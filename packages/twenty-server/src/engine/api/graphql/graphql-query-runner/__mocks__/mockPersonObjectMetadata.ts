@@ -1,4 +1,4 @@
-import { FieldMetadataType } from 'twenty-shared/types';
+import { FieldMetadataType, ObjectOpenRecordIn } from 'twenty-shared/types';
 
 import { type WorkspaceEntityDuplicateCriteria } from 'src/engine/api/graphql/workspace-query-builder/types/workspace-entity-duplicate-criteria.type';
 import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
@@ -153,28 +153,38 @@ export const mockPersonFlatObjectMetadata = (
   universalIdentifier: objectMetadataId,
   indexMetadataIds: [],
   searchFieldMetadataIds: [],
+  navigationMenuItemIds: [],
+  commandMenuItemIds: [],
   objectPermissionIds: [],
   fieldPermissionIds: [],
+  rowLevelPermissionRuleIds: [],
   fieldIds: mockFieldMetadatas.map((field) => field.id),
   viewIds: [],
+  pageLayoutIds: [],
   applicationId: 'test-application-id',
   isLabelSyncedWithName: false,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
   shortcut: null,
   description: null,
-  standardOverrides: null,
+  overrides: null,
   isUIEditable: true,
   isUICreatable: true,
+  disabledObjectPermissionActions: null,
+  openRecordIn: ObjectOpenRecordIn.USER_CHOICE,
   applicationUniversalIdentifier: 'test-application-id',
   fieldUniversalIdentifiers: mockFieldMetadatas.map(
     (field) => field.universalIdentifier,
   ),
   viewUniversalIdentifiers: [],
+  pageLayoutUniversalIdentifiers: [],
   objectPermissionUniversalIdentifiers: [],
   fieldPermissionUniversalIdentifiers: [],
+  rowLevelPermissionRuleUniversalIdentifiers: [],
   indexMetadataUniversalIdentifiers: [],
   searchFieldMetadataUniversalIdentifiers: [],
+  navigationMenuItemUniversalIdentifiers: [],
+  commandMenuItemUniversalIdentifiers: [],
   labelIdentifierFieldMetadataUniversalIdentifier: null,
   imageIdentifierFieldMetadataUniversalIdentifier: null,
 });

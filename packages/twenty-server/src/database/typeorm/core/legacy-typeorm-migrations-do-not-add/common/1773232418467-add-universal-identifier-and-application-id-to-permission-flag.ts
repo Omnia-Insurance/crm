@@ -5,10 +5,10 @@ export class AddUniversalIdentifierAndApplicationIdToPermissionFlag1773232418467
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
-      `ALTER TABLE "core"."permissionFlag" ADD COLUMN IF NOT EXISTS "universalIdentifier" uuid`,
+      `ALTER TABLE "core"."permissionFlag" ADD "universalIdentifier" uuid`,
     );
     await queryRunner.query(
-      `ALTER TABLE "core"."permissionFlag" ADD COLUMN IF NOT EXISTS "applicationId" uuid`,
+      `ALTER TABLE "core"."permissionFlag" ADD "applicationId" uuid`,
     );
   }
 

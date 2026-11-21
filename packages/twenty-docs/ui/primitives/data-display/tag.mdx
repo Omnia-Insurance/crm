@@ -1,0 +1,118 @@
+---
+title: Tag
+description: Label a category or attribute with a theme color and optional icon.
+---
+
+import { PageBanner } from "/snippets/page-banner.mdx"
+
+import { StoryEmbed } from '/snippets/ui/StoryEmbed.mdx';
+
+import TagReference from '/snippets/ui/generated/data-display/tag.mdx';
+
+## Overview
+
+Use `Tag` for categories, priorities, or other short attributes. Keep a text label so the meaning does not depend on color. Use [Status](/ui/primitives/data-display/status) when you need a state indicator and loading feedback.
+
+<StoryEmbed
+  storyId="ui-data-display-tag--display"
+  title="Tag example"
+  height={90}
+/>
+
+## Usage
+
+```tsx
+import { Tag } from 'twenty-ui/primitives/data-display';
+
+export const PriorityTag = () => <Tag color="red">Urgent</Tag>;
+```
+
+`color` is required and accepts a theme color or `transparent`. The default element is always a `span`, including when a native click handler is supplied. Add a decorative icon with `startIcon`; the label supplies its accessible meaning.
+
+## Variants
+
+<StoryEmbed
+  storyId="ui-data-display-tag--catalog"
+  title="Tag variants"
+  height={140}
+/>
+
+```tsx
+import { Tag } from 'twenty-ui/primitives/data-display';
+
+export const CategoryTags = () => (
+  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+    <Tag color="blue" variant="soft">
+      Customer
+    </Tag>
+    <Tag color="green" variant="solid">
+      Partner
+    </Tag>
+    <Tag color="orange" variant="outline">
+      Prospect
+    </Tag>
+    <Tag color="transparent" variant="outline" borderStyle="dashed">
+      Unassigned
+    </Tag>
+  </div>
+);
+```
+
+`soft` is the default treatment. `solid` emphasizes the label, `outline` adds a border, and `ghost` removes the background. Use `borderStyle="dashed"` with `outline` and `weight="medium"` for a stronger label.
+
+## Colors
+
+<StoryEmbed
+  storyId="ui-data-display-tag--colors"
+  title="Tag theme colors"
+  height={240}
+/>
+
+Keep the label meaningful without relying on its color. The catalog compares the default soft treatment; the same palette is available to the other variants.
+
+## Filter by a tag
+
+```tsx
+import { Tag } from 'twenty-ui/primitives/data-display';
+
+type CategoryFilterProps = {
+  selected: boolean;
+  onToggle: () => void;
+};
+
+export const CategoryFilter = ({ selected, onToggle }: CategoryFilterProps) => (
+  <Tag
+    color="blue"
+    variant={selected ? 'solid' : 'outline'}
+    render={<button type="button" aria-pressed={selected} onClick={onToggle} />}
+  >
+    Customer
+  </Tag>
+);
+```
+
+Compose an interactive owner through `render`. Put its click handler, native attributes, ref, and disabled state on that owner. A real button supplies focus, Enter, and Space activation. Selection state belongs to your application; use `aria-pressed` for a toggle and a visible treatment for the selected state. For navigation, render a link with its destination, such as `<a href="/records" />`. Native owners retain Tag's appearance.
+
+## Long labels
+
+By default, `truncate={true}` truncates constrained string labels and exposes their full text in a tooltip on hover. Set `truncate={false}` to keep the full label at its natural width without a tooltip, even when its parent is narrower. The parent layout owns wrapping, scrolling, and clipping.
+
+```tsx
+import { Tag } from 'twenty-ui/primitives/data-display';
+
+export const FullCategoryLabel = () => (
+  <Tag color="green" truncate={false}>
+    Enterprise customer
+  </Tag>
+);
+```
+
+Node children remain caller-owned content, so compose their text, translations, and intentional links directly.
+
+## Props
+
+Types and defaults are generated from the public component types. Native attributes and event handlers are also accepted.
+
+<TagReference />
+
+<PageBanner illustration="card-page-labels" />

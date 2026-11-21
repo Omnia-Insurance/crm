@@ -1,19 +1,19 @@
 import React from 'react';
 
+import { closestCenter } from '@dnd-kit/collision';
+import { getRecordFieldColumnKey } from '@/object-record/record-field/utils/getRecordFieldColumnKey';
 import { useRecordTableContextOrThrow } from '@/object-record/record-table/contexts/RecordTableContext';
 import { RecordTableHeaderAddColumnButton } from '@/object-record/record-table/record-table-header/components/RecordTableHeaderAddColumnButton';
 import { RecordTableHeaderCell } from '@/object-record/record-table/record-table-header/components/RecordTableHeaderCell';
 import { RecordTableHeaderEmptyLastColumn } from '@/object-record/record-table/record-table-header/components/RecordTableHeaderEmptyLastColumn';
-import { RecordTableHeaderFirstScrollableCell } from '@/object-record/record-table/record-table-header/components/RecordTableHeaderFirstScrollableCell';
 import { RecordTableHeaderLastEmptyColumn } from '@/object-record/record-table/record-table-header/components/RecordTableHeaderLastEmptyColumn';
-import { RecordTableHeaderDroppableSlot } from '@/object-record/record-table/record-table-header/dnd/components/RecordTableHeaderDroppableSlot';
-import { RecordTableHeaderDropTarget } from '@/object-record/record-table/record-table-header/dnd/components/RecordTableHeaderDropTarget';
-import { RecordTableHeaderSortableCell } from '@/object-record/record-table/record-table-header/dnd/components/RecordTableHeaderSortableCell';
 import { RECORD_TABLE_HEADER_DROPPABLE_ID } from '@/object-record/record-table/record-table-header/dnd/constants/RecordTableHeaderDroppableId';
 import { RecordTableHeaderDndKitProvider } from '@/object-record/record-table/record-table-header/dnd/providers/RecordTableHeaderDndKitProvider';
 import { isRecordTableColumnHeadersReadOnlyComponentState } from '@/object-record/record-table/states/isRecordTableColumnHeadersReadOnlyComponentState';
+import { DragDropItemDropTarget } from '@/ui/utilities/drag-and-drop/components/DragDropItemDropTarget';
+import { DragDropItemDropTargetSlot } from '@/ui/utilities/drag-and-drop/components/DragDropItemDropTargetSlot';
+import { DragDropItemSortableCell } from '@/ui/utilities/drag-and-drop/components/DragDropItemSortableCell';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
-import { isDefined } from 'twenty-shared/utils';
 
 export const RecordTableHeaderDnd = () => {
   const { visibleRecordFields } = useRecordTableContextOrThrow();
@@ -22,67 +22,44 @@ export const RecordTableHeaderDnd = () => {
     isRecordTableColumnHeadersReadOnlyComponentState,
   );
 
-  const firstScrollableRecordField = visibleRecordFields[1];
-
-  const recordFieldsWithoutFirstTwo = visibleRecordFields.slice(2);
+  const scrollableRecordFields = visibleRecordFields.slice(1);
 
   return (
     <RecordTableHeaderDndKitProvider>
-      <RecordTableHeaderDroppableSlot
-        droppableId={RECORD_TABLE_HEADER_DROPPABLE_ID}
-        index={0}
-        disabled={isRecordTableColumnHeadersReadOnly}
-      >
-        <RecordTableHeaderDropTarget index={0} compact />
-      </RecordTableHeaderDroppableSlot>
-
-      {isDefined(firstScrollableRecordField) && (
-        <RecordTableHeaderSortableCell
-          key={firstScrollableRecordField.fieldMetadataItemId}
-          id={firstScrollableRecordField.fieldMetadataItemId}
-          index={0}
-          group={RECORD_TABLE_HEADER_DROPPABLE_ID}
-          disabled={isRecordTableColumnHeadersReadOnly}
-        >
-          <RecordTableHeaderFirstScrollableCell
-            firstScrollableRecordField={firstScrollableRecordField}
-          />
-        </RecordTableHeaderSortableCell>
-      )}
-
-      {recordFieldsWithoutFirstTwo.map((recordField, index) => (
-        <React.Fragment key={recordField.fieldMetadataItemId}>
-          <RecordTableHeaderDroppableSlot
-            droppableId={RECORD_TABLE_HEADER_DROPPABLE_ID}
-            index={index + 1}
-            disabled={isRecordTableColumnHeadersReadOnly}
-          >
-            <RecordTableHeaderDropTarget index={index + 1} compact />
-          </RecordTableHeaderDroppableSlot>
-          <RecordTableHeaderSortableCell
-            id={recordField.fieldMetadataItemId}
-            index={index + 1}
+      {/* OMNIA-CUSTOM: column keys: a relation and its sub-field columns share fieldMetadataItemId, and a
+          duplicate dnd-kit sortable id breaks the drag */}
+      {scrollableRecordFields.map((recordField, index) => (
+        <React.Fragment key={getRecordFieldColumnKey(recordField)}>
+          <DragDropItemDropTargetSlot>
+            <DragDropItemDropTarget
+              index={index}
+              orientation="vertical"
+              compact
+            />
+          </DragDropItemDropTargetSlot>
+          <DragDropItemSortableCell
+            id={getRecordFieldColumnKey(recordField)}
+            index={index}
             group={RECORD_TABLE_HEADER_DROPPABLE_ID}
             disabled={isRecordTableColumnHeadersReadOnly}
+            restrictMovementTo="x"
+            collisionDetector={closestCenter}
           >
             <RecordTableHeaderCell
-              key={recordField.fieldMetadataItemId}
+              key={getRecordFieldColumnKey(recordField)}
               recordField={recordField}
-              recordFieldIndex={index + 2}
+              recordFieldIndex={index + 1}
             />
-          </RecordTableHeaderSortableCell>
+          </DragDropItemSortableCell>
         </React.Fragment>
       ))}
-      <RecordTableHeaderDroppableSlot
-        droppableId={RECORD_TABLE_HEADER_DROPPABLE_ID}
-        index={visibleRecordFields.length}
-        disabled={isRecordTableColumnHeadersReadOnly}
-      >
-        <RecordTableHeaderDropTarget
-          index={visibleRecordFields.length}
+      <DragDropItemDropTargetSlot>
+        <DragDropItemDropTarget
+          index={visibleRecordFields.length - 1}
+          orientation="vertical"
           compact
         />
-      </RecordTableHeaderDroppableSlot>
+      </DragDropItemDropTargetSlot>
       {isRecordTableColumnHeadersReadOnly ? (
         <RecordTableHeaderEmptyLastColumn />
       ) : (

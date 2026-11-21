@@ -39,10 +39,20 @@ export class MessageChannelDTO {
   @Field()
   handle: string;
 
+  @IsString()
+  @IsOptional()
+  @Field(() => String, { nullable: true })
+  displayName: string | null;
+
   @IsEnum(MessageChannelType)
   @IsNotEmpty()
   @Field(() => MessageChannelType)
   type: MessageChannelType;
+
+  @IsUUID()
+  @IsOptional()
+  @Field(() => UUIDScalarType, { nullable: true })
+  participantHandleFieldUniversalIdentifier: string | null;
 
   @IsBoolean()
   @Field()
@@ -111,6 +121,11 @@ export class MessageChannelDTO {
   @IsNotEmpty()
   @Field(() => UUIDScalarType)
   connectedAccountId: string;
+
+  @IsUUID()
+  @IsOptional()
+  @Field(() => UUIDScalarType, { nullable: true })
+  messagingProviderUniversalIdentifier: string | null;
 
   @HideField()
   workspaceId: string;

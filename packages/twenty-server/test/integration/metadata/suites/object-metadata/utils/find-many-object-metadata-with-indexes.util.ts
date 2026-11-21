@@ -27,6 +27,7 @@ export const findManyObjectMetadataWithIndexes = async ({
           id
           type
           name
+          applicationId
           description
           icon
           label
@@ -56,7 +57,7 @@ export const findManyObjectMetadataWithIndexes = async ({
         indexMetadataList {
           name
           isUnique
-          isCustom
+          isSystemSideEffect
           indexType
           indexFieldMetadataList {
             id

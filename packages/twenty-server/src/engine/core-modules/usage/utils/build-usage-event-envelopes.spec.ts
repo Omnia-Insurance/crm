@@ -17,7 +17,7 @@ describe('buildUsageEventEnvelopes', () => {
   it('maps each usage event to a usageEvent envelope carrying the workspace + columns', () => {
     const envelopes = buildUsageEventEnvelopes('ws-1', [
       usageEvent({
-        userWorkspaceId: 'uw-1',
+        spenders: { userWorkspaceId: 'uw-1', agentId: 'agent-1' },
         resourceId: 'agent-1',
         resourceContext: 'gpt-4o',
       }),
@@ -28,6 +28,7 @@ describe('buildUsageEventEnvelopes', () => {
     expect(envelopes[0].row).toMatchObject({
       workspaceId: 'ws-1',
       userWorkspaceId: 'uw-1',
+      agentId: 'agent-1',
       resourceType: UsageResourceType.AI,
       operationType: UsageOperationType.AI_CHAT_TOKEN,
       quantity: 1500,
@@ -42,6 +43,11 @@ describe('buildUsageEventEnvelopes', () => {
 
     expect(envelope.row).toMatchObject({
       userWorkspaceId: '',
+      apiKeyId: '',
+      applicationId: '',
+      agentId: '',
+      workflowId: '',
+      logicFunctionId: '',
       resourceId: '',
       resourceContext: '',
     });
@@ -58,5 +64,16 @@ describe('buildUsageEventEnvelopes', () => {
     expect((envelope.row as { periodStart?: string }).periodStart).toBe(
       '2026-01-01 00:00:00.000',
     );
+  });
+
+  it('writes a positive user share next to the total cost', () => {
+    const [envelope] = buildUsageEventEnvelopes('ws-1', [
+      usageEvent({ userCreditsUsedMicro: 2500 }),
+    ]);
+
+    expect(envelope.row).toMatchObject({
+      creditsUsedMicro: 7500,
+      userCreditsUsedMicro: 2500,
+    });
   });
 });

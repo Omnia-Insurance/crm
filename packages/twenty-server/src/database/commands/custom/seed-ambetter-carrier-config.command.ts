@@ -12,12 +12,13 @@
 // Run with: npx nx run twenty-server:command workspace:seed-ambetter-carrier-config
 
 import { Command } from 'nest-commander';
+import { isDefined, isPlainObject } from 'twenty-shared/utils';
 
-import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
+import { ProvisionedWorkspaceCommandRunner } from 'src/database/commands/command-runners/provisioned-workspace.command-runner';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { type RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
 import { DEFAULT_MATCHING_CONFIG } from 'src/modules/reconciliation/engines/matching';
 import { DEFAULT_STATUS_ENGINE_CONFIG } from 'src/modules/reconciliation/engines/status';
 import { type TransformRules } from 'src/modules/reconciliation/parsers/transforms';
@@ -193,9 +194,6 @@ const AMBETTER_PRODUCT_MAPPING = [
 // columnMapping, { dates, currency } transformRules) were never
 // user-captured, so they are replaced outright.
 // ---------------------------------------------------------------------------
-
-const isPlainObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /** Live shape: every value is { crmField: string, ... }. The legacy seed
  *  shape (canonicalName → string[] aliases) fails this. */
@@ -376,10 +374,10 @@ export const buildCarrierConfigUpdate = (
   description:
     'Insert or merge-update the Ambetter CarrierConfig record (column mapping, matching thresholds, status engine config, transform rules). Idempotent; never overwrites user-captured mappings.',
 })
-export class SeedAmbetterCarrierConfigCommand extends ActiveOrSuspendedWorkspaceCommandRunner {
+export class SeedAmbetterCarrierConfigCommand extends ProvisionedWorkspaceCommandRunner {
   constructor(
     protected readonly workspaceIteratorService: WorkspaceIteratorService,
-    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly workspaceOrmManager: WorkspaceOrmManager,
   ) {
     super(workspaceIteratorService);
   }
@@ -398,27 +396,23 @@ export class SeedAmbetterCarrierConfigCommand extends ActiveOrSuspendedWorkspace
 
     const authContext = buildSystemAuthContext(workspaceId);
 
-    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
+    await this.workspaceOrmManager.executeInWorkspaceContext(async () => {
+      // operator seed of admin-only reconciliation config, no requesting user
       const carrierConfigRepo =
-        await this.globalWorkspaceOrmManager.getRepository(
-          workspaceId,
+        this.workspaceOrmManager.getRepositoryWithoutPermissionChecks(
           'carrierConfig',
-          { shouldBypassPermissionChecks: true },
         );
 
-      // Check if an Ambetter config already exists
       const existing = await carrierConfigRepo.findOne({
-        where: { name: 'Ambetter' } as any,
+        where: { name: 'Ambetter' },
       });
 
-      if (existing) {
+      if (isDefined(existing)) {
         this.logger.log(
-          `  ✓ Ambetter CarrierConfig already exists (id=${(existing as any).id}). Merging seed values (existing data wins)...`,
+          `  ✓ Ambetter CarrierConfig already exists (id=${existing.id}). Merging seed values (existing data wins)...`,
         );
 
-        const { value: update, preserved } = buildCarrierConfigUpdate(
-          existing as unknown as Record<string, unknown>,
-        );
+        const { value: update, preserved } = buildCarrierConfigUpdate(existing);
 
         for (const note of preserved) {
           this.logger.log(`  ↳ ${note}`);
@@ -430,7 +424,7 @@ export class SeedAmbetterCarrierConfigCommand extends ActiveOrSuspendedWorkspace
           return;
         }
 
-        await carrierConfigRepo.update({ id: (existing as any).id }, update);
+        await carrierConfigRepo.update({ id: existing.id }, update);
 
         this.logger.log('  ✓ Merge-updated Ambetter CarrierConfig');
 
@@ -445,22 +439,20 @@ export class SeedAmbetterCarrierConfigCommand extends ActiveOrSuspendedWorkspace
         return;
       }
 
-      // Look up the Ambetter carrier record to link via relation
       let carrierId: string | null = null;
 
       try {
-        const carrierRepo = await this.globalWorkspaceOrmManager.getRepository(
-          workspaceId,
-          'carrier',
-          { shouldBypassPermissionChecks: true },
-        );
+        const carrierRepo =
+          this.workspaceOrmManager.getRepositoryWithoutPermissionChecks(
+            'carrier',
+          );
 
         const ambetterCarrier = await carrierRepo.findOne({
-          where: { name: 'Ambetter' } as any,
+          where: { name: 'Ambetter' },
         });
 
-        if (ambetterCarrier) {
-          carrierId = (ambetterCarrier as any).id;
+        if (isDefined(ambetterCarrier)) {
+          carrierId = ambetterCarrier.id;
           this.logger.log(`  Found Ambetter carrier record (id=${carrierId})`);
         } else {
           this.logger.warn(
@@ -485,7 +477,7 @@ export class SeedAmbetterCarrierConfigCommand extends ActiveOrSuspendedWorkspace
         transformRules: AMBETTER_TRANSFORM_RULES,
       };
 
-      if (carrierId) {
+      if (isDefined(carrierId)) {
         record.carrierId = carrierId;
       }
 

@@ -1,43 +1,104 @@
-import { UseFilters, UseGuards } from '@nestjs/common';
-import { Args, Mutation } from '@nestjs/graphql';
+import { UseFilters, UseGuards, UsePipes } from '@nestjs/common';
+import { Args, Mutation, Query } from '@nestjs/graphql';
 
 import { PermissionFlagType } from 'twenty-shared/constants';
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
 import { ApplicationExceptionFilter } from 'src/engine/core-modules/application/application-exception-filter';
+import { ApplicationLifecycleJobService } from 'src/engine/core-modules/application/application-install/services/application-lifecycle-job.service';
+import { ApplicationRegistrationExceptionFilter } from 'src/engine/core-modules/application/application-registration/application-registration-exception-filter';
 import { ApplicationUpgradeService } from 'src/engine/core-modules/application/application-upgrade/application-upgrade.service';
-import { type AuthContextUser } from 'src/engine/core-modules/auth/types/auth-context.type';
+import { TriggerUpgradeApplicationInput } from 'src/engine/core-modules/application/application-upgrade/dtos/trigger-upgrade-application.input';
+import { TriggerUpgradeApplicationResultDTO } from 'src/engine/core-modules/application/application-upgrade/dtos/trigger-upgrade-application-result.dto';
+import { ResolverValidationPipe } from 'src/engine/core-modules/graphql/pipes/resolver-validation.pipe';
+import { JobStatusDTO } from 'src/engine/core-modules/message-queue/dtos/job-status.dto';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
-import { AuthUser } from 'src/engine/decorators/auth/auth-user.decorator';
-import { AuthUserWorkspaceId } from 'src/engine/decorators/auth/auth-user-workspace-id.decorator';
+import { ApplicationTargetArg } from 'src/engine/decorators/auth/application-target-arg.decorator';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
-import { NoPermissionGuard } from 'src/engine/guards/no-permission.guard';
-import { SettingsPermissionGuard } from 'src/engine/guards/settings-permission.guard';
-import { UserAuthGuard } from 'src/engine/guards/user-auth.guard';
-import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
+import { AuthGraphqlApiExceptionFilter } from 'src/engine/core-modules/auth/filters/auth-graphql-api-exception.filter';
+import { ApplicationTargetGuard } from 'src/engine/guards/application-target.guard';
+import { AccessPolicyGuard } from 'src/engine/guards/access-policy.guard';
 
+@UsePipes(ResolverValidationPipe)
 @MetadataResolver()
-@UseFilters(ApplicationExceptionFilter)
-@UseGuards(UserAuthGuard, WorkspaceAuthGuard, NoPermissionGuard)
+@UseFilters(
+  ApplicationExceptionFilter,
+  ApplicationRegistrationExceptionFilter,
+  AuthGraphqlApiExceptionFilter,
+)
+@UseGuards(
+  AccessPolicyGuard({
+    authPrincipals: {
+      userSession: {
+        standard: true,
+        impersonated: true,
+        playground: true,
+        workspaceAgnostic: false,
+      },
+      apiKey: false,
+      oauthClient: { withUser: true, withoutUser: false },
+      application: false,
+    },
+    requiredPermissionFlags: [PermissionFlagType.APPLICATIONS],
+  }),
+)
 export class ApplicationUpgradeResolver {
   constructor(
     private readonly applicationUpgradeService: ApplicationUpgradeService,
+    private readonly applicationLifecycleJobService: ApplicationLifecycleJobService,
   ) {}
 
   @Mutation(() => Boolean)
-  @UseGuards(SettingsPermissionGuard(PermissionFlagType.MARKETPLACE_APPS))
+  @UseGuards(ApplicationTargetGuard)
   async upgradeApplication(
-    @Args('appRegistrationId') appRegistrationId: string,
+    @ApplicationTargetArg('appRegistrationId', {
+      kind: 'applicationRegistrationId',
+      requireApplicationRegistrationOwnership: false,
+    })
+    appRegistrationId: string,
     @Args('targetVersion') targetVersion: string,
     @AuthWorkspace() workspace: WorkspaceEntity,
-    @AuthUser() user: AuthContextUser,
-    @AuthUserWorkspaceId() userWorkspaceId: string,
   ): Promise<boolean> {
     return this.applicationUpgradeService.upgradeApplication({
       appRegistrationId,
       targetVersion,
       workspaceId: workspace.id,
-      userId: user.id,
-      userWorkspaceId,
+    });
+  }
+
+  @Mutation(() => TriggerUpgradeApplicationResultDTO)
+  @UseGuards(ApplicationTargetGuard)
+  async triggerUpgradeApplication(
+    @ApplicationTargetArg<TriggerUpgradeApplicationInput>('input', {
+      kind: 'applicationUniversalIdentifier',
+      idKey: 'universalIdentifier',
+      requireApplicationRegistrationOwnership: false,
+    })
+    { universalIdentifier, targetVersion }: TriggerUpgradeApplicationInput,
+    @AuthWorkspace() workspace: WorkspaceEntity,
+  ): Promise<TriggerUpgradeApplicationResultDTO> {
+    return this.applicationLifecycleJobService.triggerUpgradeApplication({
+      universalIdentifier,
+      targetVersion,
+      workspaceId: workspace.id,
+    });
+  }
+
+  @Query(() => JobStatusDTO, { nullable: true })
+  @UseGuards(ApplicationTargetGuard)
+  async findUpgradeApplicationJobStatus(
+    @ApplicationTargetArg('universalIdentifier', {
+      kind: 'applicationUniversalIdentifier',
+      requireApplicationRegistrationOwnership: false,
+    })
+    universalIdentifier: string,
+    @Args('jobId', { type: () => String, nullable: true })
+    jobId: string | undefined,
+    @AuthWorkspace() workspace: WorkspaceEntity,
+  ): Promise<JobStatusDTO | null> {
+    return this.applicationLifecycleJobService.findUpgradeApplicationJobStatus({
+      universalIdentifier,
+      workspaceId: workspace.id,
+      jobId,
     });
   }
 }

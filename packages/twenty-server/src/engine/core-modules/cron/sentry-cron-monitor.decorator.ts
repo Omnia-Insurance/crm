@@ -1,6 +1,17 @@
 import * as Sentry from '@sentry/node';
 
-export function SentryCronMonitor(monitorSlug: string, schedule: string) {
+const DEFAULT_MAX_RUNTIME_IN_MINUTES = 5;
+
+// A schedule function receives the job's arguments, for schedules chosen at
+// registration time.
+export function SentryCronMonitor(
+  monitorSlug: string,
+  // oxlint-disable-next-line typescript/no-explicit-any
+  schedule: string | ((...args: any[]) => string),
+  {
+    maxRuntimeInMinutes = DEFAULT_MAX_RUNTIME_IN_MINUTES,
+  }: { maxRuntimeInMinutes?: number } = {},
+) {
   return function (
     // oxlint-disable-next-line typescript/no-explicit-any
     _target: any,
@@ -26,10 +37,11 @@ export function SentryCronMonitor(monitorSlug: string, schedule: string) {
           {
             schedule: {
               type: 'crontab',
-              value: schedule,
+              value:
+                typeof schedule === 'function' ? schedule(...args) : schedule,
             },
             checkinMargin: 1,
-            maxRuntime: 5,
+            maxRuntime: maxRuntimeInMinutes,
             timezone: 'UTC',
           },
         );

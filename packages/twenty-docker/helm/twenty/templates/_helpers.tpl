@@ -15,10 +15,19 @@
 {{ .Release.Namespace }}
 {{- end -}}
 
+{{/* ServiceAccount name used by server/worker pods */}}
+{{- define "twenty.serviceAccountName" -}}
+{{- if .Values.serviceAccount.create -}}
+{{- default (include "twenty.fullname" .) .Values.serviceAccount.name -}}
+{{- else -}}
+{{- default "default" .Values.serviceAccount.name -}}
+{{- end -}}
+{{- end -}}
+
 {{/* Server image fields merged with globals */}}
 {{- define "twenty.server.image" -}}
 {{- $repo := default $.Values.image.repository (index $.Values.server.image "repository" | default "") -}}
-{{- $tag := default (default $.Chart.AppVersion $.Values.image.tag) (index $.Values.server.image "tag" | default "") | toString -}}
+{{- $tag := default (default $.Chart.AppVersion $.Values.image.tag) (index $.Values.server.image "tag" | default "") -}}
 {{- $pp := default $.Values.image.pullPolicy (index $.Values.server.image "pullPolicy" | default "") -}}
 {{- printf "%s:%s|%s" $repo $tag $pp -}}
 {{- end -}}
@@ -26,7 +35,7 @@
 {{/* Worker image fields merged with globals */}}
 {{- define "twenty.worker.image" -}}
 {{- $repo := default $.Values.image.repository (index $.Values.worker.image "repository" | default "") -}}
-{{- $tag := default (default $.Chart.AppVersion $.Values.image.tag) (index $.Values.worker.image "tag" | default "") | toString -}}
+{{- $tag := default (default $.Chart.AppVersion $.Values.image.tag) (index $.Values.worker.image "tag" | default "") -}}
 {{- $pp := default $.Values.image.pullPolicy (index $.Values.worker.image "pullPolicy" | default "") -}}
 {{- printf "%s:%s|%s" $repo $tag $pp -}}
 {{- end -}}
@@ -84,7 +93,7 @@ password
 {{- $port := .Values.db.external.port | default 5432 -}}
 {{- $user := .Values.db.external.user | default "postgres" -}}
 {{- $db := .Values.db.external.database | default "twenty" -}}
-{{- $qs := ternary "?sslmode=no-verify" "" (eq .Values.db.external.ssl true) -}}
+{{- $qs := ternary "?sslmode=require" "" (eq .Values.db.external.ssl true) -}}
 {{- printf "%s://%s:$(DB_PASSWORD)@%s:%v/%s%s" $scheme $user $host $port $db $qs -}}
 {{- end -}}
 {{- end -}}

@@ -1,8 +1,9 @@
+import { findFieldMetadataItemByFieldMetadataId } from '@/object-metadata/utils/findFieldMetadataItemByFieldMetadataId';
+import { CHART_NUMBER_FORMAT_DEFAULT } from '@/page-layout/widgets/graph/constants/ChartNumberFormatDefault';
 import { useGraphGroupBySortOptionLabels } from '@/side-panel/pages/page-layout/hooks/useGraphGroupBySortOptionLabels';
 import { useGraphXSortOptionLabels } from '@/side-panel/pages/page-layout/hooks/useGraphXSortOptionLabels';
 import { type ChartConfiguration } from '@/side-panel/pages/page-layout/types/ChartConfiguration';
 import { CHART_CONFIGURATION_SETTING_IDS } from '@/side-panel/pages/page-layout/types/ChartConfigurationSettingIds';
-import { findChartGroupByFieldMetadataItem } from '@/side-panel/pages/page-layout/utils/findChartGroupByFieldMetadataItem';
 import { getChartAxisNameDisplayOptions } from '@/side-panel/pages/page-layout/utils/getChartAxisNameDisplayOptions';
 import { getChartFilterRulesCount } from '@/side-panel/pages/page-layout/utils/getChartFilterRulesCount';
 import { getChartNumberFormatLabel } from '@/side-panel/pages/page-layout/utils/getChartNumberFormatLabel';
@@ -11,11 +12,12 @@ import { getFieldLabelWithSubField } from '@/side-panel/pages/page-layout/utils/
 import { objectMetadataItemsSelector } from '@/object-metadata/states/objectMetadataItemsSelector';
 import { getAggregateOperationLabel } from '@/object-record/record-board/record-board-column/utils/getAggregateOperationLabel';
 import { convertAggregateOperationToExtendedAggregateOperation } from '@/object-record/utils/convertAggregateOperationToExtendedAggregateOperation';
-import { plural, t } from '@lingui/core/macro';
+import { plural } from '@lingui/core/macro';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { type CompositeFieldSubFieldName } from 'twenty-shared/types';
 import { capitalize, isDefined } from 'twenty-shared/utils';
 import { type GraphOrderBy } from '~/generated-metadata/graphql';
+import { useLingui } from '@lingui/react/macro';
 
 export const useChartSettingsValues = ({
   objectMetadataId,
@@ -24,6 +26,7 @@ export const useChartSettingsValues = ({
   objectMetadataId: string;
   configuration?: ChartConfiguration;
 }) => {
+  const { t } = useLingui();
   const objectMetadataItems = useAtomStateValue(objectMetadataItemsSelector);
 
   const objectMetadataItem = objectMetadataItems.find(
@@ -76,15 +79,15 @@ export const useChartSettingsValues = ({
   }
 
   const groupByFieldX = isDefined(groupByFieldXId)
-    ? findChartGroupByFieldMetadataItem({
-        fields: objectMetadataItem?.fields,
+    ? findFieldMetadataItemByFieldMetadataId({
+        fieldMetadataItems: objectMetadataItem?.fields,
         fieldMetadataId: groupByFieldXId,
       })
     : undefined;
 
   const groupByFieldY = isDefined(groupByFieldYId)
-    ? findChartGroupByFieldMetadataItem({
-        fields: objectMetadataItem?.fields,
+    ? findFieldMetadataItemByFieldMetadataId({
+        fieldMetadataItems: objectMetadataItem?.fields,
         fieldMetadataId: groupByFieldYId,
       })
     : undefined;
@@ -207,8 +210,8 @@ export const useChartSettingsValues = ({
       }
       case CHART_CONFIGURATION_SETTING_IDS.DATA_ON_DISPLAY_PIE_CHART: {
         const pieChartGroupByField = isDefined(finalGroupByFieldYId)
-          ? findChartGroupByFieldMetadataItem({
-              fields: objectMetadataItem?.fields,
+          ? findFieldMetadataItemByFieldMetadataId({
+              fieldMetadataItems: objectMetadataItem?.fields,
               fieldMetadataId: finalGroupByFieldYId,
             })
           : undefined;
@@ -300,6 +303,12 @@ export const useChartSettingsValues = ({
           ? (configuration.displayLegend ?? true)
           : true;
       case CHART_CONFIGURATION_SETTING_IDS.FORMAT:
+        if (isBarOrLineChart || isPieChart) {
+          return getChartNumberFormatLabel(
+            configuration.numberFormat ?? CHART_NUMBER_FORMAT_DEFAULT,
+          );
+        }
+
         return configuration.__typename === 'AggregateChartConfiguration' &&
           isDefined(configuration.numberFormat)
           ? getChartNumberFormatLabel(configuration.numberFormat)

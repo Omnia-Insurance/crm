@@ -27,6 +27,9 @@ describe('runAgent', () => {
 
   it('POSTs the runAgent mutation to /metadata and returns the result', async () => {
     const payload = {
+      threadId: 'thread-id',
+      runId: 'run-id',
+      status: 'COMPLETED',
       result: { response: 'done' },
       error: null,
       success: true,
@@ -60,10 +63,88 @@ describe('runAgent', () => {
     const sentBody = JSON.parse(requestInit?.body as string);
 
     expect(sentBody.query).toContain('runAgent(input: $input)');
+    expect(sentBody.query).toContain('runId');
     expect(sentBody.variables).toEqual({
       input: {
         agentUniversalIdentifier: 'agent-uid',
         prompt: 'Enrich record 123',
+      },
+    });
+  });
+
+  it('sends a string input as a single user message, with its thread', async () => {
+    fetchSpy.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            runAgent: {
+              threadId: 'thread-id',
+              status: 'COMPLETED',
+              result: { response: 'done' },
+              error: null,
+              success: true,
+            },
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const result = await runAgent({
+      agentUniversalIdentifier: 'agent-uid',
+      input: 'What was the last touchpoint?',
+      additionalInstructions: 'Answer in Slack markdown.',
+      thread: { key: 'C123:1700000000.000100', title: 'Acme renewal' },
+    });
+
+    expect(result.threadId).toBe('thread-id');
+
+    const sentBody = JSON.parse(fetchSpy.mock.calls[0][1]?.body as string);
+
+    expect(sentBody.variables).toEqual({
+      input: {
+        agentUniversalIdentifier: 'agent-uid',
+        input: [{ role: 'user', content: 'What was the last touchpoint?' }],
+        additionalInstructions: 'Answer in Slack markdown.',
+        thread: { key: 'C123:1700000000.000100', title: 'Acme renewal' },
+      },
+    });
+  });
+
+  it('POSTs messages when provided instead of prompt', async () => {
+    const payload = {
+      threadId: 'thread-id',
+      status: 'COMPLETED',
+      result: { response: 'done' },
+      error: null,
+      success: true,
+    };
+
+    fetchSpy.mockResolvedValue(
+      new Response(JSON.stringify({ data: { runAgent: payload } }), {
+        status: 200,
+      }),
+    );
+
+    const messages = [
+      { role: 'user' as const, content: 'Hello' },
+      { role: 'assistant' as const, content: 'Hi' },
+      { role: 'user' as const, content: 'Status?' },
+    ];
+
+    const result = await runAgent({
+      agentUniversalIdentifier: 'agent-uid',
+      messages,
+    });
+
+    expect(result).toEqual(payload);
+
+    const sentBody = JSON.parse(fetchSpy.mock.calls[0][1]?.body as string);
+
+    expect(sentBody.variables).toEqual({
+      input: {
+        agentUniversalIdentifier: 'agent-uid',
+        messages,
       },
     });
   });
@@ -96,7 +177,9 @@ describe('runAgent', () => {
 
     await expect(
       runAgent({ agentUniversalIdentifier: 'a', prompt: 'p' }),
-    ).rejects.toThrow(/requires the app runtime env vars/);
+    ).rejects.toThrow(
+      'requires the app runtime env vars TWENTY_API_URL and TWENTY_APP_APPLICATION_ACCESS_TOKEN (or TWENTY_APP_ACCESS_TOKEN)',
+    );
 
     expect(fetchSpy).not.toHaveBeenCalled();
   });

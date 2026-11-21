@@ -61,7 +61,6 @@ const mockMorphFieldWithRelations: FieldMetadataItem = {
   ],
 } as FieldMetadataItem;
 
-// Mock multiple regular relation fields (for multiple target testing)
 const mockMultipleRelationFields: FieldMetadataItem[] = [
   {
     id: 'relation-field-company-id',
@@ -308,7 +307,7 @@ describe('extractTargetRecordsFromJunction', () => {
   describe('edge cases', () => {
     it('should skip undefined junction records in array', () => {
       const junctionRecords = [
-        undefined as unknown as ObjectRecord,
+        undefined,
         createMockJunctionRecord('junction-1', {
           company: { id: 'company-1', name: 'Acme Corp' },
         }),

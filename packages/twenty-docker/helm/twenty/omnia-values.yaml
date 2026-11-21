@@ -1,8 +1,14 @@
-server:
-  replicaCount: 2
+serviceAccount:
+  create: false
   # OMNIA-CUSTOM: Pod Identity Association maps this SA to the runtime IAM role
   # for Bedrock, Amazon Translate, and S3 QA artifacts under AWS BAA (HIPAA).
-  serviceAccountName: twenty-bedrock
+  name: twenty-bedrock
+
+server:
+  replicaCount: 2
+  # OMNIA-CUSTOM: the chart sets 7d; a user access JWT is a bearer credential no sign-out revokes.
+  env:
+    ACCESS_TOKEN_EXPIRES_IN: "30m"
   persistence:
     enabled: false
   dockerDataPersistence:
@@ -10,21 +16,89 @@ server:
   image:
     repository: 189365142140.dkr.ecr.us-east-1.amazonaws.com/twenty-crm
     tag: latest
-  env:
-    NODE_OPTIONS: "--max-old-space-size=1536"
-  extraEnv:
+  # OMNIA-CUSTOM: zero-downtime rollouts; pdb-server.yaml keeps a pod up through drains.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  minReadySeconds: 15
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/name: twenty
+          app.kubernetes.io/component: server
+  nodeSelector:
+    environment: production
+  tolerations: &productionTolerations
+    - key: environment
+      operator: Equal
+      value: production
+      effect: NoSchedule
+  # OMNIA-CUSTOM: 10-minute startup window and faster liveness/readiness than upstream.
+  startupProbe:
+    initialDelaySeconds: 10
+    failureThreshold: 60
+  livenessProbe:
+    periodSeconds: 10
+  readinessProbe:
+    periodSeconds: 5
+  # Shared by the worker and the migration job.
+  extraEnv: &omniaExtraEnv
+    # OMNIA-CUSTOM: job-migration.yaml runs upgrades; cron registration stays on the server.
+    - name: DISABLE_DB_MIGRATIONS
+      value: "true"
+    # OMNIA-CUSTOM: V8's default old space is about half the pod limit; exports and
+    # imports need the headroom (2026-08-22 worker OOM).
+    - name: NODE_OPTIONS
+      value: "--max-old-space-size=1536"
     - name: LOGIC_FUNCTION_TYPE
       value: LOCAL
+    # OMNIA-CUSTOM: logic functions call the server in-cluster, not through the ingress.
+    - name: SERVER_INTERNAL_URL
+      value: "http://my-twenty-twenty-server.twentycrm.svc.cluster.local:3000"
+    # OMNIA-CUSTOM: applicationRegistration ids whose logic functions get the Pod Identity
+    # credentials (comma-separated). Empty grants none.
+    - name: LOGIC_FUNCTION_AWS_CONTAINER_CREDENTIALS_APP_REGISTRATION_IDS
+      value: ""
     - name: CONVOSO_API_TOKEN
       valueFrom:
         secretKeyRef:
           name: convoso-credentials
           key: apiToken
-    - name: DEEPGRAM_API_KEY
-      valueFrom:
-        secretKeyRef:
-          name: deepgram-credentials
-          key: apiKey
+    # OMNIA-CUSTOM: limits sized for Omnia scripts and the omniaagent.com webhooks.
+    # Webhook calls above the limit are dropped, not queued.
+    - name: API_RATE_LIMITING_SHORT_LIMIT
+      value: "500"
+    - name: API_RATE_LIMITING_LONG_LIMIT
+      value: "5000"
+    - name: APPLICATION_API_RATE_LIMITING_LIMIT
+      value: "5000"
+    - name: APPLICATION_JOB_ENQUEUE_RATE_LIMITING_LIMIT
+      value: "5000"
+    - name: WEBHOOK_CALL_RATE_LIMITING_LIMIT
+      value: "600"
+    # OMNIA-CUSTOM: every AI tier resolves to the BAA-covered Bedrock catalog entry.
+    - name: AI_MODELS_DEFAULT_EXTRA_FAST
+      value: "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    - name: AI_MODELS_DEFAULT_FAST
+      value: "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    - name: AI_MODELS_DEFAULT_BALANCED
+      value: "bedrock/us.anthropic.claude-sonnet-4-6"
+    - name: AI_MODELS_DEFAULT_SMART
+      value: "bedrock/us.anthropic.claude-sonnet-4-6"
+    - name: AI_MODELS_DEFAULT_EXTRA_SMART
+      value: "bedrock/us.anthropic.claude-opus-4-7"
+    # OMNIA-CUSTOM: upstream telemetry sends sign-up names and emails to twenty-telemetry.com.
+    - name: TELEMETRY_ENABLED
+      value: "false"
+    # OMNIA-CUSTOM: sessions are httpOnly cookies, yet every sign-in still returns a refresh token to page
+    # JavaScript that sign-out never revokes; renewToken would trade it for new sessions for 60 days.
+    - name: REFRESH_TOKEN_EXPIRES_IN
+      value: "5m"
   resources:
     requests:
       cpu: 100m
@@ -44,16 +118,6 @@ server:
       nginx.ingress.kubernetes.io/proxy-next-upstream-tries: "3"
       nginx.ingress.kubernetes.io/proxy-next-upstream-timeout: "10"
       nginx.ingress.kubernetes.io/proxy-body-size: "10m"
-      nginx.ingress.kubernetes.io/configuration-snippet: |
-        # OMNIA-CUSTOM: Do not mark missing chunks/images as immutable. If a
-        # stale tab requests an old hashed asset during a rolling deploy, the
-        # 404 must not become a cacheable edge response.
-        if ($request_uri ~* \.(?:js|css|woff2?|svg|png|jpg|jpeg|gif|ico)$) {
-          add_header Cache-Control "public, max-age=31536000, immutable";
-        }
-        if ($request_uri !~* \.(?:js|css|woff2?|svg|png|jpg|jpeg|gif|ico|json|map|wasm)$) {
-          add_header Cache-Control "no-cache, no-store, must-revalidate" always;
-        }
     hosts:
       - host: crm.omniaagent.com
         paths:
@@ -66,27 +130,14 @@ server:
 
 worker:
   replicaCount: 2
-  serviceAccountName: twenty-bedrock
   image:
     repository: 189365142140.dkr.ecr.us-east-1.amazonaws.com/twenty-crm
     tag: latest
-  extraEnv:
-    # OMNIA: V8's default old-space (~1 GiB) is half the 2 GiB container
-    # limit; exports/imports need the headroom (2026-08-22 export OOM).
-    - name: NODE_OPTIONS
-      value: "--max-old-space-size=1536"
-    - name: LOGIC_FUNCTION_TYPE
-      value: LOCAL
-    - name: CONVOSO_API_TOKEN
-      valueFrom:
-        secretKeyRef:
-          name: convoso-credentials
-          key: apiToken
-    - name: DEEPGRAM_API_KEY
-      valueFrom:
-        secretKeyRef:
-          name: deepgram-credentials
-          key: apiKey
+  # OMNIA-CUSTOM: one worker generation at a time, so two versions never consume the queues.
+  strategy:
+    type: Recreate
+  tolerations: *productionTolerations
+  extraEnv: *omniaExtraEnv
   resources:
     requests:
       cpu: 100m
@@ -123,11 +174,7 @@ redisInternal:
     limits:
       cpu: 1000m
       memory: 2Gi
+  tolerations: *productionTolerations
 
-nodeSelector:
-  environment: production
-tolerations:
-  - key: "environment"
-    operator: "Equal"
-    value: "production"
-    effect: "NoSchedule"
+# Only the in-cluster Postgres reads the root key (db.enabled is false in prod).
+tolerations: *productionTolerations

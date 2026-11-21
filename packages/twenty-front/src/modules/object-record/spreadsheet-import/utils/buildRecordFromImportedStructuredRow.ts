@@ -8,17 +8,21 @@ import {
 } from '@/spreadsheet-import/types';
 import { isNonEmptyString } from '@sniptt/guards';
 import { parsePhoneNumberWithError, type CountryCode } from 'libphonenumber-js';
+import { type FieldMetadataSettings } from 'twenty-shared/types';
 import {
   assertUnreachable,
+  convertCurrencyAmountToCurrencyMicros,
+  getLinkUrlNormalizer,
   isDefined,
   isEmptyObject,
   normalizeUrlOrigin,
+  normalizeUsState,
+  parseToPlainDateOrThrow,
+  turnJSDateToPlainDate,
 } from 'twenty-shared/utils';
 import { z } from 'zod';
 import { FieldMetadataType, RelationType } from '~/generated-metadata/graphql';
-import { normalizeUsState } from '@/object-record/spreadsheet-import/utils/normalizeUsState';
 import { castToString } from '~/utils/castToString';
-import { convertCurrencyAmountToCurrencyMicros } from '~/utils/convertCurrencyToCurrencyMicros';
 import { stripSimpleQuotesFromString } from '~/utils/string/stripSimpleQuotesFromString';
 
 type BuildRecordFromImportedStructuredRowArgs = {
@@ -57,23 +61,29 @@ const buildRelationConnectFieldRecord = (
     Record<FieldMetadataType, Record<string, ((value: any) => any) | undefined>>
   >,
 ) => {
-  if (fieldMetadataItem.relation?.type !== RelationType.MANY_TO_ONE)
+  if (fieldMetadataItem.relation?.type !== RelationType.MANY_TO_ONE) {
     return undefined;
+  }
 
   const relationConnectFields = spreadsheetImportFields.filter(
     (field) =>
+      // OMNIA-CUSTOM: relation label, update and read-only fields share the relation's fieldMetadataItemId
       field.isRelationConnectField === true &&
       field.fieldMetadataItemId === fieldMetadataItem.id &&
       isDefined(importedStructuredRow[field.key]) &&
       isNonEmptyString(importedStructuredRow[field.key]),
   );
 
-  if (relationConnectFields.length === 0) return undefined;
+  if (relationConnectFields.length === 0) {
+    return undefined;
+  }
 
   const relationConnectFieldValue = relationConnectFields.reduce(
     (acc, field) => {
       const uniqueFieldMetadataItem = field.uniqueFieldMetadataItem;
-      if (!isDefined(uniqueFieldMetadataItem)) return acc;
+      if (!isDefined(uniqueFieldMetadataItem)) {
+        return acc;
+      }
 
       if (
         isCompositeFieldType(uniqueFieldMetadataItem.type) &&
@@ -103,52 +113,17 @@ const buildRelationConnectFieldRecord = (
     {} as Record<string, any>,
   );
 
-  if (isEmptyObject(relationConnectFieldValue)) return undefined;
+  return isEmptyObject(relationConnectFieldValue)
+    ? undefined
+    : { connect: { where: relationConnectFieldValue } };
+};
 
-  // Collect relation update fields (name, email, address, etc.) so the server
-  // can use them to create missing related records with full data.
-  const relationUpdateFields = spreadsheetImportFields.filter(
-    (field) =>
-      field.isRelationUpdateField === true &&
-      field.fieldMetadataItemId === fieldMetadataItem.id &&
-      isDefined(importedStructuredRow[field.key]) &&
-      isNonEmptyString(importedStructuredRow[field.key]),
-  );
-
-  const createData: Record<string, any> = {};
-
-  for (const field of relationUpdateFields) {
-    const targetField = field.targetFieldMetadataItem;
-
-    if (!isDefined(targetField)) continue;
-
-    if (
-      isCompositeFieldType(targetField.type) &&
-      isDefined(field.compositeSubFieldKey)
-    ) {
-      const rawValue = importedStructuredRow[field.key];
-      const transformConfig =
-        compositeFieldTransformConfigs[targetField.type];
-      const transform = transformConfig?.[field.compositeSubFieldKey];
-      const value = transform ? transform(rawValue) : rawValue;
-
-      createData[targetField.name] = {
-        ...(isDefined(createData[targetField.name])
-          ? createData[targetField.name]
-          : {}),
-        [field.compositeSubFieldKey]: value,
-      };
-    } else {
-      createData[targetField.name] = importedStructuredRow[field.key];
-    }
+const computeDateOnlyImportedValue = (value: string): string => {
+  try {
+    return parseToPlainDateOrThrow(value).toString();
+  } catch {
+    return turnJSDateToPlainDate(new Date(value)).toString();
   }
-
-  return {
-    connect: {
-      where: relationConnectFieldValue,
-      ...(isEmptyObject(createData) ? {} : { createData }),
-    },
-  };
 };
 
 export const buildRecordFromImportedStructuredRow = ({
@@ -225,6 +200,7 @@ export const buildRecordFromImportedStructuredRow = ({
       addressStreet2: castToString,
       addressCity: castToString,
       addressPostcode: castToString,
+      // OMNIA-CUSTOM: imported files often spell out the state ("Florida"); records store the 2-letter code
       addressState: normalizeUsState,
       addressCountry: castToString,
     },
@@ -244,6 +220,7 @@ export const buildRecordFromImportedStructuredRow = ({
     [FieldMetadataType.RICH_TEXT]: {
       blocknote: castToString,
       markdown: castToString,
+      tiptap: castToString,
     },
 
     [FieldMetadataType.EMAILS]: {
@@ -266,7 +243,6 @@ export const buildRecordFromImportedStructuredRow = ({
     switch (field.type) {
       case FieldMetadataType.CURRENCY:
       case FieldMetadataType.ADDRESS:
-      case FieldMetadataType.LINKS:
       case FieldMetadataType.RICH_TEXT:
       case FieldMetadataType.EMAILS:
       case FieldMetadataType.FULL_NAME: {
@@ -274,6 +250,24 @@ export const buildRecordFromImportedStructuredRow = ({
           field,
           importedStructuredRow,
           COMPOSITE_FIELD_TRANSFORM_CONFIGS[field.type],
+        );
+        if (isDefined(compositeData)) {
+          recordToBuild[field.name] = compositeData;
+        }
+        break;
+      }
+      case FieldMetadataType.LINKS: {
+        const linksVariant = (
+          field.settings as FieldMetadataSettings<FieldMetadataType.LINKS>
+        )?.type;
+
+        const compositeData = buildCompositeFieldRecord(
+          field,
+          importedStructuredRow,
+          {
+            ...COMPOSITE_FIELD_TRANSFORM_CONFIGS[FieldMetadataType.LINKS],
+            primaryLinkUrl: getLinkUrlNormalizer(linksVariant),
+          },
         );
         if (isDefined(compositeData)) {
           recordToBuild[field.name] = compositeData;
@@ -329,11 +323,13 @@ export const buildRecordFromImportedStructuredRow = ({
             );
 
             recordToBuild[field.name] = {
+              ...compositeData,
               primaryPhoneNumber: parsedNumber,
               primaryPhoneCallingCode: `+${parsedCountryCallingCode}`,
             };
           } catch {
             recordToBuild[field.name] = {
+              ...compositeData,
               primaryPhoneNumber,
               primaryPhoneCallingCode:
                 stripSimpleQuotesFromString(
@@ -402,6 +398,14 @@ export const buildRecordFromImportedStructuredRow = ({
         }
         break;
       case FieldMetadataType.DATE:
+        if (
+          isDefined(importedFieldValue) &&
+          isNonEmptyString(importedFieldValue)
+        ) {
+          recordToBuild[field.name] =
+            computeDateOnlyImportedValue(importedFieldValue);
+        }
+        break;
       case FieldMetadataType.DATE_TIME:
         if (
           isDefined(importedFieldValue) &&

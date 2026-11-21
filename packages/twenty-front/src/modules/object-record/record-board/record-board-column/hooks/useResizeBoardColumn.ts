@@ -1,14 +1,19 @@
+import { useLingui } from '@lingui/react';
 import {
   type PointerEvent as ReactPointerEvent,
   useCallback,
   useContext,
   useState,
 } from 'react';
+import { getLocaleTextDirection } from 'twenty-shared/translations';
 import { isDefined } from 'twenty-shared/utils';
+
+import { getUiZoom } from '@/ui/theme/utils/getUiZoom';
 
 import { RecordBoardContext } from '@/object-record/record-board/contexts/RecordBoardContext';
 import { clampRecordBoardColumnWidth } from '@/object-record/record-board/utils/clampRecordBoardColumnWidth';
 import { setRecordBoardColumnWidthCssVariable } from '@/object-record/record-board/utils/setRecordBoardColumnWidthCssVariable';
+import { getRecordColumnResizeOffset } from '@/object-record/record-index/utils/getRecordColumnResizeOffset';
 import { recordIndexKanbanColumnWidthComponentState } from '@/object-record/record-index/states/recordIndexKanbanColumnWidthComponentState';
 import { useDragSelect } from '@/ui/utilities/drag-select/hooks/useDragSelect';
 import { type PointerEventListener } from '@/ui/utilities/pointer-event/types/PointerEventListener';
@@ -18,6 +23,8 @@ import { useUpdateViewKanbanColumnWidth } from '@/views/hooks/useUpdateViewKanba
 
 export const useResizeBoardColumn = () => {
   const { recordBoardId } = useContext(RecordBoardContext);
+  const { i18n } = useLingui();
+  const textDirection = getLocaleTextDirection(i18n.locale);
 
   const [recordIndexKanbanColumnWidth, setRecordIndexKanbanColumnWidth] =
     useAtomComponentState(recordIndexKanbanColumnWidthComponentState);
@@ -32,6 +39,9 @@ export const useResizeBoardColumn = () => {
 
   const isResizing = isDefined(initialPointerPositionX);
 
+  // Captured once per drag: reading computed style on every move forces a style recalc.
+  const [dragUiZoom, setDragUiZoom] = useState(1);
+
   const handleResizeStart = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
       if (event.pointerType !== 'mouse') {
@@ -39,6 +49,7 @@ export const useResizeBoardColumn = () => {
       }
 
       setDragSelectionStartEnabled(false);
+      setDragUiZoom(getUiZoom());
       setInitialPointerPositionX(event.clientX);
     },
     [setDragSelectionStartEnabled],
@@ -63,7 +74,12 @@ export const useResizeBoardColumn = () => {
       setRecordBoardColumnWidthCssVariable(
         recordBoardId,
         clampRecordBoardColumnWidth(
-          recordIndexKanbanColumnWidth + (x - initialPointerPositionX),
+          recordIndexKanbanColumnWidth +
+            getRecordColumnResizeOffset({
+              pointerDeltaX: x - initialPointerPositionX,
+              uiZoom: dragUiZoom,
+              textDirection,
+            }),
         ),
       );
     },
@@ -72,6 +88,8 @@ export const useResizeBoardColumn = () => {
       recordIndexKanbanColumnWidth,
       recordBoardId,
       setDragSelectionStartEnabled,
+      dragUiZoom,
+      textDirection,
     ],
   );
 
@@ -86,7 +104,12 @@ export const useResizeBoardColumn = () => {
 
       const nextWidth = Math.round(
         clampRecordBoardColumnWidth(
-          recordIndexKanbanColumnWidth + (x - initialPointerPositionX),
+          recordIndexKanbanColumnWidth +
+            getRecordColumnResizeOffset({
+              pointerDeltaX: x - initialPointerPositionX,
+              uiZoom: dragUiZoom,
+              textDirection,
+            }),
         ),
       );
 
@@ -101,6 +124,8 @@ export const useResizeBoardColumn = () => {
       setRecordIndexKanbanColumnWidth,
       updateViewKanbanColumnWidth,
       setDragSelectionStartEnabled,
+      dragUiZoom,
+      textDirection,
     ],
   );
 

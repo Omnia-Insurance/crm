@@ -5,7 +5,6 @@
   "tags": ["scope:create-app"],
   "targets": {
     "build": {
-      "dependsOn": ["^build"],
       "outputs": ["{projectRoot}/dist"]
     },
     "dev": {

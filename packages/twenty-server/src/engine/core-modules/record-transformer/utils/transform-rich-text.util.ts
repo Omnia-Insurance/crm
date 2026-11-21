@@ -3,66 +3,58 @@ import {
   type RichTextMetadata,
   richTextValueSchema,
 } from 'twenty-shared/types';
-import { isDefined } from 'twenty-shared/utils';
+import {
+  convertBlockNoteToRichTextDocument,
+  isDefined,
+  tipTapDocumentToMarkdown,
+} from 'twenty-shared/utils';
 
-import type { ServerBlockNoteEditor } from '@blocknote/server-util';
+import { convertMarkdownToRichTextDocument } from 'src/engine/core-modules/record-transformer/utils/convert-markdown-to-rich-text-document.util';
+import { ensureTipTapSchemaVersion } from 'src/engine/core-modules/record-transformer/utils/ensure-tiptap-schema-version.util';
 
-// Reuse a single ServerBlockNoteEditor across all calls to avoid
-// the cost of dynamic import resolution + instance creation (~90ms) on every transform.
-let cachedServerBlockNoteEditor: ServerBlockNoteEditor | null = null;
-
-// SWC compiles import() to require() in CJS mode, which breaks ESM-only
-// transitive dependencies in @blocknote/core. Native import() resolves
-// the ESM bundle path where the full chain works.
-const nativeImport = new Function('specifier', 'return import(specifier)');
-
-const getServerBlockNoteEditor = async (): Promise<ServerBlockNoteEditor> => {
-  if (cachedServerBlockNoteEditor) {
-    return cachedServerBlockNoteEditor;
-  }
-
-  const module = await nativeImport('@blocknote/server-util');
-  const editor: ServerBlockNoteEditor = module.ServerBlockNoteEditor.create();
-
-  cachedServerBlockNoteEditor = editor;
-
-  return editor;
-};
-
-export const transformRichTextValue = async (
+export const transformRichTextValue = (
   // oxlint-disable-next-line typescript/no-explicit-any
   richTextValue: any,
-): Promise<RichTextMetadata> => {
-  const parsedValue = isNonEmptyString(richTextValue)
+): RichTextMetadata => {
+  const { tiptap, blocknote, markdown }: RichTextMetadata = isNonEmptyString(
+    richTextValue,
+  )
     ? richTextValueSchema.parse(richTextValue)
     : richTextValue;
 
-  const serverBlockNoteEditor = await getServerBlockNoteEditor();
+  if (isNonEmptyString(tiptap)) {
+    const versionedTipTap = ensureTipTapSchemaVersion(tiptap);
 
-  // Patch: Handle cases where blocknote to markdown conversion fails for certain block types (custom/code blocks)
-  // Todo : This may be resolved once the server-utils library is updated with proper conversion support - #947
-  let convertedMarkdown: string | null = null;
-
-  try {
-    convertedMarkdown = isDefined(parsedValue.blocknote)
-      ? await serverBlockNoteEditor.blocksToMarkdownLossy(
-          JSON.parse(parsedValue.blocknote),
-        )
-      : null;
-  } catch {
-    convertedMarkdown = parsedValue.blocknote || null;
+    return {
+      tiptap: versionedTipTap,
+      markdown: tipTapDocumentToMarkdown(versionedTipTap),
+      blocknote: null,
+    };
   }
 
-  const convertedBlocknote = parsedValue.markdown
-    ? JSON.stringify(
-        await serverBlockNoteEditor.tryParseMarkdownToBlocks(
-          parsedValue.markdown,
-        ),
-      )
-    : null;
+  const blockNoteDocument = isNonEmptyString(blocknote)
+    ? convertBlockNoteToRichTextDocument(blocknote)
+    : undefined;
+
+  if (isDefined(blockNoteDocument)) {
+    return {
+      tiptap: JSON.stringify(blockNoteDocument),
+      markdown: tipTapDocumentToMarkdown(blockNoteDocument),
+      blocknote,
+    };
+  }
+
+  const markdownDocument = isNonEmptyString(markdown)
+    ? convertMarkdownToRichTextDocument(markdown)
+    : undefined;
+
+  if (!isDefined(markdownDocument)) {
+    return { tiptap: null, markdown: null, blocknote: null };
+  }
 
   return {
-    markdown: parsedValue.markdown || convertedMarkdown,
-    blocknote: parsedValue.blocknote || convertedBlocknote,
+    tiptap: JSON.stringify(markdownDocument),
+    markdown,
+    blocknote: null,
   };
 };

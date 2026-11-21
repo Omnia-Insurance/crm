@@ -4,10 +4,6 @@
 // tracks the manifest's head entry and is updated with each release.
 export const LATEST_RELEASE: {
   release: string;
-  title: string;
-  previewImage: string;
 } = {
-  release: '2.0.0',
-  title: 'Build an app',
-  previewImage: '/images/releases/2.0/2.0.0-build-anything.webp',
+  release: '2.52.0',
 };

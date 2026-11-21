@@ -22,10 +22,7 @@ export class IngestionLogEntity {
   @Column({ nullable: false, type: 'uuid' })
   pipelineId: string;
 
-  @ManyToOne(
-    () => IngestionPipelineEntity,
-    { onDelete: 'CASCADE' },
-  )
+  @ManyToOne(() => IngestionPipelineEntity, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'pipelineId' })
   pipeline: Relation<IngestionPipelineEntity>;
 

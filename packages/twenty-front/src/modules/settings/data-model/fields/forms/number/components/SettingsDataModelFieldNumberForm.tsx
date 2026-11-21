@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { useFieldMetadataItemById } from '@/object-metadata/hooks/useFieldMetadataItemById';
 import { numberFieldDefaultValueSchema } from '@/object-record/record-field/ui/validation-schemas/numberFieldDefaultValueSchema';
-import { Separator } from '@/settings/components/Separator';
+import { SettingsCardSeparator } from '@/settings/components/SettingsCardSeparator';
 import { SettingsOptionCardContentCounter } from '@/settings/components/SettingsOptions/SettingsOptionCardContentCounter';
 import { SettingsOptionCardContentSelect } from '@/settings/components/SettingsOptions/SettingsOptionCardContentSelect';
 import { NUMBER_DATA_MODEL_SELECT_OPTIONS } from '@/settings/data-model/fields/forms/number/constants/NumberDataModelSelectOptions';
@@ -11,7 +11,7 @@ import { Select } from '@/ui/input/components/Select';
 import { plural } from '@lingui/core/macro';
 import { useLingui } from '@lingui/react/macro';
 import { IconDecimal, IconEye } from 'twenty-ui/icon';
-import { DEFAULT_DECIMAL_VALUE } from '~/utils/format/formatNumber';
+import { DEFAULT_DECIMAL_VALUE } from '@/localization/utils/formatNumber';
 
 export const settingsDataModelFieldNumberFormSchema = z.object({
   settings: numberFieldDefaultValueSchema,
@@ -49,6 +49,7 @@ export const SettingsDataModelFieldNumberForm = ({
       render={({ field: { onChange, value } }) => {
         const count = value?.decimals ?? 0;
         const type = value?.type ?? 'number';
+        const example = `${(type === 'percentage' ? 99 : 1000).toFixed(count)}${type === 'percentage' ? '%' : ''}`;
 
         return (
           <>
@@ -77,14 +78,14 @@ export const SettingsDataModelFieldNumberForm = ({
                 }))}
               />
             </SettingsOptionCardContentSelect>
-            <Separator />
+            <SettingsCardSeparator />
             {type !== 'shortNumber' && (
               <SettingsOptionCardContentCounter
                 Icon={IconDecimal}
                 title={t`Number of decimals`}
                 description={plural(count, {
-                  one: `E.g. ${(type === 'percentage' ? 99 : 1000).toFixed(count)}${type === 'percentage' ? '%' : ''} for ${count} decimal`,
-                  other: `E.g. ${(type === 'percentage' ? 99 : 1000).toFixed(count)}${type === 'percentage' ? '%' : ''} for ${count} decimals`,
+                  one: `E.g. ${example} for # decimal`,
+                  other: `E.g. ${example} for # decimals`,
                 })}
                 value={count}
                 onChange={(value) => onChange({ type: type, decimals: value })}

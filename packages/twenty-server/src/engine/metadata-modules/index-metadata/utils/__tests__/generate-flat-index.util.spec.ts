@@ -1,7 +1,11 @@
 import { TWENTY_STANDARD_APPLICATION_UNIVERSAL_IDENTIFIER } from 'twenty-shared/application';
-import { FieldMetadataType, RelationType } from 'twenty-shared/types';
+import {
+  FieldMetadataType,
+  IndexType,
+  RelationType,
+} from 'twenty-shared/types';
 
-import { IndexType } from 'src/engine/metadata-modules/index-metadata/types/indexType.types';
+import { getFlatFieldMetadataMock } from 'src/engine/metadata-modules/flat-field-metadata/__mocks__/get-flat-field-metadata.mock';
 import { generateFlatIndexMetadataWithNameOrThrow } from 'src/engine/metadata-modules/index-metadata/utils/generate-flat-index.util';
 import { type UniversalFlatFieldMetadata } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/types/universal-flat-field-metadata.type';
 import { type UniversalFlatObjectMetadata } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/types/universal-flat-object-metadata.type';
@@ -41,13 +45,14 @@ describe('generateFlatIndexMetadataWithNameOrThrow', () => {
     isUnique: false,
   } as UniversalFlatFieldMetadata;
 
-  const manyToOneRelationField = {
+  const manyToOneRelationField = getFlatFieldMetadataMock({
     universalIdentifier: 'field-account-owner',
+    objectMetadataId: 'obj-company',
     name: 'accountOwner',
     type: FieldMetadataType.RELATION,
     isUnique: false,
     universalSettings: { relationType: RelationType.MANY_TO_ONE },
-  } as unknown as UniversalFlatFieldMetadata;
+  });
 
   const buildIndex = (overrides: {
     universalIdentifier: string;
@@ -64,7 +69,6 @@ describe('generateFlatIndexMetadataWithNameOrThrow', () => {
     indexType: overrides.indexType,
     indexWhereClause: overrides.indexWhereClause ?? null,
     isUnique: overrides.isUnique,
-    isCustom: false,
     isSystemSideEffect: false,
     universalFlatIndexFieldMetadatas: overrides.fieldIds.map((id, order) => ({
       createdAt: now,

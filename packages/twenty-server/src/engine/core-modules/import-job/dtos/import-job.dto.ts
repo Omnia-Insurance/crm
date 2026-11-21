@@ -47,30 +47,3 @@ export class AppendRowsResultDTO {
   @Field(() => Int)
   totalRecords: number;
 }
-
-@ObjectType('ImportJobProgress')
-export class ImportJobProgressDTO {
-  @Field(() => String)
-  importJobId: string;
-
-  @Field(() => ImportJobStatus)
-  status: ImportJobStatus;
-
-  @Field(() => Int)
-  processedRecords: number;
-
-  @Field(() => Int)
-  totalRecords: number;
-
-  @Field(() => Int)
-  successCount: number;
-
-  @Field(() => Int)
-  warningCount: number;
-
-  @Field(() => Int)
-  failureCount: number;
-
-  @Field(() => GraphQLJSON, { nullable: true })
-  result: Record<string, unknown> | null;
-}

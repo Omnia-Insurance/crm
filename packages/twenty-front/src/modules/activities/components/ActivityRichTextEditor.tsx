@@ -1,36 +1,30 @@
 import { useStore } from 'jotai';
 import { useCallback, useRef } from 'react';
-import { v4 } from 'uuid';
 
 import { useUpsertActivity } from '@/activities/hooks/useUpsertActivity';
 import { canCreateActivityState } from '@/activities/states/canCreateActivityState';
 import { type Note } from '@/activities/types/Note';
 import { type Task } from '@/activities/types/Task';
-import { type BLOCK_SCHEMA } from '@/blocknote-editor/blocks/Schema';
-import { BLOCK_EDITOR_GLOBAL_HOTKEYS_CONFIG } from '@/blocknote-editor/constants/BlockEditorGlobalHotkeysConfig';
 import { useLabelIdentifierFieldMetadataItem } from '@/object-metadata/hooks/useLabelIdentifierFieldMetadataItem';
 import { RichTextFieldEditor } from '@/object-record/record-field/ui/meta-types/input/components/RichTextFieldEditor';
-import { draftRecordIdsState } from '@/object-record/record-side-panel/states/draftRecordIdsState';
+import { RICH_TEXT_FIELD_EDITOR_GLOBAL_HOTKEYS_CONFIG } from '@/object-record/record-field/ui/meta-types/input/constants/RichTextFieldEditorGlobalHotkeysConfig';
 import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
 import { isTitleCellInEditModeComponentState } from '@/object-record/record-title-cell/states/isTitleCellInEditModeComponentState';
 import { RecordTitleCellContainerType } from '@/object-record/record-title-cell/types/RecordTitleCellContainerType';
 import { getRecordFieldInputInstanceId } from '@/object-record/utils/getRecordFieldInputId';
-import { SIDE_PANEL_FOCUS_ID } from '@/side-panel/constants/SidePanelFocusId';
 import { usePushFocusItemToFocusStack } from '@/ui/utilities/focus/hooks/usePushFocusItemToFocusStack';
 import { useRemoveFocusItemFromFocusStackById } from '@/ui/utilities/focus/hooks/useRemoveFocusItemFromFocusStackById';
 import { FocusComponentType } from '@/ui/utilities/focus/types/FocusComponentType';
-import { useHotkeysOnFocusedElement } from '@/ui/utilities/hotkey/hooks/useHotkeysOnFocusedElement';
-import { isNonTextWritingKey } from '@/ui/utilities/hotkey/utils/isNonTextWritingKey';
 import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
-import { Key } from 'ts-key-enum';
-import { type CoreObjectNameSingular } from 'twenty-shared/types';
+import { type Editor } from '@tiptap/core';
+import { type StandardObjectNameSingular } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 
 type ActivityRichTextEditorProps = {
   activityId: string;
   activityObjectNameSingular:
-    | CoreObjectNameSingular.Task
-    | CoreObjectNameSingular.Note;
+    | StandardObjectNameSingular.Task
+    | StandardObjectNameSingular.Note;
 };
 
 export const ActivityRichTextEditor = ({
@@ -40,7 +34,7 @@ export const ActivityRichTextEditor = ({
   const store = useStore();
 
   // oxlint-disable-next-line twenty/no-state-useref
-  const editorRef = useRef<typeof BLOCK_SCHEMA.BlockNoteEditor | null>(null);
+  const editorRef = useRef<Editor | null>(null);
 
   const { upsertActivity } = useUpsertActivity({
     activityObjectNameSingular,
@@ -66,17 +60,7 @@ export const ActivityRichTextEditor = ({
   });
 
   const handlePersistBody = useCallback(
-    (blocknote: string) => {
-      // OMNIA-CUSTOM: Side-panel draft guard. When the activity is a draft
-      // opened via `useOpenCreateAuditTaskDraft` (or any side-panel draft),
-      // it's not yet on the server, so upsertActivity's update branch throws
-      // RECORD_NOT_FOUND. The body is already written to recordStoreFamilyState
-      // by RichTextFieldEditor.handleBodyChange and gets picked up by
-      // RecordShowSidePanelCreateRecordButton when the user clicks Create.
-      if (store.get(draftRecordIdsState.atom).has(activityId)) {
-        return;
-      }
-
+    (tiptap: string) => {
       if (!canCreateActivity) {
         setCanCreateActivity(true);
       }
@@ -89,7 +73,7 @@ export const ActivityRichTextEditor = ({
         upsertActivity({
           activity,
           input: {
-            bodyV2: { blocknote, markdown: null },
+            bodyV2: { blocknote: null, markdown: null, tiptap },
           },
         });
       }
@@ -111,7 +95,7 @@ export const ActivityRichTextEditor = ({
     );
 
     if (isRecordTitleCellOpen) {
-      editorRef.current?.domElement?.blur();
+      editorRef.current?.commands.blur();
       return;
     }
 
@@ -121,7 +105,7 @@ export const ActivityRichTextEditor = ({
         type: FocusComponentType.ACTIVITY_RICH_TEXT_EDITOR,
       },
       focusId: activityId,
-      globalHotkeysConfig: BLOCK_EDITOR_GLOBAL_HOTKEYS_CONFIG,
+      globalHotkeysConfig: RICH_TEXT_FIELD_EDITOR_GLOBAL_HOTKEYS_CONFIG,
     });
   }, [recordTitleCellId, activityId, pushFocusItemToFocusStack, store]);
 
@@ -138,53 +122,6 @@ export const ActivityRichTextEditor = ({
 
     removeFocusItemFromFocusStackById({ focusId: activityId });
   }, [activityId, recordTitleCellId, removeFocusItemFromFocusStackById, store]);
-
-  const focusRichTextEditorWhenFocusOnSidePanel = (
-    keyboardEvent: KeyboardEvent,
-  ) => {
-    if (keyboardEvent.key === Key.Escape) {
-      return;
-    }
-
-    const isWritingText =
-      !isNonTextWritingKey(keyboardEvent.key) &&
-      !keyboardEvent.ctrlKey &&
-      !keyboardEvent.metaKey;
-
-    if (!isWritingText) {
-      return;
-    }
-
-    const editor = editorRef.current;
-
-    if (!editor) {
-      return;
-    }
-
-    keyboardEvent.preventDefault();
-    keyboardEvent.stopPropagation();
-    keyboardEvent.stopImmediatePropagation();
-
-    const newBlockId = v4();
-    const newBlock = {
-      id: newBlockId,
-      type: 'paragraph' as const,
-      content: keyboardEvent.key,
-    };
-
-    const lastBlock = editor.document[editor.document.length - 1];
-    editor.insertBlocks([newBlock], lastBlock);
-
-    editor.setTextCursorPosition(newBlockId, 'end');
-    editor.focus();
-  };
-
-  useHotkeysOnFocusedElement({
-    keys: '*',
-    callback: focusRichTextEditorWhenFocusOnSidePanel,
-    focusId: SIDE_PANEL_FOCUS_ID,
-    dependencies: [focusRichTextEditorWhenFocusOnSidePanel],
-  });
 
   return (
     <RichTextFieldEditor

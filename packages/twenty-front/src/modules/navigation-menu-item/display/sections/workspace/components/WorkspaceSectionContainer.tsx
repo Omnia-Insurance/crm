@@ -1,12 +1,11 @@
 import { styled } from '@linaria/react';
-import React, { lazy, Suspense, useContext } from 'react';
+import React, { lazy, Suspense } from 'react';
 import { isDefined } from 'twenty-shared/utils';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { doNotTranslate } from 'twenty-shared/i18n';
+import { themeCssVariables } from 'twenty-ui/theme';
 import { type NavigationMenuItem } from '~/generated-metadata/graphql';
 
 import { isLayoutCustomizationModeEnabledState } from '@/layout-customization/states/isLayoutCustomizationModeEnabledState';
-import { NavigationMenuItemDroppableIds } from '@/navigation-menu-item/common/constants/NavigationMenuItemDroppableIds';
-import { NavigationDropTargetContext } from '@/navigation-menu-item/common/contexts/NavigationDropTargetContext';
 import { type NavigationMenuItemClickParams } from '@/navigation-menu-item/display/hooks/useNavigationMenuItemSectionItems';
 import { useReadableNavigationMenuItems } from '@/navigation-menu-item/display/hooks/useReadableNavigationMenuItems';
 import { getObjectMetadataForNavigationMenuItem } from '@/navigation-menu-item/display/object/utils/getObjectMetadataForNavigationMenuItem';
@@ -54,18 +53,11 @@ export const WorkspaceSectionContainer = ({
     isLayoutCustomizationModeEnabledState,
   );
   const { toggleNavigationSection, isNavigationSectionOpen } =
-    useNavigationSection('Workspace');
+    useNavigationSection(doNotTranslate('Workspace'));
   const views = useAtomStateValue(viewsSelector);
 
   const objectMetadataItems = useAtomStateValue(objectMetadataItemsSelector);
-  const { addToNavigationFallbackDestination } = useContext(
-    NavigationDropTargetContext,
-  );
-
   const flatItems = items.filter((item) => !isDefined(item.folderId));
-  const isAddToNavigationDropTargetVisible =
-    addToNavigationFallbackDestination?.droppableId ===
-    NavigationMenuItemDroppableIds.WORKSPACE_ORPHAN_NAVIGATION_MENU_ITEMS;
 
   const folderChildrenById = items.reduce<Map<string, NavigationMenuItem[]>>(
     (acc, item) => {
@@ -118,10 +110,6 @@ export const WorkspaceSectionContainer = ({
     };
   };
 
-  if (flatItems.length === 0 && !isAddToNavigationDropTargetVisible) {
-    return null;
-  }
-
   return (
     <NavigationMenuItemSection
       title={sectionTitle}
@@ -129,7 +117,6 @@ export const WorkspaceSectionContainer = ({
       onToggle={() => toggleNavigationSection()}
       rightIcon={rightIcon}
       alwaysShowRightIcon={isLayoutCustomizationModeEnabled}
-      forceExpanded={isAddToNavigationDropTargetVisible}
       contentWrapper={(children) => (
         <StyledWorkspaceSectionContentGapOffset>
           {children}

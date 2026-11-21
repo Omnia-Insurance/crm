@@ -1,3 +1,5 @@
+export { Trans } from './components/Trans';
+export type { TransProps } from './components/Trans';
 export { closeSidePanel } from './functions/closeSidePanel';
 export { copyToClipboard } from './functions/copyToClipboard';
 export { getApplicationVariable } from './functions/getApplicationVariable';
@@ -7,13 +9,33 @@ export { openCommandConfirmationModal } from './functions/openCommandConfirmatio
 export { openSidePanelPage } from './functions/openSidePanelPage';
 export { unmountFrontComponent } from './functions/unmountFrontComponent';
 export { updateProgress } from './functions/updateProgress';
+export { uploadFile } from './functions/uploadFile';
 export { useColorScheme } from './hooks/useColorScheme';
 export { useFrontComponentExecutionContext } from './hooks/useFrontComponentExecutionContext';
 export { useFrontComponentId } from './hooks/useFrontComponentId';
+export { useTranslate } from './hooks/useTranslate';
+export type { UseTranslateResult } from './hooks/useTranslate';
+export { useLocale } from './hooks/useLocale';
+export { useLocation } from './hooks/useLocation';
 export { useRecordId } from './hooks/useRecordId';
+export { useToolCall } from './hooks/useToolCall';
 export { useSelectedRecordIds } from './hooks/useSelectedRecordIds';
+export { useSelectedRecordsFilter } from './hooks/useSelectedRecordsFilter';
+export { useSelectedObjectMetadata } from './hooks/useSelectedObjectMetadata';
+export { useTimelineActivityId } from './hooks/useTimelineActivityId';
 export { useUserId } from './hooks/useUserId';
+export { msg } from './translations/msg';
+export { t } from './translations/t';
+export type {
+  MessageDescriptor,
+  TranslationValues,
+} from './translations/message';
 export type { FrontComponentExecutionContext } from './types/FrontComponentExecutionContext';
+export type { FrontComponentLocation } from './types/FrontComponentLocation';
+export type { FrontComponentSelectedObjectMetadata } from './types/FrontComponentSelectedObjectMetadata';
+export type { FrontComponentToolCall } from './types/FrontComponentToolCall';
+export type { FrontComponentToolCallStatus } from './types/FrontComponentToolCallStatus';
+export type { FrontComponentStorageType } from './types/FrontComponentStorageType';
 export { getFrontComponentCommandErrorDedupeKey } from './utils/getFrontComponentCommandErrorDedupeKey';
 export type {
   CloseSidePanelFunction,
@@ -27,8 +49,16 @@ export type {
   OpenSidePanelPageFunction,
   OpenSidePanelPageParams,
   RequestAccessTokenRefreshFunction,
+  StorageClearFunction,
+  StorageDeleteFunction,
+  StorageSetFunction,
   UnmountFrontComponentFunction,
   UpdateProgressFunction,
+  UploadedFrontComponentFile,
+  UploadFileFailureReason,
+  UploadFileFunction,
+  UploadFileParams,
+  UploadFileResult,
 } from './globals/frontComponentHostCommunicationApi';
 
 export {
@@ -43,6 +73,18 @@ export type {
   CommandOpenSidePanelPageProps,
   CommandProps,
 } from './command';
+
+export { sendInboxMessage } from '@/sdk/inbox/send-inbox-message';
+export { inboxMention } from '@/sdk/inbox/mentions/inbox-mention';
+export { inboxReferenceRecord } from '@/sdk/inbox/mentions/inbox-reference-record';
+export { INBOX_ASSISTANT_MENTION } from '@/sdk/inbox/mentions/inbox-assistant-mention';
+export { attachRecordToInboxThread } from '@/sdk/inbox/attach-record-to-inbox-thread';
+export { detachRecordFromInboxThread } from '@/sdk/inbox/detach-record-from-inbox-thread';
+export { archiveInboxThread } from '@/sdk/inbox/archive-inbox-thread';
+export type { SendInboxMessageInput } from '@/sdk/define/common/types/loose-shared-types.type';
+export type { SendInboxMessageResult } from 'twenty-shared/application';
+export type { InboxThreadRecordInput } from 'twenty-shared/application';
+export type { ArchiveInboxThreadInput } from 'twenty-shared/application';
 
 export { AppPath, SidePanelPages } from 'twenty-shared/types';
 export type {

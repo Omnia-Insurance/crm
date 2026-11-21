@@ -4,7 +4,7 @@ import { signValidityToken } from './sign-validity-token';
 import { verifyJwt } from './verify-jwt';
 
 const SECONDS_PER_DAY = 24 * 60 * 60;
-const DEFAULT_DURATION_DAYS = 30;
+const DEFAULT_DURATION_DAYS = 7;
 
 type ValidityClaims = {
   exp: number;
@@ -51,7 +51,7 @@ describe('signValidityToken', () => {
   });
 
   it('clamps exp down to a cancellation inside the window', () => {
-    const cancelAt = Math.floor(Date.now() / 1000) + 10 * SECONDS_PER_DAY;
+    const cancelAt = Math.floor(Date.now() / 1000) + 3 * SECONDS_PER_DAY;
     const claims = verifiedClaims(
       signValidityToken('sub_clamped', { subscriptionCancelAt: cancelAt }),
     );
@@ -78,5 +78,41 @@ describe('signValidityToken', () => {
     expect(claims.exp - claims.iat).toBe(
       DEFAULT_DURATION_DAYS * SECONDS_PER_DAY,
     );
+  });
+
+  it('caps the token at the end of the grace period', () => {
+    const graceExpiresAt = Math.floor(Date.now() / 1000) + 2 * SECONDS_PER_DAY;
+    const claims = verifiedClaims(
+      signValidityToken('sub_grace', {
+        subscriptionCancelAt: null,
+        graceExpiresAt,
+      }),
+    );
+
+    expect(claims.exp).toBe(graceExpiresAt);
+  });
+
+  it('keeps the earliest of a cancellation and a grace deadline', () => {
+    const graceExpiresAt = Math.floor(Date.now() / 1000) + 5 * SECONDS_PER_DAY;
+    const cancelAt = Math.floor(Date.now() / 1000) + 3 * SECONDS_PER_DAY;
+    const claims = verifiedClaims(
+      signValidityToken('sub_both', {
+        subscriptionCancelAt: cancelAt,
+        graceExpiresAt,
+      }),
+    );
+
+    expect(claims.exp).toBe(cancelAt);
+  });
+
+  it('signs a grace token with the standard valid status', () => {
+    const claims = verifiedClaims(
+      signValidityToken('sub_grace_status', {
+        subscriptionCancelAt: null,
+        graceExpiresAt: Math.floor(Date.now() / 1000) + SECONDS_PER_DAY,
+      }),
+    );
+
+    expect(claims.status).toBe('valid');
   });
 });

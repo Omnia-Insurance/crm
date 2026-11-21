@@ -1,610 +1,447 @@
-import { Logger, Scope } from '@nestjs/common';
+import { AgentChatTurnCancellationReason } from 'src/engine/metadata-modules/ai/ai-chat/enums/agent-chat-turn-cancellation-reason.enum';
+import { Inject, Logger, Scope } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
 import { isNonEmptyString } from '@sniptt/guards';
-import { createUIMessageStream } from 'ai';
-import type {
-  CodeExecutionData,
-  ExtendedUIMessage,
-  ExtendedUIMessagePart,
-} from 'twenty-shared/ai';
-import { isDefined } from 'twenty-shared/utils';
+import { type CodeExecutionData } from 'twenty-shared/ai';
+import { assertUnreachable, isDefined } from 'twenty-shared/utils';
 import { Repository } from 'typeorm';
-import { v4 } from 'uuid';
 
+import { type MessageQueueJobContext } from 'src/engine/core-modules/message-queue/interfaces/message-queue-job.interface';
+
+import { buildActorMetadataFromAuthContext } from 'src/engine/core-modules/actor/utils/build-actor-metadata-from-auth-context.util';
 import { Process } from 'src/engine/core-modules/message-queue/decorators/process.decorator';
 import { Processor } from 'src/engine/core-modules/message-queue/decorators/processor.decorator';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
-import { toDisplayCredits } from 'src/engine/core-modules/usage/utils/to-display-credits.util';
+import { MetricsService } from 'src/engine/core-modules/metrics/metrics.service';
+import { MetricsKeys } from 'src/engine/core-modules/metrics/types/metrics-keys.type';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
-import { AgentMessageRole } from 'src/engine/metadata-modules/ai/ai-agent-execution/entities/agent-message.entity';
-import { computeCostBreakdown } from 'src/engine/metadata-modules/ai/ai-billing/utils/compute-cost-breakdown.util';
-import { convertDollarsToBillingCredits } from 'src/engine/metadata-modules/ai/ai-billing/utils/convert-dollars-to-billing-credits.util';
-import { extractCacheCreationTokens } from 'src/engine/metadata-modules/ai/ai-billing/utils/extract-cache-creation-tokens.util';
-import { AgentChatThreadEntity } from 'src/engine/metadata-modules/ai/ai-chat/entities/agent-chat-thread.entity';
-import { AgentChatCancelSubscriberService } from 'src/engine/metadata-modules/ai/ai-chat/services/agent-chat-cancel-subscriber.service';
+import { STREAM_AGENT_CHAT_JOB_NAME } from 'src/engine/metadata-modules/ai/ai-chat/jobs/stream-agent-chat-job-name.constant';
+import { type StreamAgentChatJobData } from 'src/engine/metadata-modules/ai/ai-chat/jobs/stream-agent-chat-job.types';
+import { AgentChatActorService } from 'src/engine/metadata-modules/ai/ai-chat/services/agent-chat-actor.service';
 import { AgentChatEventPublisherService } from 'src/engine/metadata-modules/ai/ai-chat/services/agent-chat-event-publisher.service';
-import { AgentChatStreamingService } from 'src/engine/metadata-modules/ai/ai-chat/services/agent-chat-streaming.service';
 import { AgentChatService } from 'src/engine/metadata-modules/ai/ai-chat/services/agent-chat.service';
+import { AgentChatReplyExecutionPolicyService } from 'src/engine/metadata-modules/ai/ai-chat/services/agent-chat-reply-execution-policy.service';
+import { AgentTurnStreamService } from 'src/engine/metadata-modules/ai/ai-chat/services/agent-turn-stream.service';
 import { ChatExecutionService } from 'src/engine/metadata-modules/ai/ai-chat/services/chat-execution.service';
-import { getCancelChannel } from 'src/engine/metadata-modules/ai/ai-chat/utils/get-cancel-channel.util';
-import type { AiModelConfig } from 'src/engine/metadata-modules/ai/ai-models/types/ai-model-config.type';
-import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
-import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
-
-import { STREAM_AGENT_CHAT_JOB_NAME } from './stream-agent-chat-job-name.constant';
-import { type StreamAgentChatJobData } from './stream-agent-chat-job.types';
-
-export { STREAM_AGENT_CHAT_JOB_NAME, type StreamAgentChatJobData };
+import { type AgentChatTurnOutcome } from 'src/engine/metadata-modules/ai/ai-chat/types/agent-chat-turn-outcome.type';
+import { type AgentChatStreamClaim } from 'src/engine/metadata-modules/ai/ai-chat/services/agent-chat-stream-recovery.service';
+import { formatErrorWithCause } from 'src/engine/metadata-modules/ai/ai-chat/utils/format-error-with-cause.util';
+import { tagAiChatStreamScope } from 'src/engine/metadata-modules/ai/ai-chat/utils/tag-ai-chat-stream-scope.util';
+import { AgentHistoryRepository } from 'src/engine/metadata-modules/ai/ai-history/repositories/agent-history-repository';
+import { InjectAgentHistoryRepository } from 'src/engine/metadata-modules/ai/ai-history/repositories/inject-agent-history-repository.decorator';
+import { AgentTurnRecorderService } from 'src/engine/metadata-modules/ai/ai-history/services/agent-turn-recorder.service';
+import { AgentTurnStatus } from 'src/engine/metadata-modules/ai/ai-history/enums/agent-turn-status.enum';
+import { AgentChatThreadWorkspaceEntity } from 'src/engine/metadata-modules/ai/ai-history/standard-objects/agent-chat-thread.workspace-entity';
+import { mapErrorToStreamError } from 'src/engine/metadata-modules/ai/ai-history/utils/map-error-to-stream-error.util';
+import { AiModelRegistryService } from 'src/engine/metadata-modules/ai/ai-models/services/ai-model-registry.service';
+import { WorkspaceAiDataPolicyService } from 'src/engine/metadata-modules/ai/ai-models/services/workspace-ai-data-policy.service';
+import { getChatModelId } from 'src/engine/metadata-modules/ai/ai-models/utils/get-chat-model-id.util';
+import {
+  AiException,
+  AiExceptionCode,
+} from 'src/engine/metadata-modules/ai/ai.exception';
 
 @Processor({ queueName: MessageQueue.aiStreamQueue, scope: Scope.REQUEST })
 export class StreamAgentChatJob {
   private readonly logger = new Logger(StreamAgentChatJob.name);
 
+  // keeps the catch in handle() from counting a turn the stream already classified
+  private hasRecordedTurnOutcome = false;
+
+  @Inject(AgentChatReplyExecutionPolicyService)
+  private readonly replyExecutionPolicyService: AgentChatReplyExecutionPolicyService;
+
   constructor(
-    @InjectWorkspaceScopedRepository(AgentChatThreadEntity)
-    private readonly threadRepository: WorkspaceScopedRepository<AgentChatThreadEntity>,
+    @InjectAgentHistoryRepository('agentChatThread')
+    private readonly threadRepository: AgentHistoryRepository<AgentChatThreadWorkspaceEntity>,
     @InjectRepository(WorkspaceEntity)
     private readonly workspaceRepository: Repository<WorkspaceEntity>,
     private readonly agentChatService: AgentChatService,
     private readonly chatExecutionService: ChatExecutionService,
     private readonly eventPublisherService: AgentChatEventPublisherService,
-    private readonly cancelSubscriberService: AgentChatCancelSubscriberService,
-    private readonly agentChatStreamingService: AgentChatStreamingService,
+    private readonly turnStreamService: AgentTurnStreamService,
+    private readonly metricsService: MetricsService,
+    private readonly aiModelRegistryService: AiModelRegistryService,
+    private readonly actorService: AgentChatActorService,
+    private readonly turnRecorderService: AgentTurnRecorderService,
+    private readonly workspaceAiDataPolicyService: WorkspaceAiDataPolicyService,
   ) {}
 
   @Process(STREAM_AGENT_CHAT_JOB_NAME)
-  async handle(data: StreamAgentChatJobData): Promise<void> {
+  async handle(
+    data: StreamAgentChatJobData,
+    context?: MessageQueueJobContext,
+  ): Promise<void> {
+    tagAiChatStreamScope({
+      streamId: data.streamId,
+      turnId: data.existingTurnId,
+      threadId: data.threadId,
+      workspaceId: data.workspaceId,
+    });
+
+    const thread = await this.threadRepository.findOne(data.workspaceId, {
+      where: { id: data.threadId },
+      select: ['id', 'activeStreamId'],
+    });
+
+    if (thread?.activeStreamId !== data.streamId) {
+      this.logger.warn(
+        `Skipping stream ${data.streamId} for thread ${data.threadId}: the thread no longer holds this claim`,
+      );
+
+      return;
+    }
+
     const workspace = await this.workspaceRepository.findOne({
       where: { id: data.workspaceId },
     });
 
+    const turnModelId = await this.resolveTurnModelId(data.modelId, workspace);
+
+    this.metricsService.incrementCounterBy({
+      key: MetricsKeys.AiChatTurnStarted,
+      amount: 1,
+      attributes: { model: turnModelId },
+    });
+
+    const claim = {
+      threadId: data.threadId,
+      workspaceId: data.workspaceId,
+      streamId: data.streamId,
+    };
+
+    try {
+      await this.turnStreamService.runClaimed({
+        claim,
+        jobAbortSignal: context?.abortSignal,
+        work: (abortSignal) =>
+          this.runTurn({ workspace, data, claim, turnModelId, abortSignal }),
+      });
+    } catch (error) {
+      this.logger.error(
+        `[AI_CHAT_TURN_FAILED] failurePhase=execution, model=${turnModelId}, threadId=${data.threadId}, workspaceId=${data.workspaceId}, streamId=${data.streamId}: ${formatErrorWithCause(error)}`,
+      );
+
+      this.recordTurnOutcome(
+        {
+          kind: 'failed',
+          failurePhase: 'execution',
+          errorCode: mapErrorToStreamError(error).code,
+        },
+        turnModelId,
+      );
+
+      await this.eventPublisherService
+        .publish({
+          threadId: data.threadId,
+          workspaceId: data.workspaceId,
+          event: { type: 'queue-updated' },
+        })
+        .catch(() => {});
+      throw error;
+    }
+  }
+
+  private async runTurn({
+    workspace,
+    data,
+    claim,
+    turnModelId,
+    abortSignal,
+  }: {
+    workspace: WorkspaceEntity | null;
+    data: StreamAgentChatJobData;
+    claim: AgentChatStreamClaim;
+    turnModelId: string;
+    abortSignal: AbortSignal;
+  }): Promise<void> {
     if (!workspace) {
-      this.logger.error(`Workspace ${data.workspaceId} not found`);
-      await this.eventPublisherService.publish({
+      throw new AiException(
+        `Workspace ${data.workspaceId} not found`,
+        AiExceptionCode.WORKSPACE_NOT_FOUND,
+      );
+    }
+
+    const turnId = data.existingTurnId;
+    const { sender, authorizedConversation, message } =
+      await this.actorService.authorizeJob({
+        workspaceId: data.workspaceId,
+        threadId: data.threadId,
+        messageId: data.messageId,
+        turnId,
+        userWorkspaceId: data.userWorkspaceId,
+      });
+
+    const isExecutionAllowed =
+      await this.replyExecutionPolicyService.shouldExecute({
         threadId: data.threadId,
         workspaceId: data.workspaceId,
-        event: {
-          type: 'stream-error',
-          code: 'WORKSPACE_NOT_FOUND',
-          message: `Workspace ${data.workspaceId} not found`,
-        },
+        userWorkspaceId: sender.userWorkspaceId,
+        messageId: message?.id,
+      });
+
+    if (!isExecutionAllowed) {
+      await this.cancelTurnForWorkspacePolicy({
+        claim,
+        turnId,
+        turnModelId,
       });
 
       return;
     }
 
-    const abortController = new AbortController();
-    const cancelChannel = getCancelChannel(data.threadId);
-
-    await this.cancelSubscriberService.subscribe(cancelChannel, () => {
-      abortController.abort();
+    const isRunning = await this.turnRecorderService.markRunning({
+      workspaceId: data.workspaceId,
+      turnId,
+      modelId: turnModelId,
+      createdBy: buildActorMetadataFromAuthContext(
+        authorizedConversation.authContext,
+      ),
+      isBuiltInAssistant: true,
+      streamClaim: claim,
     });
 
-    try {
-      await this.executeStream(data, workspace, abortController.signal);
-    } catch (error) {
-      this.logger.error(
-        `Stream ${data.streamId} failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      await this.eventPublisherService
-        .publish({
-          threadId: data.threadId,
-          workspaceId: data.workspaceId,
-          event: {
-            type: 'stream-error',
-            code: 'STREAM_EXECUTION_FAILED',
-            message:
-              error instanceof Error
-                ? error.message
-                : 'Stream execution failed',
-          },
-        })
-        .catch(() => {});
-      throw error;
-    } finally {
-      await this.cancelSubscriberService.unsubscribe(cancelChannel);
-      await this.threadRepository
-        .update(
-          data.workspaceId,
-          { id: data.threadId, activeStreamId: data.streamId },
-          { activeStreamId: null },
-        )
-        .catch(() => {});
-
-      if (!abortController.signal.aborted) {
-        await this.agentChatStreamingService
-          .flushNextQueuedMessage(
-            data.threadId,
-            data.userWorkspaceId,
-            data.workspaceId,
-            data.hasTitle,
-          )
-          .catch((error) => {
-            this.logger.error(
-              `Failed to flush queued message for thread ${data.threadId}: ${error instanceof Error ? error.message : String(error)}`,
-            );
-          });
-      }
+    // the stream was stopped while starting, and its turn already ended
+    if (!isRunning) {
+      return;
     }
-  }
-
-  private async executeStream(
-    data: StreamAgentChatJobData,
-    workspace: WorkspaceEntity,
-    abortSignal: AbortSignal,
-  ): Promise<void> {
-    // When processing a promoted queued message, the user message already
-    // exists in the DB with a turn — skip persisting it again.
-    const userMessagePromise = data.existingTurnId
-      ? Promise.resolve({ turnId: data.existingTurnId })
-      : this.agentChatService.addMessage({
-          threadId: data.threadId,
-          uiMessage: {
-            role: AgentMessageRole.USER,
-            parts: data.lastUserMessageParts.filter(
-              (part): part is ExtendedUIMessagePart =>
-                part.type === 'text' || part.type === 'file',
-            ),
-          },
-          workspaceId: data.workspaceId,
-        });
-
-    userMessagePromise.catch(() => {});
 
     const titlePromise = data.hasTitle
       ? Promise.resolve(null)
       : this.agentChatService
           .generateTitleIfNeeded({
+            userWorkspaceId: data.userWorkspaceId,
             threadId: data.threadId,
             messageContent: data.lastUserMessageText,
             workspaceId: data.workspaceId,
           })
           .catch(() => null);
 
-    await this.buildAndPublishStream({
-      workspace,
-      data,
-      userMessagePromise,
-      titlePromise,
+    const { finish } = await this.turnStreamService.streamTurn({
+      workspaceId: data.workspaceId,
+      claim,
+      turnId,
+      agentId: null,
+      isBuiltInAssistant: true,
       abortSignal,
-    });
-  }
-
-  private async buildAndPublishStream({
-    workspace,
-    data,
-    userMessagePromise,
-    titlePromise,
-    abortSignal,
-  }: {
-    workspace: WorkspaceEntity;
-    data: StreamAgentChatJobData;
-    userMessagePromise: Promise<{ turnId: string | null }>;
-    titlePromise: Promise<string | null>;
-    abortSignal: AbortSignal;
-  }): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-      const assistantMessageId = v4();
-
-      let streamUsage = {
-        inputTokens: 0,
-        outputTokens: 0,
-        inputCredits: 0,
-        outputCredits: 0,
-        cacheReadTokens: 0,
-      };
-      let lastStepConversationSize = 0;
-      let totalCacheCreationTokens = 0;
-      let streamError: unknown;
-      let checkHasNoMoreAvailableCredits: () => boolean = () => false;
-
-      // onFinish fires before the uiStream is fully drained. We use this
-      // promise to coordinate: the IIFE waits for DB persist to complete
-      // before publishing message-persisted (after all chunks).
-      let resolveStreamFinished: () => void;
-      const streamFinishedPromise = new Promise<void>((res) => {
-        resolveStreamFinished = res;
-      });
-
-      abortSignal.addEventListener('abort', () => resolve(), { once: true });
-
-      const uiStream = createUIMessageStream<ExtendedUIMessage>({
-        execute: async ({ writer }) => {
-          const onCodeExecutionUpdate = (
-            codeExecutionData: CodeExecutionData,
-          ) => {
+      startTurn: async (writer) => {
+        const turn = await this.chatExecutionService.streamChat({
+          workspace,
+          userWorkspaceId: data.userWorkspaceId,
+          sender,
+          authorizedConversation,
+          streamId: data.streamId,
+          turnId,
+          messages: data.messages,
+          browsingContext: data.browsingContext,
+          modelId: data.modelId,
+          onCodeExecutionUpdate: (codeExecutionData: CodeExecutionData) => {
             writer.write({
               type: 'data-code-execution' as const,
               id: `code-execution-${codeExecutionData.executionId}`,
               data: codeExecutionData,
             });
-          };
-
-          const onCompaction = () => {
+          },
+          onCompaction: () => {
             writer.write({
               type: 'data-compaction' as const,
               id: `compaction-${data.threadId}`,
               data: {},
             });
-          };
+          },
+          abortSignal,
+          conversationSizeTokens: data.conversationSizeTokens,
+          onUserCreditsExhausted: ({
+            renewsAt,
+            isFallingBackToWorkspaceCredits,
+          }) =>
+            this.eventPublisherService
+              .publish({
+                threadId: data.threadId,
+                workspaceId: data.workspaceId,
+                event: {
+                  type: 'user-credits-exhausted',
+                  workspaceMemberId:
+                    authorizedConversation.authContext.workspaceMemberId,
+                  isFallingBackToWorkspaceCredits,
+                  renewsAt: renewsAt.toISOString(),
+                },
+              })
+              .catch((error: unknown) =>
+                this.logger.warn(
+                  `Could not publish the user credits notice for stream ${data.streamId}: ${formatErrorWithCause(error)}`,
+                ),
+              ),
+        });
 
-          const { stream, modelConfig, hasNoMoreAvailableCredits } =
-            await this.chatExecutionService.streamChat({
-              workspace,
-              userWorkspaceId: data.userWorkspaceId,
-              threadId: data.threadId,
-              messages: data.messages,
-              browsingContext: data.browsingContext,
-              modelId: data.modelId,
-              onCodeExecutionUpdate,
-              onCompaction,
-              abortSignal,
-              conversationSizeTokens: data.conversationSizeTokens,
-            });
-
-          checkHasNoMoreAvailableCredits = hasNoMoreAvailableCredits;
-
-          const titleWritePromise = titlePromise.then((generatedTitle) => {
-            if (generatedTitle) {
-              writer.write({
-                type: 'data-thread-title' as const,
-                id: `thread-title-${data.threadId}`,
-                data: { title: generatedTitle },
-              });
-            }
-          });
-
-          writer.merge(
-            stream.toUIMessageStream({
-              onError: (error) => {
-                streamError = error;
-
-                return error instanceof Error ? error.message : String(error);
-              },
-              sendStart: true,
-              generateMessageId: () => assistantMessageId,
-              messageMetadata: ({ part }) => {
-                return this.computeMessageMetadata({
-                  part,
-                  modelConfig,
-                  lastStepConversationSize,
-                  totalCacheCreationTokens,
-                  onUpdateUsage: (usage) => {
-                    streamUsage = usage;
-                  },
-                  onUpdateConversationSize: (size) => {
-                    lastStepConversationSize = size;
-                  },
-                  onUpdateCacheCreationTokens: (tokens) => {
-                    totalCacheCreationTokens = tokens;
-                  },
+        return {
+          source: {
+            parts: turn.stream.stream,
+            modelConfig: turn.modelConfig,
+            getStreamError: turn.getStreamError,
+            pendingWrites: titlePromise.then((generatedTitle) => {
+              if (generatedTitle) {
+                writer.write({
+                  type: 'data-thread-title' as const,
+                  id: `thread-title-${data.threadId}`,
+                  data: { title: generatedTitle },
                 });
-              },
-              onFinish: async ({ responseMessage, isAborted }) => {
-                try {
-                  await this.handleStreamFinish({
-                    assistantMessageId,
-                    responseMessage,
-                    isAborted,
-                    streamError,
-                    outOfCredits: checkHasNoMoreAvailableCredits(),
-                    threadId: data.threadId,
-                    workspaceId: data.workspaceId,
-                    userWorkspaceId: data.userWorkspaceId,
-                    streamUsage,
-                    lastStepConversationSize,
-                    totalCacheCreationTokens,
-                    modelConfig,
-                    userMessagePromise,
-                  });
-                  await titleWritePromise;
-                  resolveStreamFinished();
-                } catch (error) {
-                  reject(error);
-                }
-              },
-              sendReasoning: true,
+              }
             }),
-          );
-        },
-      });
-
-      // Publish all chunks first, then signal completion. This guarantees
-      // message-persisted arrives after every stream-chunk on the client.
-      void (async () => {
-        try {
-          for await (const chunk of uiStream) {
-            await this.eventPublisherService.publish({
-              threadId: data.threadId,
-              workspaceId: data.workspaceId,
-              event: {
-                type: 'stream-chunk',
-                chunk: chunk as Record<string, unknown>,
-              },
-            });
-          }
-
-          await streamFinishedPromise;
-
-          if (streamError) {
-            reject(streamError);
-          } else if (checkHasNoMoreAvailableCredits()) {
-            await this.eventPublisherService.publish({
-              threadId: data.threadId,
-              workspaceId: data.workspaceId,
-              event: { type: 'credits-exhausted' },
-            });
-            resolve();
-          } else {
-            await this.eventPublisherService.publish({
-              threadId: data.threadId,
-              workspaceId: data.workspaceId,
-              event: {
-                type: 'message-persisted',
-                messageId: assistantMessageId,
-              },
-            });
-            resolve();
-          }
-        } catch (error) {
-          reject(error);
-        }
-      })();
+          },
+          getStopReason: turn.getStopReason,
+        };
+      },
+      completeTurn: async ({ started }) => ({
+        modelId: turnModelId,
+        stopReason: started.getStopReason(),
+      }),
     });
+
+    if (isDefined(finish)) {
+      this.recordTurnOutcome(finish.outcome, turnModelId);
+
+      if (isDefined(finish.threadBefore)) {
+        await this.agentChatService.notifyThreadUsageUpdated({
+          threadBefore: finish.threadBefore,
+          workspaceMemberId:
+            authorizedConversation.authContext.workspaceMemberId,
+          workspaceId: data.workspaceId,
+        });
+      }
+    }
   }
 
-  private computeMessageMetadata({
-    part,
-    modelConfig,
-    lastStepConversationSize,
-    totalCacheCreationTokens,
-    onUpdateUsage,
-    onUpdateConversationSize,
-    onUpdateCacheCreationTokens,
+  private async cancelTurnForWorkspacePolicy({
+    claim,
+    turnId,
+    turnModelId,
   }: {
-    part: {
-      type: string;
-      usage?: {
-        inputTokens?: number;
-      };
-      totalUsage?: {
-        inputTokens?: number;
-        outputTokens?: number;
-        inputTokenDetails?: { cacheReadTokens?: number };
-        outputTokenDetails?: { reasoningTokens?: number };
-      };
-      providerMetadata?: Record<string, Record<string, unknown> | undefined>;
-    };
-    modelConfig: AiModelConfig;
-    lastStepConversationSize: number;
-    totalCacheCreationTokens: number;
-    onUpdateUsage: (usage: {
-      inputTokens: number;
-      outputTokens: number;
-      inputCredits: number;
-      outputCredits: number;
-      cacheReadTokens: number;
-    }) => void;
-    onUpdateConversationSize: (size: number) => void;
-    onUpdateCacheCreationTokens: (tokens: number) => void;
-  }) {
-    if (part.type === 'finish-step') {
-      const stepInput = part.usage?.inputTokens ?? 0;
-      const stepCacheCreation = extractCacheCreationTokens(
-        part.providerMetadata,
-      );
-
-      onUpdateCacheCreationTokens(totalCacheCreationTokens + stepCacheCreation);
-      onUpdateConversationSize(stepInput);
-    }
-
-    if (part.type === 'finish') {
-      const breakdown = computeCostBreakdown(modelConfig, {
-        inputTokens: part.totalUsage?.inputTokens,
-        outputTokens: part.totalUsage?.outputTokens,
-        cachedInputTokens: part.totalUsage?.inputTokenDetails?.cacheReadTokens,
-        reasoningTokens: part.totalUsage?.outputTokenDetails?.reasoningTokens,
-        cacheCreationTokens: totalCacheCreationTokens,
-      });
-
-      const inputCredits = Math.round(
-        convertDollarsToBillingCredits(breakdown.inputCostInDollars),
-      );
-      const outputCredits = Math.round(
-        convertDollarsToBillingCredits(breakdown.outputCostInDollars),
-      );
-
-      onUpdateUsage({
-        inputTokens: breakdown.tokenCounts.totalInputTokens,
-        outputTokens: part.totalUsage?.outputTokens ?? 0,
-        inputCredits,
-        outputCredits,
-        cacheReadTokens: breakdown.tokenCounts.cachedInputTokens,
-      });
-
-      return {
-        createdAt: new Date().toISOString(),
-        usage: {
-          inputTokens: breakdown.tokenCounts.totalInputTokens,
-          outputTokens: part.totalUsage?.outputTokens ?? 0,
-          cachedInputTokens: breakdown.tokenCounts.cachedInputTokens,
-          inputCredits: toDisplayCredits(inputCredits),
-          outputCredits: toDisplayCredits(outputCredits),
-          conversationSize: lastStepConversationSize,
-        },
-        model: {
-          contextWindowTokens: modelConfig.contextWindowTokens,
-        },
-      };
-    }
-
-    return undefined;
-  }
-
-  private async handleStreamFinish({
-    assistantMessageId,
-    responseMessage,
-    isAborted,
-    streamError,
-    outOfCredits,
-    threadId,
-    workspaceId,
-    userWorkspaceId,
-    streamUsage,
-    lastStepConversationSize,
-    totalCacheCreationTokens,
-    modelConfig,
-    userMessagePromise,
-  }: {
-    assistantMessageId: string;
-    responseMessage: Omit<ExtendedUIMessage, 'id'>;
-    isAborted: boolean;
-    streamError: unknown;
-    outOfCredits: boolean;
-    threadId: string;
-    workspaceId: string;
-    userWorkspaceId: string;
-    streamUsage: {
-      inputTokens: number;
-      outputTokens: number;
-      inputCredits: number;
-      outputCredits: number;
-      cacheReadTokens: number;
-    };
-    lastStepConversationSize: number;
-    totalCacheCreationTokens: number;
-    modelConfig: AiModelConfig;
-    userMessagePromise: Promise<{ turnId: string | null }>;
+    claim: AgentChatStreamClaim;
+    turnId: string;
+    turnModelId: string;
   }): Promise<void> {
-    const hasText = responseMessage.parts.some(
-      (part) => part.type === 'text' && isNonEmptyString(part.text),
+    const { threadId, workspaceId } = claim;
+    const isCancelled = await this.turnRecorderService.finish({
+      workspaceId,
+      turnId,
+      status: AgentTurnStatus.CANCELLED,
+      streamClaim: claim,
+    });
+
+    if (!isCancelled) {
+      return;
+    }
+
+    this.recordTurnOutcome(
+      {
+        kind: 'cancelled',
+        reason: AgentChatTurnCancellationReason.WORKSPACE_POLICY,
+      },
+      turnModelId,
     );
 
-    if (isAborted || !hasText) {
-      this.logAssistantTurnWithoutText({
-        responseMessage,
-        isAborted,
-        streamError,
-        outOfCredits,
-        hasText,
+    await this.eventPublisherService
+      .publish({
         threadId,
         workspaceId,
-        streamUsage,
-      });
-    }
-
-    if (responseMessage.parts.length === 0) {
-      return;
-    }
-
-    const threadStatus = await this.threadRepository.findOne(workspaceId, {
-      where: { id: threadId },
-      select: ['id', 'deletedAt'],
-    });
-
-    if (!threadStatus || threadStatus.deletedAt) {
-      return;
-    }
-
-    const userMessage = await userMessagePromise;
-
-    if (
-      isDefined(userMessage.turnId) &&
-      (await this.agentChatService.hasAssistantMessageForTurn({
-        turnId: userMessage.turnId,
+        event: { type: 'stream-ended' },
+      })
+      .catch((error: unknown) =>
+        this.logger.warn(
+          `Could not publish workspace-policy stream-ended event for workspace ${workspaceId}, stream ${claim.streamId}: ${formatErrorWithCause(error)}`,
+        ),
+      );
+    await this.eventPublisherService
+      .publish({
+        threadId,
         workspaceId,
-      }))
-    ) {
-      return;
-    }
-
-    await this.agentChatService.addMessage({
-      threadId,
-      uiMessage: responseMessage,
-      id: assistantMessageId,
-      turnId: userMessage.turnId ?? undefined,
-      workspaceId,
-    });
-
-    await this.threadRepository.update(
-      workspaceId,
-      { id: threadId },
-      {
-        totalInputTokens: () =>
-          `"totalInputTokens" + ${streamUsage.inputTokens}`,
-        totalOutputTokens: () =>
-          `"totalOutputTokens" + ${streamUsage.outputTokens}`,
-        totalInputCredits: () =>
-          `"totalInputCredits" + ${streamUsage.inputCredits}`,
-        totalOutputCredits: () =>
-          `"totalOutputCredits" + ${streamUsage.outputCredits}`,
-        totalCacheReadTokens: () =>
-          `"totalCacheReadTokens" + ${streamUsage.cacheReadTokens}`,
-        totalCacheCreationTokens: () =>
-          `"totalCacheCreationTokens" + ${totalCacheCreationTokens}`,
-        contextWindowTokens: modelConfig.contextWindowTokens,
-        conversationSize: lastStepConversationSize,
-      },
-    );
-
-    await this.agentChatService.notifyThreadUsageUpdated({
-      threadId,
-      userWorkspaceId,
-      workspaceId,
-    });
+        event: { type: 'queue-updated' },
+      })
+      .catch((error: unknown) =>
+        this.logger.warn(
+          `Could not publish workspace-policy queue-updated event for workspace ${workspaceId}, stream ${claim.streamId}: ${formatErrorWithCause(error)}`,
+        ),
+      );
   }
 
-  private logAssistantTurnWithoutText({
-    responseMessage,
-    isAborted,
-    streamError,
-    outOfCredits,
-    hasText,
-    threadId,
-    workspaceId,
-    streamUsage,
-  }: {
-    responseMessage: Omit<ExtendedUIMessage, 'id'>;
-    isAborted: boolean;
-    streamError: unknown;
-    outOfCredits: boolean;
-    hasText: boolean;
-    threadId: string;
-    workspaceId: string;
-    streamUsage: {
-      inputTokens: number;
-      outputTokens: number;
-    };
-  }): void {
-    const reason = isAborted
-      ? 'user-cancelled'
-      : streamError
-        ? 'stream-error'
-        : outOfCredits
-          ? 'credits-exhausted'
-          : 'empty-completion';
+  // resolve auto-select ids here so turn-start and outcome metrics carry the same model label
+  private async resolveTurnModelId(
+    requestedModelId: string | undefined,
+    workspace: WorkspaceEntity | null,
+  ): Promise<string> {
+    const modelId = isDefined(workspace)
+      ? getChatModelId({ requestedModelId, workspace })
+      : requestedModelId;
 
-    const errorDetail =
-      streamError instanceof Error
-        ? `${streamError.name}: ${streamError.message}`
-        : isDefined(streamError)
-          ? String(streamError)
-          : 'none';
+    if (!isNonEmptyString(modelId)) {
+      return 'unknown';
+    }
 
-    this.logger.warn(
-      `[AI_CHAT_NO_TEXT] Assistant turn ended without a text reply — ` +
-        `reason=${reason}, threadId=${threadId}, workspaceId=${workspaceId}, ` +
-        `isAborted=${isAborted}, outOfCredits=${outOfCredits}, hasText=${hasText}, ` +
-        `streamError=${errorDetail}, ` +
-        `inputTokens=${streamUsage.inputTokens},` +
-        `responseMessage.parts=${JSON.stringify(responseMessage.parts)}`,
-    );
+    try {
+      const workspaceSettings = isDefined(workspace)
+        ? {
+            ...workspace,
+            effectiveAiDataPolicy:
+              await this.workspaceAiDataPolicyService.getEffectiveAiDataPolicy(
+                workspace,
+              ),
+          }
+        : undefined;
 
-    if (streamError instanceof Error && isDefined(streamError.stack)) {
-      this.logger.warn(
-        `[AI_CHAT_NO_TEXT] streamError stack — threadId=${threadId}: ${streamError.stack}`,
-      );
+      return this.aiModelRegistryService.getEffectiveModelConfig(
+        modelId,
+        workspaceSettings,
+      ).modelId;
+    } catch {
+      return modelId;
+    }
+  }
+
+  private recordTurnOutcome(
+    outcome: AgentChatTurnOutcome,
+    turnModelId: string,
+  ): void {
+    if (this.hasRecordedTurnOutcome) {
+      return;
+    }
+
+    this.hasRecordedTurnOutcome = true;
+
+    switch (outcome.kind) {
+      case 'completed':
+        this.metricsService.incrementCounterBy({
+          key: MetricsKeys.AiChatTurnCompleted,
+          amount: 1,
+          attributes: { model: turnModelId, outcome: outcome.outcome },
+        });
+
+        return;
+      case 'cancelled':
+        this.metricsService.incrementCounterBy({
+          key: MetricsKeys.AiChatTurnCancelled,
+          amount: 1,
+          attributes: { model: turnModelId, reason: outcome.reason },
+        });
+
+        return;
+      case 'failed':
+        this.metricsService.incrementCounterBy({
+          key: MetricsKeys.AiChatTurnFailed,
+          amount: 1,
+          attributes: {
+            model: turnModelId,
+            failure_phase: outcome.failurePhase,
+            ...(isDefined(outcome.errorCode) && {
+              error_code: outcome.errorCode,
+            }),
+          },
+        });
+
+        return;
+      default:
+        return assertUnreachable(outcome);
     }
   }
 }

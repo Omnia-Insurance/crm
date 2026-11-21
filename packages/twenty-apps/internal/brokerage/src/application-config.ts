@@ -23,7 +23,7 @@ const BROKERAGE_ABOUT_DESCRIPTION = [
   '',
   '#### Roles',
   '',
-  'The app defines Agent and Manager role templates. Post-install setup applies Agent policy-write ownership with write-scoped RLS until Twenty app manifests support scoped predicates directly.',
+  'The app defines Agent and Manager role templates. Agents can read every policy but create or edit only the policies assigned to them.',
 ].join('\n');
 
 export default defineApplication({

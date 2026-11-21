@@ -33,8 +33,8 @@ import { Injectable, Logger } from '@nestjs/common';
 
 import { IsNull, Not } from 'typeorm';
 
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
 import {
   getStatusEngine,
   STATUS_ENGINE_IDS,
@@ -70,7 +70,7 @@ export class CarrierConfigValidationService {
   constructor(
     private readonly dataService: ReconciliationDataService,
     private readonly attachmentService: ReconciliationAttachmentService,
-    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly workspaceOrmManager: WorkspaceOrmManager,
   ) {}
 
   /**
@@ -308,26 +308,21 @@ export class CarrierConfigValidationService {
   ): Promise<ReconciliationRecord | null> {
     const authContext = buildSystemAuthContext(workspaceId);
 
-    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        const repo = await this.globalWorkspaceOrmManager.getRepository(
-          workspaceId,
+    return this.workspaceOrmManager.executeInWorkspaceContext(async () => {
+      // Read-only preview of pipeline bookkeeping for a RECONCILIATION-gated caller
+      const repo =
+        this.workspaceOrmManager.getRepositoryWithoutPermissionChecks<ReconciliationRecord>(
           'reconciliation',
-          { shouldBypassPermissionChecks: true },
         );
 
-        const records = await repo.find({
-          where: { carrierConfigId, parsedAt: Not(IsNull()) },
-          order: { parsedAt: 'DESC' },
-          take: 1,
-        });
+      const [latestParsed] = await repo.find({
+        where: { carrierConfigId, parsedAt: Not(IsNull()) },
+        order: { parsedAt: 'DESC' },
+        take: 1,
+      });
 
-        return records.length > 0
-          ? (records[0] as unknown as ReconciliationRecord)
-          : null;
-      },
-      authContext,
-    );
+      return latestParsed ?? null;
+    }, authContext);
   }
 
   private buildResult({

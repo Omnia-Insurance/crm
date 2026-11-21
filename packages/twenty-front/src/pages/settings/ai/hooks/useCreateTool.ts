@@ -1,16 +1,16 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-
-import { t } from '@lingui/core/macro';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath, isDefined } from 'twenty-shared/utils';
 
 import { usePersistLogicFunction } from '@/logic-functions/hooks/usePersistLogicFunction';
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
+import { useToast } from 'twenty-ui/components/feedback';
+import { useLingui } from '@lingui/react/macro';
 
 export const useCreateTool = () => {
+  const { t } = useLingui();
   const navigate = useNavigate();
-  const { enqueueSuccessSnackBar } = useSnackBar();
+  const { enqueueToast } = useToast();
   const { createLogicFunction } = usePersistLogicFunction();
   const [isCreatingTool, setIsCreatingTool] = useState(false);
 
@@ -26,13 +26,13 @@ export const useCreateTool = () => {
         },
       });
 
-      // Failure path already surfaces its own snackbar from usePersistLogicFunction.
+      // Failure path already surfaces its own toast from usePersistLogicFunction.
       if (result.status !== 'successful' || !isDefined(result.response?.data)) {
         return;
       }
 
       const newLogicFunction = result.response.data.createOneLogicFunction;
-      enqueueSuccessSnackBar({ message: t`Tool created` });
+      enqueueToast({ status: 'success', children: t`Tool created` });
 
       const applicationId = newLogicFunction.applicationId;
       if (isDefined(applicationId)) {

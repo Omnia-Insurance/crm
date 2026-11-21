@@ -1,3 +1,7 @@
+import { RECORD_TABLE_FIELDS_DROPDOWN_PAGE } from '@/side-panel/pages/page-layout/components/record-table-settings/constants/RecordTableFieldsDropdownPage';
+import { ChartSettingsDropdownSection } from '@/side-panel/pages/page-layout/components/chart-settings/ChartSettingsDropdownSection';
+import { DraggableListRow } from '@/ui/layout/draggable-list/components/DraggableListRow';
+import { ApplicationStackIcon } from '@/applications/components/ApplicationStackIcon';
 import { useGetFieldMetadataItemByIdOrThrow } from '@/object-metadata/hooks/useGetFieldMetadataItemById';
 import { useObjectMetadataItemById } from '@/object-metadata/hooks/useObjectMetadataItemById';
 import { getLabelIdentifierFieldMetadataItem } from '@/object-metadata/utils/getLabelIdentifierFieldMetadataItem';
@@ -6,21 +10,19 @@ import { useUpdateRecordField } from '@/object-record/record-field/hooks/useUpda
 import { visibleRecordFieldsComponentSelector } from '@/object-record/record-field/states/visibleRecordFieldsComponentSelector';
 import { DraggableItem } from '@/ui/layout/draggable-list/components/DraggableItem';
 import { DraggableList } from '@/ui/layout/draggable-list/components/DraggableList';
-import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
-import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
-import { DropdownMenuSeparator } from '@/ui/layout/dropdown/components/DropdownMenuSeparator';
+import { type DraggableListDropResult } from '@/ui/layout/draggable-list/types/DraggableListDropResult';
 import { useAtomComponentSelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorValue';
-import { type DropResult } from '@hello-pangea/dnd';
-import { t } from '@lingui/core/macro';
-import { isDefined } from 'twenty-shared/utils';
-import { IconEyeOff, useIcons } from 'twenty-ui/icon';
-import { MenuItemDraggable, MenuItemNavigate } from 'twenty-ui/navigation';
+import { isDefined, isNonEmptyArray } from 'twenty-shared/utils';
+import { LightIconButton } from 'twenty-ui/components/input';
+import { Dropdown } from 'twenty-ui/components/navigation';
+import { IconEyeOff } from 'twenty-ui/icon';
+import { useIcons } from 'twenty-ui/icon/provider';
 import { sortByProperty } from '~/utils/array/sortByProperty';
+import { useLingui } from '@lingui/react/macro';
 
 type RecordTableFieldsDropdownVisibleFieldsContentProps = {
   objectMetadataId: string;
   recordIndexId: string;
-  onShowHiddenFields: () => void;
   onFieldUpdated?: (
     viewFieldId: string,
     update: Partial<{ position: number; isVisible: boolean }>,
@@ -30,9 +32,9 @@ type RecordTableFieldsDropdownVisibleFieldsContentProps = {
 export const RecordTableFieldsDropdownVisibleFieldsContent = ({
   objectMetadataId,
   recordIndexId,
-  onShowHiddenFields,
   onFieldUpdated,
 }: RecordTableFieldsDropdownVisibleFieldsContentProps) => {
+  const { t } = useLingui();
   const { objectMetadataItem } = useObjectMetadataItemById({
     objectId: objectMetadataId,
   });
@@ -67,23 +69,17 @@ export const RecordTableFieldsDropdownVisibleFieldsContent = ({
     )
     .toSorted(sortByProperty('position'));
 
-  const handleDragEnd = (result: DropResult) => {
-    if (
-      !result.destination ||
-      result.destination.index === 1 ||
-      result.source.index === 1
-    ) {
+  const handleDragEnd = (result: DraggableListDropResult) => {
+    if (!isDefined(result.destination)) {
       return;
     }
 
     const updatedField = reorderVisibleRecordFields({
-      fromIndex: result.source.index - 1,
-      toIndex: result.destination.index - 1,
+      recordFieldToMove: draggableRecordFields[result.source.index],
+      targetRecordField: draggableRecordFields[result.destination.index],
     });
 
-    if (isDefined(updatedField)) {
-      onFieldUpdated?.(updatedField.id, { position: updatedField.position });
-    }
+    onFieldUpdated?.(updatedField.id, { position: updatedField.position });
   };
 
   const handleHideField = (fieldMetadataId: string) => {
@@ -97,27 +93,29 @@ export const RecordTableFieldsDropdownVisibleFieldsContent = ({
   };
 
   return (
-    <DropdownContent>
-      <DropdownMenuItemsContainer>
+    <>
+      <ChartSettingsDropdownSection>
         {isDefined(fieldMetadataItemLabelIdentifier) && (
-          <MenuItemDraggable
-            LeftIcon={getIcon(fieldMetadataItemLabelIdentifier.icon)}
-            text={fieldMetadataItemLabelIdentifier.label}
-            accent="placeholder"
-            gripMode="always"
+          <DraggableListRow
+            startIcon={
+              <ApplicationStackIcon
+                Icon={getIcon(fieldMetadataItemLabelIdentifier.icon)}
+                applicationId={fieldMetadataItemLabelIdentifier.applicationId}
+              />
+            }
+            isMuted
+            dragHandleVisibility="always"
             isDragDisabled
-          />
+          >
+            {fieldMetadataItemLabelIdentifier.label}
+          </DraggableListRow>
         )}
-        {draggableRecordFields.length > 0 && (
+        {isNonEmptyArray(draggableRecordFields) && (
           <DraggableList
             onDragEnd={handleDragEnd}
             draggableItems={
               <>
                 {draggableRecordFields.map((recordField, index) => {
-                  const fieldIndex =
-                    index +
-                    (isDefined(fieldMetadataItemLabelIdentifier) ? 1 : 0);
-
                   const { fieldMetadataItem } = getFieldMetadataItemByIdOrThrow(
                     recordField.fieldMetadataItemId,
                   );
@@ -126,22 +124,29 @@ export const RecordTableFieldsDropdownVisibleFieldsContent = ({
                     <DraggableItem
                       key={recordField.fieldMetadataItemId}
                       draggableId={recordField.fieldMetadataItemId}
-                      index={fieldIndex + 1}
+                      index={index}
                       itemComponent={
-                        <MenuItemDraggable
-                          LeftIcon={getIcon(fieldMetadataItem.icon)}
-                          iconButtons={[
-                            {
-                              Icon: IconEyeOff,
-                              onClick: () =>
-                                handleHideField(
-                                  recordField.fieldMetadataItemId,
-                                ),
-                            },
-                          ]}
-                          text={fieldMetadataItem.label}
-                          gripMode="always"
-                        />
+                        <DraggableListRow
+                          startIcon={
+                            <ApplicationStackIcon
+                              Icon={getIcon(fieldMetadataItem.icon)}
+                              applicationId={fieldMetadataItem.applicationId}
+                            />
+                          }
+                          actions={
+                            <LightIconButton
+                              aria-label={t`Hide ${fieldMetadataItem.label}`}
+                              onClick={() =>
+                                handleHideField(recordField.fieldMetadataItemId)
+                              }
+                            >
+                              <IconEyeOff />
+                            </LightIconButton>
+                          }
+                          dragHandleVisibility="always"
+                        >
+                          {fieldMetadataItem.label}
+                        </DraggableListRow>
                       }
                     />
                   );
@@ -150,15 +155,16 @@ export const RecordTableFieldsDropdownVisibleFieldsContent = ({
             }
           />
         )}
-      </DropdownMenuItemsContainer>
-      <DropdownMenuSeparator />
-      <DropdownMenuItemsContainer scrollable={false}>
-        <MenuItemNavigate
-          onClick={onShowHiddenFields}
-          LeftIcon={IconEyeOff}
-          text={t`Hidden Fields`}
-        />
-      </DropdownMenuItemsContainer>
-    </DropdownContent>
+      </ChartSettingsDropdownSection>
+      <Dropdown.Separator />
+      <Dropdown.Section>
+        <Dropdown.ActionItem
+          page={RECORD_TABLE_FIELDS_DROPDOWN_PAGE.HIDDEN_FIELDS}
+          startIcon={<IconEyeOff />}
+        >
+          {t`Hidden Fields`}
+        </Dropdown.ActionItem>
+      </Dropdown.Section>
+    </>
   );
 };

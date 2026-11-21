@@ -1,3 +1,4 @@
+import { isDefined } from 'twenty-shared/utils';
 import { FormAddressFieldInput } from '@/object-record/record-field/ui/form-types/components/FormAddressFieldInput';
 import { FormArrayFieldInput } from '@/object-record/record-field/ui/form-types/components/FormArrayFieldInput';
 import { FormBooleanFieldInput } from '@/object-record/record-field/ui/form-types/components/FormBooleanFieldInput';
@@ -17,18 +18,20 @@ import { FormNumberFieldInput } from '@/object-record/record-field/ui/form-types
 import { FormPhoneFieldInput } from '@/object-record/record-field/ui/form-types/components/FormPhoneFieldInput';
 import { FormRawJsonFieldInput } from '@/object-record/record-field/ui/form-types/components/FormRawJsonFieldInput';
 import { FormRelationToOneFieldInput } from '@/object-record/record-field/ui/form-types/components/FormRelationToOneFieldInput';
+import { FormRecordRichTextFieldInput } from '@/object-record/record-field/ui/form-types/components/FormRecordRichTextFieldInput';
 import { FormRichTextFieldInput } from '@/object-record/record-field/ui/form-types/components/FormRichTextFieldInput';
 import { FormSelectFieldInput } from '@/object-record/record-field/ui/form-types/components/FormSelectFieldInput';
 import { FormTextFieldInput } from '@/object-record/record-field/ui/form-types/components/FormTextFieldInput';
 import { FormUuidFieldInput } from '@/object-record/record-field/ui/form-types/components/FormUuidFieldInput';
-import { type VariablePickerComponent } from '@/object-record/record-field/ui/form-types/types/VariablePickerComponent';
+import { type FormFieldInputSettings } from '@/object-record/record-field/ui/form-types/types/FormFieldInputSettings';
+import { type FormFieldInputSubFieldPlaceholders } from '@/object-record/record-field/ui/form-types/types/FormFieldInputSubFieldPlaceholders';
+import { type VariablePickerComponent } from '@/ui/input/types/VariablePickerComponent';
 import { type FieldDefinition } from '@/object-record/record-field/ui/types/FieldDefinition';
 import {
   type FieldAddressValue,
   type FieldArrayValue,
   type FieldEmailsValue,
   type FieldFullNameValue,
-  type FieldLinksValue,
   type FieldMetadata,
   type FieldMultiSelectValue,
   type FieldPhonesValue,
@@ -36,6 +39,7 @@ import {
   type FieldRelationValue,
   type FieldRichTextValue,
   type FormFieldCurrencyValue,
+  type FormFieldLinksValue,
 } from '@/object-record/record-field/ui/types/FieldMetadata';
 import { isFieldAddress } from '@/object-record/record-field/ui/types/guards/isFieldAddress';
 import { isFieldArray } from '@/object-record/record-field/ui/types/guards/isFieldArray';
@@ -57,7 +61,11 @@ import { isFieldRichText } from '@/object-record/record-field/ui/types/guards/is
 import { isFieldSelect } from '@/object-record/record-field/ui/types/guards/isFieldSelect';
 import { isFieldText } from '@/object-record/record-field/ui/types/guards/isFieldText';
 import { isFieldUuid } from '@/object-record/record-field/ui/types/guards/isFieldUuid';
-import { FieldMetadataType } from 'twenty-shared/types';
+// OMNIA-CUSTOM: Carrier -> Product allowlist (U6)
+import {
+  FieldMetadataType,
+  type RecordGqlOperationFilter,
+} from 'twenty-shared/types';
 import { type JsonValue } from 'type-fest';
 
 type FormFieldInputProps = {
@@ -68,9 +76,13 @@ type FormFieldInputProps = {
   VariablePicker?: VariablePickerComponent;
   readonly?: boolean;
   placeholder?: string;
+  subFieldPlaceholders?: FormFieldInputSubFieldPlaceholders;
   error?: string;
   onError?: (error: string | undefined) => void;
   timeZone?: string;
+  settings?: FormFieldInputSettings;
+  // OMNIA-CUSTOM: Carrier -> Product allowlist (U6), to-one relations only
+  additionalFilter?: RecordGqlOperationFilter;
 };
 
 export const FormFieldInput = ({
@@ -81,9 +93,13 @@ export const FormFieldInput = ({
   VariablePicker,
   readonly,
   placeholder,
+  subFieldPlaceholders,
   error,
   onError,
   timeZone,
+  settings,
+  // OMNIA-CUSTOM: Carrier -> Product allowlist (U6)
+  additionalFilter,
 }: FormFieldInputProps) => {
   return isFieldNumber(field) || field.type === FieldMetadataType.NUMERIC ? (
     <FormNumberFieldInput
@@ -130,6 +146,7 @@ export const FormFieldInput = ({
       onChange={onChange}
       VariablePicker={VariablePicker}
       readonly={readonly}
+      subFieldPlaceholders={subFieldPlaceholders}
     />
   ) : isFieldAddress(field) ? (
     <FormAddressFieldInput
@@ -138,14 +155,17 @@ export const FormFieldInput = ({
       onChange={onChange}
       VariablePicker={VariablePicker}
       readonly={readonly}
+      subFieldPlaceholders={subFieldPlaceholders}
     />
   ) : isFieldLinks(field) ? (
     <FormLinksFieldInput
       label={field.label}
-      defaultValue={defaultValue as FieldLinksValue | undefined}
+      defaultValue={defaultValue as FormFieldLinksValue | undefined}
       onChange={onChange}
       VariablePicker={VariablePicker}
       readonly={readonly}
+      subFieldPlaceholders={subFieldPlaceholders}
+      maxNumberOfValues={field.metadata.settings?.maxNumberOfValues}
     />
   ) : isFieldEmails(field) ? (
     <FormEmailsFieldInput
@@ -154,6 +174,7 @@ export const FormFieldInput = ({
       onChange={onChange}
       VariablePicker={VariablePicker}
       readonly={readonly}
+      subFieldPlaceholders={subFieldPlaceholders}
     />
   ) : isFieldFiles(field) ? (
     <FormFilesFieldInput
@@ -171,6 +192,7 @@ export const FormFieldInput = ({
       onChange={onChange}
       VariablePicker={VariablePicker}
       readonly={readonly}
+      subFieldPlaceholders={subFieldPlaceholders}
     />
   ) : isFieldDate(field) ? (
     <FormDateFieldInput
@@ -220,21 +242,37 @@ export const FormFieldInput = ({
     />
   ) : isFieldCurrency(field) ? (
     <FormCurrencyFieldInput
+      amountUnit={
+        settings?.type === FieldMetadataType.CURRENCY
+          ? settings.amountUnit
+          : undefined
+      }
       label={field.label}
       defaultValue={defaultValue as FormFieldCurrencyValue | null}
       onChange={onChange}
       VariablePicker={VariablePicker}
       readonly={readonly}
+      subFieldPlaceholders={subFieldPlaceholders}
     />
   ) : isFieldRichText(field) ? (
-    <FormRichTextFieldInput
-      label={field.label}
-      defaultValue={defaultValue as FieldRichTextValue | undefined}
-      onChange={onChange}
-      VariablePicker={VariablePicker}
-      readonly={readonly}
-      placeholder={placeholder}
-    />
+    isDefined(VariablePicker) ? (
+      <FormRichTextFieldInput
+        label={field.label}
+        defaultValue={defaultValue as FieldRichTextValue | undefined}
+        onChange={onChange}
+        VariablePicker={VariablePicker}
+        readonly={readonly}
+        placeholder={placeholder}
+      />
+    ) : (
+      <FormRecordRichTextFieldInput
+        label={field.label}
+        defaultValue={defaultValue as FieldRichTextValue | undefined}
+        onChange={onChange}
+        readonly={readonly}
+        placeholder={placeholder}
+      />
+    )
   ) : isFieldRelationManyToOne(field) ? (
     <FormRelationToOneFieldInput
       label={field.label}
@@ -246,6 +284,8 @@ export const FormFieldInput = ({
       onChange={onChange}
       VariablePicker={VariablePicker}
       readonly={readonly}
+      // OMNIA-CUSTOM: Carrier -> Product allowlist (U6)
+      additionalFilter={additionalFilter}
     />
   ) : isFieldMorphRelationManyToOne(field) ? (
     <FormMorphRelationToOneFieldInput

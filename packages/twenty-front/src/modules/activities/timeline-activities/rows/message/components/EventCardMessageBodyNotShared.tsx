@@ -1,7 +1,7 @@
 import { styled } from '@linaria/react';
 import { Trans } from '@lingui/react/macro';
 import { IconLock } from 'twenty-ui/icon';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables, useTheme } from 'twenty-ui/theme';
 
 const StyledEmailBodyNotSharedContainer = styled.div`
   align-items: center;
@@ -11,10 +11,8 @@ const StyledEmailBodyNotSharedContainer = styled.div`
   color: ${themeCssVariables.font.color.light};
   display: flex;
   flex-direction: column;
-
   font-size: ${themeCssVariables.font.size.sm};
   font-weight: ${themeCssVariables.font.weight.medium};
-
   gap: ${themeCssVariables.spacing[3]};
   height: 80px;
   justify-content: center;
@@ -40,11 +38,13 @@ export const EventCardMessageBodyNotShared = ({
 }: {
   notSharedByFullName: string;
 }) => {
+  const theme = useTheme();
+
   return (
     <StyledEmailBodyNotSharedContainer>
       <StyledEmailBodyNotShared>
         <StyledEmailBodyNotSharedIconContainer>
-          <IconLock />
+          <IconLock size={theme.icon.size.sm} />
         </StyledEmailBodyNotSharedIconContainer>
         <span>
           <Trans>Not shared by {notSharedByFullName}</Trans>

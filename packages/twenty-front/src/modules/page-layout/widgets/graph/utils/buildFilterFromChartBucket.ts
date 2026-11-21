@@ -18,6 +18,7 @@ import {
   isFieldMetadataDateKind,
   parseToPlainDateOrThrow,
 } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
 
 type ChartFilter = {
   fieldName: string;
@@ -76,13 +77,17 @@ export const buildFilterFromChartBucket = ({
     if (shouldAssumeDayRangeFilter) {
       if (!isNonEmptyString(timezone)) {
         throw new Error(
-          `Timezone should be defined for date granularity group by day`,
+          doNotTranslate(
+            `Timezone should be defined for date granularity group by day`,
+          ),
         );
       }
 
       if (!isDefined(firstDayOfTheWeek)) {
         throw new Error(
-          `First day of the week should be defined for date granularity group by day`,
+          doNotTranslate(
+            `First day of the week should be defined for date granularity group by day`,
+          ),
         );
       }
 
@@ -102,13 +107,17 @@ export const buildFilterFromChartBucket = ({
     if (isTimeRangeDateGranularity(dateGranularity)) {
       if (!isNonEmptyString(timezone)) {
         throw new Error(
-          `Timezone should be defined for date granularity group by`,
+          doNotTranslate(
+            `Timezone should be defined for date granularity group by`,
+          ),
         );
       }
 
       if (!isDefined(firstDayOfTheWeek)) {
         throw new Error(
-          `First day of the week should be defined for date granularity group by`,
+          doNotTranslate(
+            `First day of the week should be defined for date granularity group by`,
+          ),
         );
       }
 
@@ -131,6 +140,7 @@ export const buildFilterFromChartBucket = ({
   const availableOperands = getRecordFilterOperands({
     filterType: getFilterTypeFromFieldType(fieldMetadataItem.type),
     subFieldName: subFieldName ?? undefined,
+    // OMNIA-CUSTOM: one-to-many relations only offer emptiness operands
     relationType: fieldMetadataItem.relation?.type,
   });
 

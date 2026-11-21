@@ -1,59 +1,54 @@
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
-import { isFieldMetadataReadOnlyByPermissions } from '@/object-record/read-only/utils/internal/isFieldMetadataReadOnlyByPermissions';
+import { type ObjectPermissionsByObjectMetadataId } from '@/object-metadata/types/ObjectPermissionsByObjectMetadataId';
+import { getFieldPermissions } from '@/object-metadata/utils/getFieldPermissions';
+import { getObjectPermissionsForObject } from '@/object-metadata/utils/getObjectPermissionsForObject';
 import { isOneToManyRelationFieldReadOnlyDueToTargetUpdatePermission } from '@/object-record/read-only/utils/isOneToManyRelationFieldReadOnlyDueToTargetUpdatePermission';
 import { type FieldDefinition } from '@/object-record/record-field/ui/types/FieldDefinition';
 import { type FieldMetadata } from '@/object-record/record-field/ui/types/FieldMetadata';
-import { type ObjectPermission } from '~/generated-metadata/graphql';
-import { type ObjectPermissions } from 'twenty-shared/types';
-import { isDefined } from 'twenty-shared/utils';
-
-type ObjectPermissionsByObjectMetadataId = Record<
-  string,
-  ObjectPermissions & { objectMetadataId: string }
->;
+import { canReachSomeRecords, isDefined } from 'twenty-shared/utils';
 
 type IsRecordFieldReadOnlyParams = {
   isRecordReadOnly: boolean;
-  isSystemObject?: boolean;
-  isFieldFromStandardApplication?: boolean;
+  objectMetadataId: string;
   fieldMetadataItem: Pick<FieldMetadataItem, 'id' | 'isUIEditable'>;
-  objectPermissions: ObjectPermission;
+  objectPermissionsByObjectMetadataId: ObjectPermissionsByObjectMetadataId;
   fieldDefinition?: FieldDefinition<FieldMetadata>;
-  objectPermissionsByObjectMetadataId?: ObjectPermissionsByObjectMetadataId;
 };
 
 export const isRecordFieldReadOnly = ({
-  objectPermissions,
   isRecordReadOnly,
-  isSystemObject,
-  isFieldFromStandardApplication,
+  objectMetadataId,
   fieldMetadataItem,
-  fieldDefinition,
   objectPermissionsByObjectMetadataId,
+  fieldDefinition,
 }: IsRecordFieldReadOnlyParams) => {
-  const fieldReadOnlyByPermissions = isFieldMetadataReadOnlyByPermissions({
-    objectPermissions,
-    fieldMetadataId: fieldMetadataItem.id,
-  });
+  if (isRecordReadOnly || !(fieldMetadataItem.isUIEditable ?? true)) {
+    return true;
+  }
 
-  const oneToManyTargetReadOnly =
+  const objectPermissions = getObjectPermissionsForObject(
+    objectPermissionsByObjectMetadataId,
+    objectMetadataId,
+  );
+
+  if (
+    !canReachSomeRecords({
+      objectRecordsPermissions: objectPermissions,
+      operationType: 'update',
+    }) ||
+    !getFieldPermissions({
+      objectPermissions,
+      fieldMetadataId: fieldMetadataItem.id,
+    }).canUpdateField
+  ) {
+    return true;
+  }
+
+  return (
     isDefined(fieldDefinition) &&
-    isDefined(objectPermissionsByObjectMetadataId) &&
     isOneToManyRelationFieldReadOnlyDueToTargetUpdatePermission({
       fieldDefinition,
       objectPermissionsByObjectMetadataId,
-    });
-
-  // Keep system-object standard fields read-only. If the application origin
-  // cannot be resolved yet, fail closed until metadata finishes loading.
-  const isReadOnlyStandardFieldOnSystemObject =
-    isSystemObject === true && isFieldFromStandardApplication !== false;
-
-  return (
-    isRecordReadOnly ||
-    isReadOnlyStandardFieldOnSystemObject ||
-    !(fieldMetadataItem.isUIEditable ?? true) ||
-    fieldReadOnlyByPermissions ||
-    oneToManyTargetReadOnly
+    })
   );
 };

@@ -24,7 +24,7 @@ export class CreateRecordService {
   ) {}
 
   async execute(params: CreateRecordParams): Promise<ToolOutput> {
-    const { objectName, objectRecord, authContext } = params;
+    const { objectName, objectRecord, authContext, shareWith } = params;
 
     try {
       const {
@@ -55,8 +55,6 @@ export class CreateRecordService {
         name: 'Workflow',
       };
 
-      // Clean undefined values from the record data (including nested composite fields)
-      // This prevents validation errors for partial composite field inputs
       const cleanedRecord = removeUndefinedFromRecord(objectRecord);
       const dataWithActor = { ...cleanedRecord, createdBy: actorMetadata };
 
@@ -64,6 +62,7 @@ export class CreateRecordService {
         await this.commonCreateOneRunner.execute(
           {
             data: dataWithActor,
+            shareWith,
             selectedFields,
           },
           queryRunnerContext,

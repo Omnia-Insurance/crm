@@ -25,14 +25,23 @@ type OneToManyRelationValue<
 
 type OneToManyMetadataRelationsProperties = {
   [TSourceMetadataName in AllMetadataName]: {
-    [TRelationProperty in ExtractEntityOneToManyEntityRelationProperties<
-      MetadataEntity<TSourceMetadataName>
-    >]: OneToManyRelationValue<TSourceMetadataName, TRelationProperty>;
+    [
+      TRelationProperty in ExtractEntityOneToManyEntityRelationProperties<
+        MetadataEntity<TSourceMetadataName>
+      >
+    ]: OneToManyRelationValue<TSourceMetadataName, TRelationProperty>;
   };
 };
 
 export const ALL_ONE_TO_MANY_METADATA_RELATIONS = {
-  agent: {},
+  agent: {
+    navigationMenuItems: {
+      metadataName: 'navigationMenuItem',
+      flatEntityForeignKeyAggregator: 'navigationMenuItemIds',
+      universalFlatEntityForeignKeyAggregator:
+        'navigationMenuItemUniversalIdentifiers',
+    },
+  },
   skill: {},
   commandMenuItem: {},
   navigationMenuItem: {},
@@ -71,6 +80,12 @@ export const ALL_ONE_TO_MANY_METADATA_RELATIONS = {
       universalFlatEntityForeignKeyAggregator:
         'calendarViewUniversalIdentifiers',
     },
+    calendarEndViews: {
+      metadataName: 'view',
+      flatEntityForeignKeyAggregator: 'calendarEndViewIds',
+      universalFlatEntityForeignKeyAggregator:
+        'calendarEndViewUniversalIdentifiers',
+    },
     mainGroupByFieldMetadataViews: {
       metadataName: 'view',
       flatEntityForeignKeyAggregator: 'mainGroupByFieldMetadataViewIds',
@@ -82,6 +97,31 @@ export const ALL_ONE_TO_MANY_METADATA_RELATIONS = {
       flatEntityForeignKeyAggregator: 'searchFieldMetadataIds',
       universalFlatEntityForeignKeyAggregator:
         'searchFieldMetadataUniversalIdentifiers',
+    },
+    fieldMetadataOptions: {
+      metadataName: 'fieldMetadataOption',
+      flatEntityForeignKeyAggregator: 'fieldMetadataOptionIds',
+      universalFlatEntityForeignKeyAggregator:
+        'fieldMetadataOptionUniversalIdentifiers',
+    },
+    rowLevelPermissionPredicates: {
+      metadataName: 'rowLevelPermissionPredicate',
+      flatEntityForeignKeyAggregator: 'rowLevelPermissionPredicateIds',
+      universalFlatEntityForeignKeyAggregator:
+        'rowLevelPermissionPredicateUniversalIdentifiers',
+    },
+    relationRowLevelPermissionPredicates: {
+      metadataName: 'rowLevelPermissionPredicate',
+      flatEntityForeignKeyAggregator: 'relationRowLevelPermissionPredicateIds',
+      universalFlatEntityForeignKeyAggregator:
+        'relationRowLevelPermissionPredicateUniversalIdentifiers',
+    },
+    workspaceMemberRowLevelPermissionPredicates: {
+      metadataName: 'rowLevelPermissionPredicate',
+      flatEntityForeignKeyAggregator:
+        'workspaceMemberRowLevelPermissionPredicateIds',
+      universalFlatEntityForeignKeyAggregator:
+        'workspaceMemberRowLevelPermissionPredicateUniversalIdentifiers',
     },
   },
   objectMetadata: {
@@ -108,6 +148,12 @@ export const ALL_ONE_TO_MANY_METADATA_RELATIONS = {
       universalFlatEntityForeignKeyAggregator:
         'fieldPermissionUniversalIdentifiers',
     },
+    rowLevelPermissionRules: {
+      metadataName: 'rowLevelPermissionRule',
+      flatEntityForeignKeyAggregator: 'rowLevelPermissionRuleIds',
+      universalFlatEntityForeignKeyAggregator:
+        'rowLevelPermissionRuleUniversalIdentifiers',
+    },
     views: {
       metadataName: 'view',
       flatEntityForeignKeyAggregator: 'viewIds',
@@ -118,6 +164,23 @@ export const ALL_ONE_TO_MANY_METADATA_RELATIONS = {
       flatEntityForeignKeyAggregator: 'searchFieldMetadataIds',
       universalFlatEntityForeignKeyAggregator:
         'searchFieldMetadataUniversalIdentifiers',
+    },
+    pageLayouts: {
+      metadataName: 'pageLayout',
+      flatEntityForeignKeyAggregator: 'pageLayoutIds',
+      universalFlatEntityForeignKeyAggregator: 'pageLayoutUniversalIdentifiers',
+    },
+    commandMenuItems: {
+      metadataName: 'commandMenuItem',
+      flatEntityForeignKeyAggregator: 'commandMenuItemIds',
+      universalFlatEntityForeignKeyAggregator:
+        'commandMenuItemUniversalIdentifiers',
+    },
+    navigationMenuItems: {
+      metadataName: 'navigationMenuItem',
+      flatEntityForeignKeyAggregator: 'navigationMenuItemIds',
+      universalFlatEntityForeignKeyAggregator:
+        'navigationMenuItemUniversalIdentifiers',
     },
   },
   view: {
@@ -152,6 +215,12 @@ export const ALL_ONE_TO_MANY_METADATA_RELATIONS = {
       metadataName: 'viewSort',
       flatEntityForeignKeyAggregator: 'viewSortIds',
       universalFlatEntityForeignKeyAggregator: 'viewSortUniversalIdentifiers',
+    },
+    navigationMenuItems: {
+      metadataName: 'navigationMenuItem',
+      flatEntityForeignKeyAggregator: 'navigationMenuItemIds',
+      universalFlatEntityForeignKeyAggregator:
+        'navigationMenuItemUniversalIdentifiers',
     },
   },
   viewField: {},
@@ -204,6 +273,18 @@ export const ALL_ONE_TO_MANY_METADATA_RELATIONS = {
       universalFlatEntityForeignKeyAggregator:
         'rowLevelPermissionPredicateGroupUniversalIdentifiers',
     },
+    rowLevelPermissionRules: {
+      metadataName: 'rowLevelPermissionRule',
+      flatEntityForeignKeyAggregator: 'rowLevelPermissionRuleIds',
+      universalFlatEntityForeignKeyAggregator:
+        'rowLevelPermissionRuleUniversalIdentifiers',
+    },
+    agentChatChannelRoles: {
+      metadataName: 'agentChatChannelRole',
+      flatEntityForeignKeyAggregator: 'agentChatChannelRoleIds',
+      universalFlatEntityForeignKeyAggregator:
+        'agentChatChannelRoleUniversalIdentifiers',
+    },
   },
   roleTarget: {},
   rolePermissionFlag: {},
@@ -222,6 +303,12 @@ export const ALL_ONE_TO_MANY_METADATA_RELATIONS = {
       metadataName: 'pageLayoutTab',
       flatEntityForeignKeyAggregator: 'tabIds',
       universalFlatEntityForeignKeyAggregator: 'tabUniversalIdentifiers',
+    },
+    navigationMenuItems: {
+      metadataName: 'navigationMenuItem',
+      flatEntityForeignKeyAggregator: 'navigationMenuItemIds',
+      universalFlatEntityForeignKeyAggregator:
+        'navigationMenuItemUniversalIdentifiers',
     },
   },
   pageLayoutTab: {
@@ -248,6 +335,7 @@ export const ALL_ONE_TO_MANY_METADATA_RELATIONS = {
         'rowLevelPermissionPredicateUniversalIdentifiers',
     },
   },
+  rowLevelPermissionRule: {},
   viewFilterGroup: {
     childViewFilterGroups: {
       metadataName: 'viewFilterGroup',
@@ -263,10 +351,41 @@ export const ALL_ONE_TO_MANY_METADATA_RELATIONS = {
   },
   frontComponent: {},
   webhook: {},
+  mcpServer: {},
   applicationVariable: {},
   viewSort: {},
   connectionProvider: {},
+  messagingProvider: {},
   searchFieldMetadata: {},
+  timelineActivityType: {},
+  settingsMenuItem: {},
+  fieldMetadataOption: {},
+  relatedRecordPath: {},
+  validationRule: {},
+  workflow: {
+    navigationMenuItems: {
+      metadataName: 'navigationMenuItem',
+      flatEntityForeignKeyAggregator: 'navigationMenuItemIds',
+      universalFlatEntityForeignKeyAggregator:
+        'navigationMenuItemUniversalIdentifiers',
+    },
+  },
+  workflowVersion: {},
+  agentChatChannel: {
+    channelRoles: {
+      metadataName: 'agentChatChannelRole',
+      flatEntityForeignKeyAggregator: 'channelRoleIds',
+      universalFlatEntityForeignKeyAggregator:
+        'channelRoleUniversalIdentifiers',
+    },
+    navigationMenuItems: {
+      metadataName: 'navigationMenuItem',
+      flatEntityForeignKeyAggregator: 'navigationMenuItemIds',
+      universalFlatEntityForeignKeyAggregator:
+        'navigationMenuItemUniversalIdentifiers',
+    },
+  },
+  agentChatChannelRole: {},
 } as const satisfies OneToManyMetadataRelationsProperties;
 
 // satisfies with complex mapped types involving nested generics doesn't always catch missing required keys

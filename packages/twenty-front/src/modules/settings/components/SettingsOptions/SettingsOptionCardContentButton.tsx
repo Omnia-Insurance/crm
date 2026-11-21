@@ -7,15 +7,14 @@ import {
 } from '@/settings/components/SettingsOptions/SettingsCardContentBase';
 import { SettingsOptionIconCustomizer } from '@/settings/components/SettingsOptions/SettingsOptionIconCustomizer';
 import { styled } from '@linaria/react';
-import { type IconComponent } from 'twenty-ui/icon';
-import { OverflowingTextWithTooltip } from 'twenty-ui/surfaces';
 import { isDefined } from 'twenty-shared/utils';
+import { OverflowingTextWithTooltip } from 'twenty-ui/primitives/typography';
+import { type IconComponent } from 'twenty-ui/icon';
 
 type SettingsOptionCardContentButtonProps = {
   Icon?: IconComponent;
   title: React.ReactNode;
   description?: string;
-  disabled?: boolean;
   Button?: React.ReactNode;
 };
 
@@ -28,11 +27,10 @@ export const SettingsOptionCardContentButton = ({
   Icon,
   title,
   description,
-  disabled = false,
   Button,
 }: SettingsOptionCardContentButtonProps) => {
   return (
-    <StyledSettingsCardContent disabled={disabled}>
+    <StyledSettingsCardContent>
       {Icon && (
         <StyledSettingsCardIcon>
           <SettingsOptionIconCustomizer Icon={Icon} />

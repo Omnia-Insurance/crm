@@ -1,13 +1,21 @@
 'use client';
 
-import { msg } from '@lingui/core/macro';
 import { useLingui } from '@lingui/react';
 import { css } from '@linaria/core';
 import { styled } from '@linaria/react';
 import NextImage from 'next/image';
 
+import { TalkToUsButton } from '@/contact-cal';
 import { useAnimatedNumber } from '@/platform/motion';
-import { color, mediaUp, radius, semanticColor, spacing } from '@/tokens';
+import {
+  color,
+  EASING,
+  mediaUp,
+  radius,
+  REDUCED_MOTION,
+  semanticColor,
+  spacing,
+} from '@/tokens';
 import { Body, Button, Heading } from '@/ui';
 
 import {
@@ -15,55 +23,74 @@ import {
   type PlansBillingPeriod,
   type PlansTierId,
 } from './plans-data';
+import { FEATURE_TRANSITION_TIMING } from './feature-transition-timing';
+import { getPlanCardRowTemplate } from './get-plan-card-row-template';
+import { getPlanFeatureKey } from './get-plan-feature-key';
 import { PlanFeatureList } from './PlanFeatureList';
 import { type PlansHostingMode } from '@/pricing-state';
 import { useFeatureTransition } from './use-feature-transition';
 
-const CardShell = styled.div`
+const CardShell = styled.div<{ $rowTemplate: string }>`
   background-color: ${color('white')};
   border: 1px solid transparent;
   border-radius: ${radius(2)};
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: ${({ $rowTemplate }) => $rowTemplate};
   height: 100%;
   min-height: 0;
   overflow: hidden;
   padding: ${spacing(4)};
   position: relative;
+  transition: grid-template-rows
+    ${FEATURE_TRANSITION_TIMING.switchMilliseconds}ms ${EASING.spring};
   z-index: 1;
+
+  &[data-highlighted] {
+    border-color: ${color('blue')};
+  }
 
   & > * + * {
     margin-top: ${spacing(4)};
   }
+
+  ${REDUCED_MOTION} {
+    transition: none;
+  }
+
+  ${mediaUp('md')} {
+    grid-row: 1 / -1;
+    grid-template-rows: subgrid;
+  }
 `;
 
-const CardHeader = styled.div`
-  align-items: flex-start;
-  display: flex;
+const CardHeader = styled.div<{ $iconWidthPx: number }>`
   flex-shrink: 0;
-  gap: ${spacing(3)};
-  justify-content: space-between;
+  padding-right: ${({ $iconWidthPx }) =>
+    `calc(${$iconWidthPx}px + ${spacing(3)})`};
+  position: relative;
 `;
 
 const CardHeaderInfo = styled.div`
   display: flex;
-  flex: 1;
   flex-direction: column;
   min-width: 0;
   overflow: hidden;
 
   & > * + * {
-    margin-top: ${spacing(4)};
+    margin-top: ${spacing(1)};
   }
 `;
 
-// The title and price guard against long localized strings: they ellipsis
-// (or, for the price line, hold one line) on desktop where the two cards
-// share the row width. Ported from the old card.
+// Guards long localized strings where the two cards share the row on desktop.
 const titleClassName = css`
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+`;
+
+const taglineClassName = css`
+  color: ${color('black-60')};
 `;
 
 const PriceLine = styled.div`
@@ -72,6 +99,10 @@ const PriceLine = styled.div`
   display: flex;
   flex-wrap: wrap;
   min-width: 0;
+
+  && {
+    margin-top: ${spacing(6)};
+  }
 
   ${mediaUp('md')} {
     flex-wrap: nowrap;
@@ -92,30 +123,44 @@ const priceSuffixClassName = css`
   }
 `;
 
+const priceQualifierClassName = css`
+  color: ${color('black-60')};
+  flex-shrink: 0;
+`;
+
+const featuresClassName = css`
+  grid-row: 4 / -2;
+`;
+
 const CardRule = styled.div`
   border-top: 1px dotted ${semanticColor.divider};
   flex-shrink: 0;
   height: 0;
   width: 100%;
+
+  && {
+    margin-top: ${spacing(6)};
+  }
 `;
 
 const CardIcon = styled.div<{ $widthPx: number }>`
   border-radius: ${radius(2)};
-  flex-shrink: 0;
   height: 80px;
-  margin-left: auto;
   overflow: hidden;
-  position: relative;
+  position: absolute;
+  right: 0;
+  top: 0;
   width: ${({ $widthPx }) => `${$widthPx}px`};
 
   img {
     object-fit: contain;
-    object-position: center right;
+    object-position: right top;
   }
 `;
 
 const CtaRow = styled.div`
   flex-shrink: 0;
+  grid-row: -2 / -1;
   width: 100%;
 
   > * {
@@ -130,45 +175,43 @@ export function PlanCard({
   billing,
   highlighted = false,
   hosting,
-  maxBullets,
   tierId,
 }: {
   billing: PlansBillingPeriod;
   highlighted?: boolean;
   hosting: PlansHostingMode;
-  maxBullets: number;
   tierId: PlansTierId;
 }) {
   const { i18n } = useLingui();
   const tier = PLANS_DATA[tierId];
   const cell = tier.cells[hosting][billing];
+  const cta = tier.cta[hosting];
   const iconWidth = tier.icon.widthPx ?? 80;
   const animatedPriceValue = useAnimatedNumber(cell.price.value);
-  const { comparisonBulletTexts, phase, visibleBullets } = useFeatureTransition(
-    cell.featureBullets,
+  const { comparisonItemKeys, phase, visibleItems } = useFeatureTransition(
+    cell.features,
+    getPlanFeatureKey,
   );
 
   return (
-    <CardShell>
-      <CardHeader>
+    <CardShell
+      $rowTemplate={getPlanCardRowTemplate(cell.features.length)}
+      data-highlighted={highlighted ? '' : undefined}
+    >
+      <CardHeader $iconWidthPx={iconWidth}>
         <CardHeaderInfo>
           <Heading
             as="h3"
             className={titleClassName}
             family="sans"
             size="xs"
-            weight="light"
+            weight="medium"
           >
-            {i18n._(tier.heading)}
+            {i18n._(tier.heading[hosting])}
           </Heading>
-          <PriceLine>
-            <Heading as="h4" family="sans" size="sm" weight="regular">
-              {`${cell.price.prefix}${PRICE_NUMBER_FORMATTER.format(animatedPriceValue)}`}
-            </Heading>
-            <Body as="span" className={priceSuffixClassName} size="sm">
-              {i18n._(cell.price.suffix)}
-            </Body>
-          </PriceLine>
+          <Body as="p" className={taglineClassName} size="sm" weight="medium">
+            {i18n._(tier.tagline[hosting])}
+          </Body>
         </CardHeaderInfo>
         <CardIcon $widthPx={iconWidth}>
           <NextImage
@@ -180,21 +223,43 @@ export function PlanCard({
         </CardIcon>
       </CardHeader>
 
+      <PriceLine>
+        {cell.price.qualifier !== undefined && (
+          <Body as="span" className={priceQualifierClassName} size="sm">
+            {i18n._(cell.price.qualifier)}
+          </Body>
+        )}
+        <Heading as="h4" family="sans" size="sm" weight="medium">
+          {`${cell.price.prefix}${PRICE_NUMBER_FORMATTER.format(animatedPriceValue)}${cell.price.valueSuffix ?? ''}`}
+        </Heading>
+        <Body as="span" className={priceSuffixClassName} size="sm">
+          {i18n._(cell.price.suffix)}
+        </Body>
+      </PriceLine>
+
       <CardRule />
 
       <PlanFeatureList
-        comparisonBulletTexts={comparisonBulletTexts}
-        maxBullets={maxBullets}
+        className={featuresClassName}
+        comparisonItemKeys={comparisonItemKeys}
+        intro={tier.featuresIntro}
         phase={phase}
-        visibleBullets={visibleBullets}
+        visibleFeatures={visibleItems}
       />
 
       <CtaRow>
-        <Button
-          href="https://app.twenty.com/welcome"
-          label={i18n._(msg`Start for free`)}
-          variant={highlighted ? 'filled' : 'outlined'}
-        />
+        {cta.href !== undefined ? (
+          <Button
+            href={cta.href}
+            label={i18n._(cta.label)}
+            variant={highlighted ? 'filled' : 'outlined'}
+          />
+        ) : (
+          <TalkToUsButton
+            label={cta.label}
+            variant={highlighted ? 'filled' : 'outlined'}
+          />
+        )}
       </CtaRow>
     </CardShell>
   );

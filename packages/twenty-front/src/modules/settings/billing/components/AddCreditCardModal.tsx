@@ -1,12 +1,9 @@
+import { DialogInstance } from '@/ui/layout/dialog/components/DialogInstance';
 import { AddPaymentMethodForm } from '@/settings/billing/components/AddPaymentMethodForm';
-import { ModalStatefulWrapper } from '@/ui/layout/modal/components/ModalStatefulWrapper';
-import { useModal } from '@/ui/layout/modal/hooks/useModal';
-import { styled } from '@linaria/react';
+import { useDialog } from '@/ui/layout/dialog/hooks/useDialog';
 import { useLingui } from '@lingui/react/macro';
-import { Button } from 'twenty-ui/input';
-import { Section, SectionAlignment, SectionFontColor } from 'twenty-ui/layout';
-import { H1Title, H1TitleFontColor } from 'twenty-ui/typography';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { Dialog } from 'twenty-ui/primitives/surfaces';
+import { Button } from 'twenty-ui/primitives/input';
 
 type AddCreditCardModalProps = {
   modalInstanceId: string;
@@ -14,70 +11,53 @@ type AddCreditCardModalProps = {
   onPaymentMethodAdded: () => Promise<void>;
 };
 
-const StyledCenteredTitle = styled.div`
-  text-align: center;
-`;
-
-const StyledSectionContainer = styled.div`
-  margin-bottom: ${themeCssVariables.spacing[6]};
-`;
-
-const StyledCancelButtonContainer = styled.div`
-  margin-top: ${themeCssVariables.spacing[4]};
-`;
-
 export const AddCreditCardModal = ({
   modalInstanceId,
   finalRedirectPath,
   onPaymentMethodAdded,
 }: AddCreditCardModalProps) => {
   const { t } = useLingui();
-  const { closeModal } = useModal();
+  const { closeDialog } = useDialog();
 
+  // Close only after activation so the form keeps its loading state visible
   const handlePaymentMethodAdded = async () => {
-    closeModal(modalInstanceId);
     await onPaymentMethodAdded();
+    closeDialog(modalInstanceId);
   };
 
   return (
-    <ModalStatefulWrapper
-      modalInstanceId={modalInstanceId}
-      isClosable={true}
-      size="medium"
-      padding="large"
-      overlay="dark"
-      dataGloballyPreventClickOutside
+    <DialogInstance
+      dialogId={modalInstanceId}
+      dismissible={true}
       renderInDocumentBody
-      smallBorderRadius
-      autoHeight
     >
-      <StyledCenteredTitle>
-        <H1Title
-          title={t`Add your credit card`}
-          fontColor={H1TitleFontColor.Primary}
-        />
-      </StyledCenteredTitle>
-      <StyledSectionContainer>
-        <Section
-          alignment={SectionAlignment.Center}
-          fontColor={SectionFontColor.Primary}
+      {({ onKeyDown }) => (
+        <Dialog.Popup
+          onKeyDown={onKeyDown}
+          size="md"
+          data-globally-prevent-click-outside
         >
-          {t`Add your credit card below. Once added, your subscription will start automatically.`}
-        </Section>
-      </StyledSectionContainer>
-      <AddPaymentMethodForm
-        finalRedirectPath={finalRedirectPath}
-        onPaymentMethodAdded={handlePaymentMethodAdded}
-      />
-      <StyledCancelButtonContainer>
-        <Button
-          onClick={() => closeModal(modalInstanceId)}
-          variant="secondary"
-          title={t`Cancel`}
-          fullWidth
-          justify="center"
-        />
-      </StyledCancelButtonContainer>
-    </ModalStatefulWrapper>
+          <Dialog.Header>
+            <Dialog.Title>{t`Add your credit card`}</Dialog.Title>
+            <Dialog.Description>
+              {t`Add your credit card below. Once added, your subscription will start automatically.`}
+            </Dialog.Description>
+          </Dialog.Header>
+          <Dialog.Body>
+            <AddPaymentMethodForm
+              finalRedirectPath={finalRedirectPath}
+              onPaymentMethodAdded={handlePaymentMethodAdded}
+            />
+          </Dialog.Body>
+          <Dialog.Footer>
+            <Button
+              onClick={() => closeDialog(modalInstanceId)}
+              fullWidth
+              variant="outline"
+            >{t`Cancel`}</Button>
+          </Dialog.Footer>
+        </Dialog.Popup>
+      )}
+    </DialogInstance>
   );
 };

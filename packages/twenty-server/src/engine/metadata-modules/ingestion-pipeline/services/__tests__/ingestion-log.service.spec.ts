@@ -1,10 +1,13 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 
+import { IsNull } from 'typeorm';
+
 import { IngestionLogEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-log.entity';
 import { IngestionLogService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-log.service';
 
 const pipelineId = 'pipeline-1';
+const workspaceId = 'workspace-1';
 
 const mockLog: IngestionLogEntity = {
   id: 'log-1',
@@ -52,15 +55,18 @@ describe('IngestionLogService', () => {
   });
 
   describe('findByPipelineId', () => {
-    it('should return logs as DTOs ordered by startedAt DESC', async () => {
+    it('should return the workspace pipeline logs as DTOs ordered by startedAt DESC', async () => {
       mockRepository.find.mockResolvedValue([mockLog]);
 
-      const result = await service.findByPipelineId(pipelineId);
+      const result = await service.findByPipelineId(pipelineId, workspaceId);
 
       expect(result).toHaveLength(1);
       expect(result[0].status).toBe('pending');
       expect(mockRepository.find).toHaveBeenCalledWith({
-        where: { pipelineId },
+        where: {
+          pipelineId,
+          pipeline: { workspaceId, deletedAt: IsNull() },
+        },
         order: { startedAt: 'DESC' },
         take: 50,
       });
@@ -69,7 +75,7 @@ describe('IngestionLogService', () => {
     it('should respect custom limit', async () => {
       mockRepository.find.mockResolvedValue([]);
 
-      await service.findByPipelineId(pipelineId, 10);
+      await service.findByPipelineId(pipelineId, workspaceId, 10);
 
       expect(mockRepository.find).toHaveBeenCalledWith(
         expect.objectContaining({ take: 10 }),

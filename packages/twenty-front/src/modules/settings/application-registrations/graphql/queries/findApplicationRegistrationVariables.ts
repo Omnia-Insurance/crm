@@ -13,7 +13,10 @@ export const FIND_APPLICATION_REGISTRATION_VARIABLES = gql`
       description
       isSecret
       isRequired
+      isDeprecated
       isFilled
+      type
+      options
       createdAt
       updatedAt
     }

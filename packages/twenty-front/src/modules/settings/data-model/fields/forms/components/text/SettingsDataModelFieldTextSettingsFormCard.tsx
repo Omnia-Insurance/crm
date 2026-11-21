@@ -1,7 +1,8 @@
-import { Separator } from '@/settings/components/Separator';
+import { SettingsCardSeparator } from '@/settings/components/SettingsCardSeparator';
 import { SettingsDataModelPreviewFormCard } from '@/settings/data-model/components/SettingsDataModelPreviewFormCard';
 
 import { SettingsDataModelFieldIsUniqueForm } from '@/settings/data-model/fields/forms/components/SettingsDataModelFieldIsUniqueForm';
+// OMNIA-CUSTOM: soft Required rule (contract C5)
 import { SettingsDataModelFieldRequiredForm } from '@/settings/data-model/fields/forms/components/SettingsDataModelFieldRequiredForm';
 import { SettingsDataModelFieldTextForm } from '@/settings/data-model/fields/forms/components/text/SettingsDataModelFieldTextForm';
 import { SettingsDataModelFieldPreviewWidget } from '@/settings/data-model/fields/preview/components/SettingsDataModelFieldPreviewWidget';
@@ -40,14 +41,15 @@ export const SettingsDataModelFieldTextSettingsFormCard = ({
             disabled={disabled}
             existingFieldMetadataId={existingFieldMetadataId}
           />
-          <Separator />
+          <SettingsCardSeparator />
           <SettingsDataModelFieldIsUniqueForm
             fieldType={FieldMetadataType.TEXT}
             existingFieldMetadataId={existingFieldMetadataId}
             objectNameSingular={objectNameSingular}
             disabled={disabled}
           />
-          <Separator />
+          {/* OMNIA-CUSTOM: soft Required rule (contract C5) */}
+          <SettingsCardSeparator />
           <SettingsDataModelFieldRequiredForm
             existingFieldMetadataId={existingFieldMetadataId}
             objectNameSingular={objectNameSingular}

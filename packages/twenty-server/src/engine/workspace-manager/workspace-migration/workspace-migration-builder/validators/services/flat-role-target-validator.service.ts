@@ -10,7 +10,10 @@ import { FailedFlatEntityValidation } from 'src/engine/workspace-manager/workspa
 import { getEmptyFlatEntityValidationError } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/builders/utils/get-flat-entity-validation-error.util';
 import { FlatEntityUpdateValidationArgs } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/types/universal-flat-entity-update-validation-args.type';
 import { UniversalFlatEntityValidationArgs } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/types/universal-flat-entity-validation-args.type';
+import { validateFlatRoleTargetAgentTarget } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/utils/validate-flat-role-target-agent-target.util';
+import { validateFlatRoleTargetApplicationTarget } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/utils/validate-flat-role-target-application-target.util';
 import { validateFlatRoleTargetAssignationAvailability } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/utils/validate-flat-role-target-assignation-availability.util';
+import { validateFlatRoleTargetRoleIsEntitled } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/utils/validate-flat-role-target-role-is-entitled.util';
 import { validateFlatRoleTargetTargetsOnlyOneEntity } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/utils/validate-flat-role-target-targets-only-one-entity.util';
 
 @Injectable()
@@ -21,6 +24,8 @@ export class FlatRoleTargetValidatorService {
       flatRoleTargetMaps: optimisticFlatRoleTargetMaps,
       flatRoleMaps,
     },
+    additionalCacheDataMaps: { billingEntitlements },
+    buildOptions,
   }: UniversalFlatEntityValidationArgs<
     typeof ALL_METADATA_NAME.roleTarget
   >): FailedFlatEntityValidation<'roleTarget', 'create'> {
@@ -68,7 +73,29 @@ export class FlatRoleTargetValidatorService {
           flatRole: referencedRole,
           flatRoleTarget: flatRoleTargetToValidate,
         }),
+        ...validateFlatRoleTargetApplicationTarget({
+          flatRole: referencedRole,
+          flatRoleTarget: flatRoleTargetToValidate,
+          flatRoleTargetMaps: optimisticFlatRoleTargetMaps,
+          buildOptions,
+        }),
+        ...validateFlatRoleTargetAgentTarget({
+          flatRole: referencedRole,
+          flatRoleTarget: flatRoleTargetToValidate,
+          buildOptions,
+        }),
       );
+
+      const entitlementError = validateFlatRoleTargetRoleIsEntitled({
+        flatRole: referencedRole,
+        flatRoleTarget: flatRoleTargetToValidate,
+        billingEntitlements,
+        buildOptions,
+      });
+
+      if (isDefined(entitlementError)) {
+        validationResult.errors.push(entitlementError);
+      }
     }
 
     return validationResult;
@@ -115,6 +142,8 @@ export class FlatRoleTargetValidatorService {
       flatRoleTargetMaps: optimisticFlatRoleTargetMaps,
       flatRoleMaps,
     },
+    additionalCacheDataMaps: { billingEntitlements },
+    buildOptions,
   }: FlatEntityUpdateValidationArgs<
     typeof ALL_METADATA_NAME.roleTarget
   >): FailedFlatEntityValidation<'roleTarget', 'update'> {
@@ -172,7 +201,36 @@ export class FlatRoleTargetValidatorService {
         flatRole: referencedRole,
         flatRoleTarget: updatedFlatRoleTarget,
       }),
+      ...validateFlatRoleTargetApplicationTarget({
+        flatRole: referencedRole,
+        flatRoleTarget: updatedFlatRoleTarget,
+        flatRoleTargetMaps: optimisticFlatRoleTargetMaps,
+        buildOptions,
+      }),
+      ...validateFlatRoleTargetAgentTarget({
+        flatRole: referencedRole,
+        flatRoleTarget: updatedFlatRoleTarget,
+        buildOptions,
+      }),
     );
+
+    if (
+      updatedFlatRoleTarget.roleUniversalIdentifier ===
+      existingRoleTarget.roleUniversalIdentifier
+    ) {
+      return validationResult;
+    }
+
+    const entitlementError = validateFlatRoleTargetRoleIsEntitled({
+      flatRole: referencedRole,
+      flatRoleTarget: updatedFlatRoleTarget,
+      billingEntitlements,
+      buildOptions,
+    });
+
+    if (isDefined(entitlementError)) {
+      validationResult.errors.push(entitlementError);
+    }
 
     return validationResult;
   }

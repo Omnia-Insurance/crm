@@ -2,16 +2,16 @@ import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadat
 import { FormArrayFieldInput } from '@/object-record/record-field/ui/form-types/components/FormArrayFieldInput';
 import { FormBooleanFieldInput } from '@/object-record/record-field/ui/form-types/components/FormBooleanFieldInput';
 import { FormMultiRecordPicker } from '@/object-record/record-field/ui/form-types/components/FormMultiRecordPicker';
+import { FormMultiSelectFieldInput } from '@/object-record/record-field/ui/form-types/components/FormMultiSelectFieldInput';
 import { FormNumberFieldInput } from '@/object-record/record-field/ui/form-types/components/FormNumberFieldInput';
 import { FormSelectFieldInput } from '@/object-record/record-field/ui/form-types/components/FormSelectFieldInput';
 import { FormSingleRecordPicker } from '@/object-record/record-field/ui/form-types/components/FormSingleRecordPicker';
 import { FormTextFieldInput } from '@/object-record/record-field/ui/form-types/components/FormTextFieldInput';
-import { type VariablePickerComponent } from '@/object-record/record-field/ui/form-types/types/VariablePickerComponent';
+import { type VariablePickerComponent } from '@/ui/input/types/VariablePickerComponent';
 import { type FieldArrayValue } from '@/object-record/record-field/ui/types/FieldMetadata';
-import { isStandaloneVariableString } from '@/workflow/utils/isStandaloneVariableString';
+import { getWorkflowCodeFieldsEnumArraySelectOptions } from '@/workflow/workflow-steps/workflow-actions/code-action/utils/getWorkflowCodeFieldsEnumArraySelectOptions';
 import { getWorkflowCodeFieldsEnumSelectOptions } from '@/workflow/workflow-steps/workflow-actions/code-action/utils/getWorkflowCodeFieldsEnumSelectOptions';
 import { getWorkflowCodeFieldsLeafKind } from '@/workflow/workflow-steps/workflow-actions/code-action/utils/getWorkflowCodeFieldsLeafKind';
-import { t } from '@lingui/core/macro';
 import {
   isBoolean,
   isNonEmptyArray,
@@ -21,7 +21,11 @@ import {
   isString,
 } from '@sniptt/guards';
 import { isDefined } from 'twenty-shared/utils';
-import { type InputSchemaProperty } from 'twenty-shared/workflow';
+import {
+  type InputSchemaProperty,
+  isStandaloneVariableString,
+} from 'twenty-shared/workflow';
+import { useLingui } from '@lingui/react/macro';
 
 type WorkflowEditActionCodeFieldLeafProps = {
   label: string;
@@ -40,6 +44,7 @@ export const WorkflowEditActionCodeFieldLeaf = ({
   onChange,
   VariablePicker,
 }: WorkflowEditActionCodeFieldLeafProps) => {
+  const { t } = useLingui();
   const { objectMetadataItems } = useObjectMetadataItems();
 
   const leafKind = getWorkflowCodeFieldsLeafKind(schemaProperty);
@@ -89,6 +94,26 @@ export const WorkflowEditActionCodeFieldLeaf = ({
         />
       );
     }
+  }
+
+  if (leafKind === 'enum-array') {
+    return (
+      <FormMultiSelectFieldInput
+        label={label}
+        defaultValue={
+          Array.isArray(inputValue) || isStandaloneVariableString(inputValue)
+            ? inputValue
+            : undefined
+        }
+        options={getWorkflowCodeFieldsEnumArraySelectOptions({
+          itemsProperty: schemaProperty?.items,
+          selectedValues: inputValue,
+        })}
+        onChange={onChange}
+        readonly={readonly}
+        VariablePicker={VariablePicker}
+      />
+    );
   }
 
   if (leafKind === 'array') {

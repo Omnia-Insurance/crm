@@ -1,5 +1,7 @@
 import { QueryRunner } from 'typeorm';
 
+// OMNIA-CUSTOM: guarded cutover shared with the Omnia 2.8 catch-up command
+import { finalizeRolePermissionFlagCutoverIfNeeded } from 'src/database/commands/upgrade-version-command/2-7/utils/finalize-role-permission-flag-cutover-if-needed.util';
 import { RegisteredInstanceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-instance-command.decorator';
 import { FastInstanceCommand } from 'src/engine/core-modules/upgrade/interfaces/fast-instance-command.interface';
 
@@ -8,32 +10,9 @@ export class FinalizeRolePermissionFlagCutoverFastInstanceCommand
   implements FastInstanceCommand
 {
   public async up(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(
-      `ALTER TABLE "core"."rolePermissionFlag"
-       DROP CONSTRAINT IF EXISTS "IDX_ROLE_PERMISSION_FLAG_FLAG_ROLE_ID_UNIQUE"`,
-    );
-
-    // OMNIA-CUSTOM: self-heal rows the 2.6 Link step left unlinked (observed on
-    // long-lived workspaces: a few rolePermissionFlag rows had a NULL
-    // permissionFlagId). Backfill flag -> permissionFlag.key before SET NOT NULL
-    // so the cutover doesn't hard-fail the whole upgrade.
-    await queryRunner.query(
-      `UPDATE "core"."rolePermissionFlag" rolePermissionFlag
-          SET "permissionFlagId" = permissionFlag."id"
-         FROM "core"."permissionFlag" permissionFlag
-        WHERE rolePermissionFlag."permissionFlagId" IS NULL
-          AND permissionFlag."key" = rolePermissionFlag."flag"
-          AND permissionFlag."workspaceId" = rolePermissionFlag."workspaceId"`,
-    );
-
-    await queryRunner.query(
-      `ALTER TABLE "core"."rolePermissionFlag"
-       ALTER COLUMN "permissionFlagId" SET NOT NULL`,
-    );
-
-    await queryRunner.query(
-      `ALTER TABLE "core"."rolePermissionFlag" DROP COLUMN "flag"`,
-    );
+    // OMNIA-CUSTOM: self-heal rows the 2.6 link step left unlinked, and no-op
+    // when the Omnia 2.8 catch-up already ran (prod's cursor skips this step).
+    await finalizeRolePermissionFlagCutoverIfNeeded(queryRunner);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

@@ -1,0 +1,141 @@
+---
+title: Întrebări frecvente legale
+description: Întrebări juridice puse frecvent.
+---
+
+import { PageBanner } from "/snippets/page-banner.mdx"
+
+## Rezervarea datelor și transferurile internaționale
+
+<AccordionGroup>
+<Accordion title="În ce țară și regiune vor fi stocate datele spațiului nostru de lucru, atașamentele, jurnalele și copiile de rezervă?">
+Douăzeci de Cloud rulează pe serverele AWS situate în Frankfurt, Germania.
+</Accordion>
+<Accordion title="Poate regiunea gazdă să fie reparată prin contract pentru spațiul nostru de lucru?">
+Selecția regiunilor va fi disponibilă începând din 2027, inițial pentru noi spații de lucru. Utilizatorii vor putea solicita o schimbare de regiune pentru un spațiu de lucru existent la o dată ulterioară. Alternativ, poți să contactezi [partenerii noștri](https://twenty.com/partners/list?categories=HOSTING) pentru a te ajuta să îți configurezi instanța.
+</Accordion>
+<Accordion title="Ce sub-procesatori pot procesa sau accesa datele noastre CRM și în ce țări sunt localizate?">
+O listă cu toate sub-procesoarele este disponibilă în [centrul nostru de încredere](https://trust.twenty.com/?tab=subprocessors).
+</Accordion>
+<Accordion title="Ce garanții se aplică transferurilor internaționale de date?">
+Clauze contractuale standard ale UE, împreună cu addendumul din Regatul Unit și amendamentele elvețiene, se aplică transferurilor internaționale de date în afara UE, inclusiv transferurilor către toți subprocesatorii.
+</Accordion>
+</AccordionGroup>
+
+## Acordul privind prelucrarea datelor și rolurile juridice
+
+<AccordionGroup>
+<Accordion title="Unde putem găsi actualul acord de prelucrare a datelor?">
+Puteți genera DPA semnat la http://{your-domain}/settings/legal/dpa (de ex. https://getting-started.twenty.com/settings/legal/dpa).
+</Accordion>
+<Accordion title="Este DPA disponibil pe toate planurile?">
+Da. Acordul standard de prelucrare a datelor este disponibil în fiecare plan și poate fi semnat cu un singur clic din Setări → Juridic → DPA. Modificările aduse termenilor standard, cum ar fi o entitate contractantă diferită sau termene-limită de notificare personalizate, sunt disponibile în planul Enterprise.
+</Accordion>
+<Accordion title="Funcționează douăzeci de persoane care prelucrează date pentru comerciant și informații de contact stocate în CRM, în timp ce compania noastră rămâne operatorul de date?">
+În conformitate cu [Politica noastră de confidențialitate](https://twenty.com/privacy-policy), douăzeci acționează ca procesor de date pentru comerciant și contactează informațiile stocate în CRM, în timp ce firma dumneavoastră rămâne operatorul de date.
+</Accordion>
+<Accordion title="Conținutul CRM este folosit vreodată pentru a instrui modele AI de douăzeci sau terțe părți?">
+Nu. Twenty nu are propriul model AI și nu antrenează niciun model pe datele dvs. Furnizorii de AI utilizați în mod implicit pe Twenty Cloud (Azure OpenAI, OpenAI, Anthropic și Mistral) nu se antrenează pe baza acestora conform termenilor lor. Unele modele opționale, precum Google Gemini și TypeSafe (utilizat de acțiunea Classify din fluxurile de lucru), sunt utilizate numai dacă un administrator le activează; termenii acestora sunt enumerați în [Centrul nostru de încredere](https://trust.twenty.com/?tab=subprocessors).
+</Accordion>
+<Accordion title="Poate prelucrarea cu IA să fie păstrată în UE sau limitată la furnizori care nu păstrează date?">
+Da. În Settings → General → Privacy, setați regiunea de procesare doar la UE și activați Zero data retention. Twenty utilizează apoi numai modele al căror furnizor îndeplinește ambele condiții și refuză orice solicitare pe care nu o poate direcționa astfel. Sunt disponibile mai puține modele cu aceste setări, iar unele costă mai mult.
+</Accordion>
+<Accordion title="Dacă există o procesare AI opțională, poate fi dezactivată complet pentru spațiul nostru de lucru?">
+Nicio dată nu este trimisă unui furnizor de AI decât dacă cineva din spațiul dvs. de lucru rulează AI: chatul AI, un agent AI sau un pas AI într-un flux de lucru. Pentru a bloca complet AI, setați o limită de utilizare AI de 0 pentru spațiul de lucru în Setări → Facturare, care se aplică fiecărui membru, inclusiv administratorilor. De asemenea, puteți elimina permisiunea Ask AI din rolurile dvs. editabile în Setări → Roluri; rolul Admin încorporat o păstrează întotdeauna.
+</Accordion>
+</AccordionGroup>
+
+## Controale de securitate și acces
+
+<AccordionGroup>
+<Accordion title="Este criptarea folosită în tranzit și în repaus, care sunt practicile dvs. cheie de gestionare și cum sunt izolate datele chiriașe?">
+Toate datele sunt criptate în tranzit și în repaus. Datele disponibile sunt izolate prin intermediul unei scheme per chiriaș, iar cheile de criptare sunt rotite periodic.
+</Accordion>
+<Accordion title="Care douăzeci de membri ai personalului sau subprelucrătorilor pot accesa spațiile de lucru ale clienților, în ce scopuri și cum se accesează autorizați și înregistrați?">
+Echipele de inginerie și asistență Twenty pot accesa spațiile de lucru ale clienților pentru a investiga și rezolva problemele. Proprietarii spațiilor de lucru controlează acest lucru: accesul pentru asistență poate fi dezactivat oricând în Settings → General → Privacy și rămâne dezactivat până când îl activați din nou. Accesul pentru asistență necesită autentificare cu doi factori din partea Twenty, iar în planul Organization și în planurile superioare fiecare sesiune este înregistrată în jurnalele dvs. de audit. În timp ce o persoană de la Twenty vă impersonifică, sesiunea apare și cu eticheta Impersonation în Setări → Profil → Dispozitive.
+</Accordion>
+<Accordion title="Pot membrii spațiului nostru de lucru să se impersonifice reciproc?">
+Membrii al căror rol are permisiunea Impersonate pot vedea spațiul de lucru ca orice alt membru, inclusiv ca administratori ai spațiului de lucru, așadar acordați-o numai rolurilor în care aveți încredere. Controlați cine are această permisiune în Setări → Roluri.
+</Accordion>
+<Accordion title="Cât timp sunt păstrate jurnalele de audit?">
+Jurnalele de audit sunt disponibile în planul Organization și în planurile superioare. Puteți seta durata de păstrare a acestora în Setări → General → Securitate.
+</Accordion>
+<Accordion title="Care este procesul de notificare a incidentelor și ținta termenului de notificare în urma unui incident confirmat de securitate care afectează datele noastre?">
+În cazul unei încălcări confirmate a securității datelor cu caracter personal care afectează datele dumneavoastră, vă vom notifica fără întârzieri nejustificate, vizând un termen de cel mult 72 de ore de la verificarea incidentului, astfel cum se prevede în secțiunea 4.6 din DPA-ul nostru. Notificarea noastră va include, în măsura în care este cunoscută la momentul respectiv: natura încălcării, categoriile și volumul aproximativ al datelor și persoanelor afectate, consecințele probabile, precum și măsurile de remediere și atenuare luate sau planificate. Vom oferi actualizări pe măsură ce ancheta progresează.
+</Accordion>
+</AccordionGroup>
+
+## Păstrarea și ștergerea datelor
+
+<AccordionGroup>
+<Accordion title="Când o înregistrare individuală CRM este ștearsă, când este eliminată din sistemele active?">
+Atunci când o înregistrare este ștearsă, este prima ștersă de soft-uri și poate fi restabilită. Acesta este șters și eliminat permanent din sistemele active odată ce perioada de retenție s-a scurs sau un utilizator îl distruge manual.
+</Accordion>
+<Accordion title="Cât timp sunt păstrate în sistem înregistrările șterse soft-?">
+În mod implicit, înregistrările de ștergere a softului sunt păstrate timp de 14 zile, după care sunt eliminate definitiv din sistem. Perioada de retenție pentru înregistrările șterse soft-deleted poate fi modificată în Setări → General → Securitate.
+</Accordion>
+<Accordion title="Cât timp poate rămâne înregistrarea respectivă în copii de rezervă sau în jurnale tehnice?">
+O înregistrare ștearsă rămâne în copiile de rezervă pentru 30 de zile, după care a fost ștearsă definitiv.
+</Accordion>
+<Accordion title="Când un spațiu de lucru este închis sau se solicită ștergerea completă, ce calendar exact se aplică pentru datele de producție, atașamentele, jurnalele și copiile de rezervă?">
+Când un spațiu de lucru este șters, datele sale sunt eliminate din sistemele de producție în termen de aproximativ 90 de zile de la încetarea serviciului și, de obicei, mult mai devreme. Copiile de rezervă și de arhivă sunt apoi suprascrise sau eliminate în termen de încă 90 de zile, după care toate datele sunt șterse definitiv. Pe tot parcursul ambelor perioade, datele sunt izolate de orice utilizare operațională. La cerere, putem furniza o certificare scrisă odată ce procesul de ștergere este finalizat. Consultați clauza 4.9 din Acordul dvs. de Prelucrare a Datelor pentru termenii compleți.
+</Accordion>
+<Accordion title="În timpul unei perioade de retenţie de rezervă, datele sunt şterse izolat de accesul operaţional şi de utilizare?">
+Da, în timpul oricărei perioade de retenție de rezervă, datele șterse sunt izolate de utilizarea operațională.
+</Accordion>
+<Accordion title="Sunt reținute categorii de date mai lungi în scopuri legale, de facturare, de prevenire a fraudei, de securitate sau de audit? Dacă da, ce categorii și pentru cât timp?">
+Pentru mai multe informații despre păstrarea datelor, puteți solicita Politica noastră privind gestionarea și păstrarea datelor disponibilă în [centrul nostru de încredere](https://trust.twenty.com/?tab=documents).
+</Accordion>
+<Accordion title="Poate oferi douăzeci de confirmări scrise atunci când o cerere de ștergere completă a fost finalizată?">
+Recunoaștem cererile de ștergere și oferim confirmare scrisă de îndată ce ștergerea este finalizată.
+</Accordion>
+</AccordionGroup>
+
+## Rezolvări și reziliență
+
+<AccordionGroup>
+<Accordion title="Care sunt frecvența și perioada de retenție?">
+Backup-urile sunt create continuu cu instantanee luate zilnic, iar perioada de retenție este de 30 de zile.
+</Accordion>
+<Accordion title="Care este obiectivul stabilit pentru douăzeci de nori în ceea ce privește redresarea și redresarea?">
+RTO și RPO sunt 6 ore (în conformitate cu DPA).
+</Accordion>
+<Accordion title="Sunt copiile de rezervă criptate și stocate în aceeași regiune cu datele primare din spațiul de lucru?">
+Toate copiile de rezervă sunt criptate și stocate în locații separate geografic din cadrul aceleiași jurisdicții (de exemplu, în interiorul UE, pentru date UE).
+</Accordion>
+</AccordionGroup>
+
+## Conformitate
+
+<AccordionGroup>
+<Accordion title="Se conformează douăzeci de RGPD?">
+Da, douăzeci este [RGPD conform](https://trust.twenty.com/?tab=securityControls\&frameworks=gdpr_v1).
+</Accordion>
+<Accordion title="Se conformează 20 SOC 2?">
+Da, douăzeci de ani este [de conformitate SOC 2](https://trust.twenty.com/?tab=securityControls\&frameworks=soc2_v1).
+</Accordion>
+<Accordion title="Este conformă douăzeci de HIPAAA?">
+Nu, douăzeci de persoane sunt pe cale să devină conforme cu HIPAA.
+</Accordion>
+</AccordionGroup>
+
+## Licențiere
+
+<AccordionGroup>
+<Accordion title="Dacă modific codul pentru a adăuga funcționalități doar pentru uz intern al echipei mele, trebuie să public aceste modificări?">
+Nu. Rularea unei versiuni modificate pentru propria echipă nu reprezintă distribuire, astfel încât nu apare nicio obligație de publicare. Clauza de rețea a AGPL se aplică atunci când persoane din afara organizației dvs. interacționează, prin rețea, cu instanța dvs. modificată.
+</Accordion>
+<Accordion title="Dacă creez un front-end separat și folosesc Twenty ca backend, fără modificări, trebuie să public acele modificări?">
+Nu. Front-end-ul dvs. este o operă proprie, separată, iar faptul că interacționează cu Twenty prin API-urile sale nu schimbă acest lucru. Deoarece Twenty în sine nu este modificat, nu există nimic de publicat.
+</Accordion>
+<Accordion title="Dacă modific codul pentru a adăuga funcționalități în scopul revânzării, trebuie să public acele modificări?">
+Da, deoarece modificați codul pentru a-l distribui altora, aveți obligația de a publica acele modificări. Dacă nu doriți să publicați modificările, puteți obține o licență Organization.
+</Accordion>
+<Accordion title="Aplicațiile dezvoltate pe Twenty trebuie să fie licențiate AGPL?">
+Aplicațiile care interacționează cu Twenty numai prin intermediul API-urilor/SDK-urilor sale publicate pot fi licențiate în condițiile alese de dvs. (consultați „Excepția pentru aplicațiile Twenty” din LICENSE-ul depozitului). Twenty în sine este în mare parte sub licența AGPLv3, iar unele pachete (inclusiv SDK-ul Twenty) sunt licențiate MIT.
+</Accordion>
+</AccordionGroup>
+
+Dacă aveţi mai multe întrebări, vă rugăm să verificaţi [Termenii şi condiţiile noastre](https://twenty.com/terms), [Politica de confidenţialitate](https://twenty.com/privacy-policy) şi [Centrul de încredere](https://trust.twenty.com/). Dacă încă nu ai răspuns la întrebări, trimite-le la [contact@twenty.com](mailto:contact@twenty.com) sau prin chat-ul de suport.
+
+<PageBanner illustration="section-legal" />

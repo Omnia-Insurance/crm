@@ -5,15 +5,18 @@ import { convertPredicateToRecordFilter } from '@/settings/roles/role-permission
 
 import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMemberState';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
+// OMNIA-CUSTOM: the C2 hop prefill resolves its relation target and fetches the member's own record
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
-import {
-  CoreObjectNameSingular,
-  FieldMetadataType,
-  RelationType,
-  RowLevelPermissionPredicateScope,
-} from 'twenty-shared/types';
-import { getObjectPermissionsForObject } from '@/object-metadata/utils/getObjectPermissionsForObject';
+import { isManyToOneRelationField } from '@/object-metadata/utils/isManyToOneRelationField';
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
+import {
+  StandardObjectNameSingular,
+  RelationType,
+  type RowLevelPermissionPredicate,
+  RowLevelPermissionPredicateOperand,
+} from 'twenty-shared/types';
+import { findSingleCreateRowLevelPermissionRule } from '@/object-metadata/utils/findSingleCreateRowLevelPermissionRule';
+import { getObjectPermissionsForObject } from '@/object-metadata/utils/getObjectPermissionsForObject';
 import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
 import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
 import { isCompositeFieldType } from '@/object-record/object-filter-dropdown/utils/isCompositeFieldType';
@@ -23,147 +26,155 @@ import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
 import { isUndefined } from '@sniptt/guards';
 import { useUserTimezone } from '@/ui/input/components/internal/date/hooks/useUserTimezone';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
-import { useMemo } from 'react';
 import { isDefined, isPlainObject } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
 
-const mergeCompositeValues = (existingValue: unknown, incomingValue: unknown) =>
+const mergeCompositeValues = (
+  existingValue: unknown,
+  incomingValue: unknown,
+) =>
   isPlainObject(existingValue) && isPlainObject(incomingValue)
     ? { ...existingValue, ...incomingValue }
     : incomingValue;
 
-export const useBuildRecordInputFromRLSPredicates = ({
+// OMNIA-CUSTOM: contract C2 hop (policy.agent ▸ agentProfile.workspaceMember IS Me). Its create
+// default is the member's own target record, their AgentProfile, never the raw member id
+type RowLevelPermissionHopPrefill = {
+  recordInputFieldName: string;
+  targetObjectNameSingular: string;
+  targetWorkspaceMemberJoinColumnName: string;
+};
+
+const findRowLevelPermissionHopPrefill = ({
+  predicates,
   objectMetadataItem,
+  objectMetadataItems,
+  workspaceMemberObjectMetadataItem,
 }: {
+  predicates: RowLevelPermissionPredicate[];
   objectMetadataItem: EnrichedObjectMetadataItem;
-}) => {
+  objectMetadataItems: EnrichedObjectMetadataItem[];
+  workspaceMemberObjectMetadataItem: EnrichedObjectMetadataItem;
+}): RowLevelPermissionHopPrefill | undefined => {
+  for (const predicate of predicates) {
+    if (
+      predicate.objectMetadataId !== objectMetadataItem.id ||
+      !isDefined(predicate.relationFieldMetadataId) ||
+      predicate.operand !== RowLevelPermissionPredicateOperand.IS
+    ) {
+      continue;
+    }
+
+    const relationFieldMetadataItem = objectMetadataItem.fields.find(
+      (field) => field.id === predicate.relationFieldMetadataId,
+    );
+
+    if (
+      !isDefined(relationFieldMetadataItem) ||
+      !relationFieldMetadataItem.isActive ||
+      !isManyToOneRelationField(relationFieldMetadataItem)
+    ) {
+      continue;
+    }
+
+    const targetObjectMetadataItem = objectMetadataItems.find(
+      (item) =>
+        item.id === relationFieldMetadataItem.relation.targetObjectMetadata.id,
+    );
+    const targetWorkspaceMemberFieldMetadataItem =
+      targetObjectMetadataItem?.fields.find(
+        (field) => field.id === predicate.fieldMetadataId,
+      );
+    const workspaceMemberFieldMetadataItem =
+      workspaceMemberObjectMetadataItem.fields.find(
+        (field) => field.id === predicate.workspaceMemberFieldMetadataId,
+      );
+
+    if (
+      !isDefined(targetObjectMetadataItem) ||
+      !targetObjectMetadataItem.isActive ||
+      !isDefined(targetWorkspaceMemberFieldMetadataItem) ||
+      !targetWorkspaceMemberFieldMetadataItem.isActive ||
+      !isManyToOneRelationField(targetWorkspaceMemberFieldMetadataItem) ||
+      targetWorkspaceMemberFieldMetadataItem.relation.targetObjectMetadata
+        .id !== workspaceMemberObjectMetadataItem.id ||
+      workspaceMemberFieldMetadataItem?.name !== 'id'
+    ) {
+      continue;
+    }
+
+    return {
+      recordInputFieldName: doNotTranslate(
+        `${relationFieldMetadataItem.name}Id`,
+      ),
+      targetObjectNameSingular: targetObjectMetadataItem.nameSingular,
+      targetWorkspaceMemberJoinColumnName: doNotTranslate(
+        `${targetWorkspaceMemberFieldMetadataItem.name}Id`,
+      ),
+    };
+  }
+
+  return undefined;
+};
+
+export const useBuildRecordInputFromRLSPredicates = ({
+  objectMetadataItem: defaultObjectMetadataItem,
+}: {
+  objectMetadataItem?: EnrichedObjectMetadataItem;
+} = {}) => {
   const currentWorkspaceMember = useAtomStateValue(currentWorkspaceMemberState);
 
   const { userTimezone } = useUserTimezone();
 
   const { record: currentWorkspaceMemberRecord } = useFindOneRecord({
-    objectNameSingular: CoreObjectNameSingular.WorkspaceMember,
+    objectNameSingular: StandardObjectNameSingular.WorkspaceMember,
     objectRecordId: currentWorkspaceMember?.id,
   });
 
   const { objectMetadataItem: workspaceMemberObjectMetadataItem } =
     useObjectMetadataItem({
-      objectNameSingular: CoreObjectNameSingular.WorkspaceMember,
+      objectNameSingular: StandardObjectNameSingular.WorkspaceMember,
     });
 
   const { objectPermissionsByObjectMetadataId } = useObjectPermissions();
-  const objectPermissions = getObjectPermissionsForObject(
-    objectPermissionsByObjectMetadataId,
-    objectMetadataItem.id,
-  );
 
+  // OMNIA-CUSTOM: hooks cannot run inside the builder, so the hop target of the hook-level
+  // object is fetched here; the fallback object keeps the unconditional fetch valid when skipped
   const { objectMetadataItems } = useObjectMetadataItems();
 
-  const writeScopedRlsPredicates = useMemo(
-    () =>
-      objectPermissions.rowLevelPermissionPredicates.filter(
-        (predicate) =>
-          predicate.objectMetadataId === objectMetadataItem.id &&
-          (predicate.scope === RowLevelPermissionPredicateScope.ALL ||
-            predicate.scope === RowLevelPermissionPredicateScope.WRITE ||
-            !isDefined(predicate.scope)),
-      ),
-    [objectMetadataItem.id, objectPermissions.rowLevelPermissionPredicates],
-  );
+  const hopPrefill = isDefined(defaultObjectMetadataItem)
+    ? findRowLevelPermissionHopPrefill({
+        predicates:
+          findSingleCreateRowLevelPermissionRule(
+            getObjectPermissionsForObject(
+              objectPermissionsByObjectMetadataId,
+              defaultObjectMetadataItem.id,
+            ),
+          )?.predicates ?? [],
+        objectMetadataItem: defaultObjectMetadataItem,
+        objectMetadataItems,
+        workspaceMemberObjectMetadataItem,
+      })
+    : undefined;
 
-  // Detect indirect relation: when an RLS predicate's workspaceMemberFieldMetadataId
-  // needs to resolve through an intermediate object (e.g. Policy.agent ->
-  // AgentProfile.workspaceMember) instead of using the raw workspaceMember id.
-  const intermediateObjectInfo = useMemo(() => {
-    for (const predicate of writeScopedRlsPredicates) {
-      const wmFieldId = predicate.workspaceMemberFieldMetadataId;
-
-      if (!wmFieldId) {
-        continue;
-      }
-
-      const predicateFieldMetadataItem = objectMetadataItem.fields.find(
-        (field) => field.id === predicate.fieldMetadataId,
-      );
-
-      const isOnWorkspaceMember =
-        workspaceMemberObjectMetadataItem?.fields.some(
-          (field) => field.id === wmFieldId,
-        );
-
-      if (
-        isDefined(predicateFieldMetadataItem) &&
-        predicateFieldMetadataItem.type === FieldMetadataType.RELATION
-      ) {
-        const relationTargetObjectNameSingular =
-          predicateFieldMetadataItem.relation?.targetObjectMetadata
-            .nameSingular;
-
-        if (
-          isDefined(relationTargetObjectNameSingular) &&
-          relationTargetObjectNameSingular !==
-            CoreObjectNameSingular.WorkspaceMember
-        ) {
-          const relationTargetObjectMetadataItem = objectMetadataItems.find(
-            (item) => item.nameSingular === relationTargetObjectNameSingular,
-          );
-          const relationToWorkspaceMemberField =
-            relationTargetObjectMetadataItem?.fields.find(
-              (field) =>
-                field.type === FieldMetadataType.RELATION &&
-                field.relation?.targetObjectMetadata.nameSingular ===
-                  CoreObjectNameSingular.WorkspaceMember,
-            );
-
-          if (isDefined(relationToWorkspaceMemberField)) {
-            return {
-              objectNameSingular: relationTargetObjectNameSingular,
-              relationFieldName: relationToWorkspaceMemberField.name,
-            };
-          }
-        }
-      }
-
-      if (!isOnWorkspaceMember) {
-        for (const obj of objectMetadataItems) {
-          const field = obj.fields.find((f) => f.id === wmFieldId);
-
-          if (isDefined(field)) {
-            return {
-              objectNameSingular: obj.nameSingular,
-              relationFieldName: field.name,
-            };
-          }
-        }
-      }
-    }
-
-    return null;
-  }, [
-    objectMetadataItems,
-    objectMetadataItem.fields,
-    workspaceMemberObjectMetadataItem,
-    writeScopedRlsPredicates,
-  ]);
-
-  // Pre-fetch intermediate object record for the current user
-  // (e.g., find the Agent record where workspaceMemberId = current user)
-  const { records: intermediateRecords } = useFindManyRecords({
+  const { records: hopTargetRecords } = useFindManyRecords({
     objectNameSingular:
-      intermediateObjectInfo?.objectNameSingular ??
-      CoreObjectNameSingular.WorkspaceMember,
-    filter: intermediateObjectInfo
-      ? {
-          [`${intermediateObjectInfo.relationFieldName}Id`]: {
-            eq: currentWorkspaceMember?.id,
-          },
-        }
-      : undefined,
-    skip: !intermediateObjectInfo || !currentWorkspaceMember?.id,
+      hopPrefill?.targetObjectNameSingular ??
+      StandardObjectNameSingular.WorkspaceMember,
+    filter:
+      isDefined(hopPrefill) && isDefined(currentWorkspaceMember)
+        ? {
+            [hopPrefill.targetWorkspaceMemberJoinColumnName]: {
+              eq: currentWorkspaceMember.id,
+            },
+          }
+        : undefined,
+    recordGqlFields: { id: true },
     limit: 1,
+    skip: !isDefined(hopPrefill) || !isDefined(currentWorkspaceMember),
   });
 
-  const intermediateRecordId =
-    intermediateRecords.length > 0 ? intermediateRecords[0].id : undefined;
+  const hopTargetRecordId = hopTargetRecords.at(0)?.id;
 
   const getRecordInputFieldName = (fieldMetadataItem: {
     name: string;
@@ -172,15 +183,14 @@ export const useBuildRecordInputFromRLSPredicates = ({
   }) =>
     fieldMetadataItem.type === 'RELATION' &&
     fieldMetadataItem.settings?.relationType === RelationType.MANY_TO_ONE
-      ? `${fieldMetadataItem.name}Id`
+      ? // Metadata and protocol identifiers must stay stable across locales.
+        doNotTranslate(`${fieldMetadataItem.name}Id`)
       : fieldMetadataItem.name;
 
   const getWorkspaceMemberFieldValue = ({
-    fieldMetadataItem,
     workspaceMemberFieldMetadataId,
     workspaceMemberSubFieldName,
   }: {
-    fieldMetadataItem: EnrichedObjectMetadataItem['fields'][number];
     workspaceMemberFieldMetadataId?: string | null;
     workspaceMemberSubFieldName?: string | null;
   }) => {
@@ -190,36 +200,24 @@ export const useBuildRecordInputFromRLSPredicates = ({
       );
 
     if (!isDefined(workspaceMemberFieldMetadataItem)) {
-      // Indirect relation: field is on an intermediate object (e.g., Agent)
-      // that has a relation to WorkspaceMember. Return the pre-fetched
-      // intermediate record ID so it can be used as the pre-fill value.
-      if (isDefined(intermediateRecordId)) {
-        return intermediateRecordId;
-      }
-
-      // Field metadata not found — may be stale RLS predicate referencing
-      // a removed field. Skip gracefully; the server-side hook will set
-      // the correct value with bypassed permissions.
-      return undefined;
-    }
-
-    if (
-      fieldMetadataItem.type === FieldMetadataType.RELATION &&
-      workspaceMemberFieldMetadataItem.name === 'id' &&
-      fieldMetadataItem.relation?.targetObjectMetadata.nameSingular ===
-        intermediateObjectInfo?.objectNameSingular &&
-      isDefined(intermediateRecordId)
-    ) {
-      return intermediateRecordId;
+      throw new Error(
+        doNotTranslate(
+          `Workspace member field metadata item not found for id: ${workspaceMemberFieldMetadataId}`,
+        ),
+      );
     }
 
     let workspaceMemberFieldValue =
-      currentWorkspaceMemberRecord?.[workspaceMemberFieldMetadataItem.name];
+      currentWorkspaceMemberRecord?.[
+        getRecordInputFieldName(workspaceMemberFieldMetadataItem)
+      ];
 
     if (isCompositeFieldType(workspaceMemberFieldMetadataItem.type)) {
       if (!workspaceMemberSubFieldName) {
         throw new Error(
-          `Workspace member subfield name not found for field: ${workspaceMemberFieldMetadataItem.name}`,
+          doNotTranslate(
+            `Workspace member subfield name not found for field: ${workspaceMemberFieldMetadataItem.name}`,
+          ),
         );
       }
 
@@ -231,21 +229,47 @@ export const useBuildRecordInputFromRLSPredicates = ({
 
     if (isUndefined(workspaceMemberFieldValue)) {
       throw new Error(
-        `Current workspace member field value not found for field: ${workspaceMemberFieldMetadataItem.name}`,
+        doNotTranslate(
+          `Current workspace member field value not found for field: ${workspaceMemberFieldMetadataItem.name}`,
+        ),
       );
     }
 
     return workspaceMemberFieldValue;
   };
 
-  const buildRecordInputFromRLSPredicates = (options?: {
-    includeRestrictedFields?: boolean;
-  }): Partial<ObjectRecord> => {
+  const buildRecordInputFromRLSPredicates = ({
+    objectMetadataItem = defaultObjectMetadataItem,
+  }: {
+    objectMetadataItem?: EnrichedObjectMetadataItem;
+  } = {}): Partial<ObjectRecord> => {
+    if (!isDefined(objectMetadataItem)) {
+      throw new Error(
+        doNotTranslate(
+          'Object metadata item is required to build RLS defaults',
+        ),
+      );
+    }
+
+    const objectPermissions = getObjectPermissionsForObject(
+      objectPermissionsByObjectMetadataId,
+      objectMetadataItem.id,
+    );
+    const rlsPredicates = (
+      findSingleCreateRowLevelPermissionRule(objectPermissions)?.predicates ??
+      []
+    ).filter(
+      (predicate) =>
+        predicate.objectMetadataId === objectMetadataItem.id &&
+        // OMNIA-CUSTOM: a hop predicate's field lives on the target object; it prefills below
+        !isDefined(predicate.relationFieldMetadataId),
+    );
+
     const fieldMetadataItemMap = new Map(
       objectMetadataItem.fields.map((field) => [field.id, field]),
     );
 
-    const rlsPredicatesAsRecordFilters = writeScopedRlsPredicates
+    const rlsPredicatesAsRecordFilters = rlsPredicates
       .map((predicate) =>
         convertPredicateToRecordFilter(
           predicate,
@@ -266,36 +290,20 @@ export const useBuildRecordInputFromRLSPredicates = ({
       }
 
       if (isDefined(filter.rlsDynamicValue)) {
-        // Skip fields the user can't edit — the server-side post-query
-        // hook will set them with bypassed permissions instead.
-        const fieldRestriction =
-          objectPermissions.restrictedFields[fieldMetadataItem.id];
-
-        if (
-          fieldRestriction?.canUpdate === false &&
-          !options?.includeRestrictedFields
-        ) {
-          return;
-        }
-
         const recordInputField = getRecordInputFieldName(fieldMetadataItem);
         const currentWorkspaceMemberFieldValue = getWorkspaceMemberFieldValue({
-          fieldMetadataItem,
           workspaceMemberFieldMetadataId:
             filter.rlsDynamicValue?.workspaceMemberFieldMetadataId,
           workspaceMemberSubFieldName:
             filter.rlsDynamicValue?.workspaceMemberSubFieldName,
         });
 
-        // Skip if the value couldn't be resolved (e.g., no Agent profile)
-        if (isUndefined(currentWorkspaceMemberFieldValue)) {
-          return;
-        }
-
         if (isCompositeFieldType(fieldMetadataItem.type)) {
           if (!filter.subFieldName) {
             throw new Error(
-              `Subfield name not found for composite field: ${fieldMetadataItem.name}`,
+              doNotTranslate(
+                `Subfield name not found for composite field: ${fieldMetadataItem.name}`,
+              ),
             );
           }
 
@@ -307,7 +315,9 @@ export const useBuildRecordInputFromRLSPredicates = ({
 
           if (!compositeValue) {
             throw new Error(
-              `Composite subfield not found for field: ${fieldMetadataItem.name}`,
+              doNotTranslate(
+                `Composite subfield not found for field: ${fieldMetadataItem.name}`,
+              ),
             );
           }
 
@@ -323,8 +333,6 @@ export const useBuildRecordInputFromRLSPredicates = ({
       }
     });
 
-    // Only process filters without rlsDynamicValue in buildRecordInputFromFilter
-    // Filters with rlsDynamicValue are already handled above
     const staticFilters = rlsPredicatesAsRecordFilters.filter(
       (filter) => !isDefined(filter.rlsDynamicValue),
     );
@@ -336,7 +344,17 @@ export const useBuildRecordInputFromRLSPredicates = ({
       timeZone: userTimezone,
     });
 
+    // OMNIA-CUSTOM: C2 hop prefill, below direct predicates. Omitted while unresolved and for a
+    // call-time object (junction path, no prefetch); the policy create hook then stamps agentId
+    const recordInputFromHopPredicate: Partial<ObjectRecord> =
+      isDefined(hopPrefill) &&
+      isDefined(hopTargetRecordId) &&
+      objectMetadataItem.id === defaultObjectMetadataItem?.id
+        ? { [hopPrefill.recordInputFieldName]: hopTargetRecordId }
+        : {};
+
     const mergedRecordInput: Partial<ObjectRecord> = {
+      ...recordInputFromHopPredicate,
       ...recordInputFromDynamicFilters,
     };
 

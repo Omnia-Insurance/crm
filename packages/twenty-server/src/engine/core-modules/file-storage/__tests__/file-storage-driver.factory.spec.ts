@@ -49,8 +49,12 @@ describe('FileStorageDriverFactory', () => {
       jest
         .spyOn(twentyConfigService, 'get')
         .mockImplementation((key: string) => {
-          if (key === 'STORAGE_TYPE') return StorageDriverType.LOCAL;
-          if (key === 'STORAGE_LOCAL_PATH') return storagePath;
+          if (key === 'STORAGE_TYPE') {
+            return StorageDriverType.LOCAL;
+          }
+          if (key === 'STORAGE_LOCAL_PATH') {
+            return storagePath;
+          }
 
           return undefined;
         });
@@ -96,8 +100,12 @@ describe('FileStorageDriverFactory', () => {
       jest
         .spyOn(twentyConfigService, 'get')
         .mockImplementation((key: string) => {
-          if (key === 'STORAGE_TYPE') return StorageDriverType.LOCAL;
-          if (key === 'STORAGE_LOCAL_PATH') return storagePath;
+          if (key === 'STORAGE_TYPE') {
+            return StorageDriverType.LOCAL;
+          }
+          if (key === 'STORAGE_LOCAL_PATH') {
+            return storagePath;
+          }
 
           return undefined;
         });
@@ -180,8 +188,12 @@ describe('FileStorageDriverFactory', () => {
       jest
         .spyOn(twentyConfigService, 'get')
         .mockImplementation((key: string) => {
-          if (key === 'STORAGE_TYPE') return StorageDriverType.LOCAL;
-          if (key === 'STORAGE_LOCAL_PATH') return storagePath;
+          if (key === 'STORAGE_TYPE') {
+            return StorageDriverType.LOCAL;
+          }
+          if (key === 'STORAGE_LOCAL_PATH') {
+            return storagePath;
+          }
 
           return undefined;
         });
@@ -198,8 +210,12 @@ describe('FileStorageDriverFactory', () => {
       jest
         .spyOn(twentyConfigService, 'get')
         .mockImplementation((key: string) => {
-          if (key === 'STORAGE_TYPE') return StorageDriverType.LOCAL;
-          if (key === 'STORAGE_LOCAL_PATH') return storagePath;
+          if (key === 'STORAGE_TYPE') {
+            return StorageDriverType.LOCAL;
+          }
+          if (key === 'STORAGE_LOCAL_PATH') {
+            return storagePath;
+          }
 
           return undefined;
         });
@@ -211,24 +227,30 @@ describe('FileStorageDriverFactory', () => {
     });
 
     it('should create new driver when config key changes', () => {
-      // First call with local storage
       jest
         .spyOn(twentyConfigService, 'get')
         .mockImplementation((key: string) => {
-          if (key === 'STORAGE_TYPE') return StorageDriverType.LOCAL;
-          if (key === 'STORAGE_LOCAL_PATH') return '/tmp/storage1';
+          if (key === 'STORAGE_TYPE') {
+            return StorageDriverType.LOCAL;
+          }
+          if (key === 'STORAGE_LOCAL_PATH') {
+            return '/tmp/storage1';
+          }
 
           return undefined;
         });
 
       const driver1 = factory.getCurrentDriver();
 
-      // Second call with different local path
       jest
         .spyOn(twentyConfigService, 'get')
         .mockImplementation((key: string) => {
-          if (key === 'STORAGE_TYPE') return StorageDriverType.LOCAL;
-          if (key === 'STORAGE_LOCAL_PATH') return '/tmp/storage2';
+          if (key === 'STORAGE_TYPE') {
+            return StorageDriverType.LOCAL;
+          }
+          if (key === 'STORAGE_LOCAL_PATH') {
+            return '/tmp/storage2';
+          }
 
           return undefined;
         });
@@ -241,19 +263,21 @@ describe('FileStorageDriverFactory', () => {
     });
 
     it('should create new driver when switching from local to S3', () => {
-      // First call with local storage
       jest
         .spyOn(twentyConfigService, 'get')
         .mockImplementation((key: string) => {
-          if (key === 'STORAGE_TYPE') return StorageDriverType.LOCAL;
-          if (key === 'STORAGE_LOCAL_PATH') return '/tmp/storage';
+          if (key === 'STORAGE_TYPE') {
+            return StorageDriverType.LOCAL;
+          }
+          if (key === 'STORAGE_LOCAL_PATH') {
+            return '/tmp/storage';
+          }
 
           return undefined;
         });
 
       const driver1 = factory.getCurrentDriver();
 
-      // Second call with S3 storage
       jest
         .spyOn(twentyConfigService, 'get')
         .mockImplementation((key: string) => {
@@ -297,8 +321,12 @@ describe('FileStorageDriverFactory', () => {
       jest
         .spyOn(twentyConfigService, 'get')
         .mockImplementation((key: string) => {
-          if (key === 'STORAGE_TYPE') return StorageDriverType.LOCAL;
-          if (key === 'STORAGE_LOCAL_PATH') return storagePath;
+          if (key === 'STORAGE_TYPE') {
+            return StorageDriverType.LOCAL;
+          }
+          if (key === 'STORAGE_LOCAL_PATH') {
+            return storagePath;
+          }
 
           return undefined;
         });

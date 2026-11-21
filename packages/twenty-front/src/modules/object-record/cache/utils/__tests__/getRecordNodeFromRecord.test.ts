@@ -1,3 +1,4 @@
+import { type RecordGqlFields } from 'twenty-shared/types';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 
 import { mockedPersonRecords } from '~/testing/mock-data/generated/data/people/mock-people-data';
@@ -9,7 +10,6 @@ const peopleMock = [...mockedPersonRecords];
 
 describe('getRecordNodeFromRecord', () => {
   it('computes relation records cache references by default', () => {
-    // Given
     const objectMetadataItems: EnrichedObjectMetadataItem[] =
       getTestEnrichedObjectMetadataItemsMock();
     const objectMetadataItem:
@@ -25,13 +25,12 @@ describe('getRecordNodeFromRecord', () => {
       throw new Error('Object metadata item not found');
     }
 
-    const recordGqlFields = {
+    const recordGqlFields: RecordGqlFields = {
       name: true,
       company: true,
     };
     const record = peopleMock[0];
 
-    // When
     const result = getRecordNodeFromRecord({
       objectMetadataItems,
       objectMetadataItem,
@@ -39,7 +38,6 @@ describe('getRecordNodeFromRecord', () => {
       record,
     });
 
-    // Then
     expect(result).toEqual({
       __typename: 'Person',
       company: {
@@ -54,7 +52,6 @@ describe('getRecordNodeFromRecord', () => {
   });
 
   it('does not compute relation records cache references when `computeReferences` is false', () => {
-    // Given
     const objectMetadataItems: EnrichedObjectMetadataItem[] =
       getTestEnrichedObjectMetadataItemsMock();
     const objectMetadataItem:
@@ -70,14 +67,13 @@ describe('getRecordNodeFromRecord', () => {
       throw new Error('Object metadata item not found');
     }
 
-    const recordGqlFields = {
+    const recordGqlFields: RecordGqlFields = {
       name: true,
       company: true,
     };
     const record = peopleMock[0];
     const computeReferences = false;
 
-    // When
     const result = getRecordNodeFromRecord({
       objectMetadataItems,
       objectMetadataItem,
@@ -86,7 +82,6 @@ describe('getRecordNodeFromRecord', () => {
       computeReferences,
     });
 
-    // Then
     expect(result).toEqual({
       __typename: 'Person',
       company: record.company,
@@ -99,7 +94,6 @@ describe('getRecordNodeFromRecord', () => {
   });
 
   it('skips a to-many relation whose value is null instead of crashing', () => {
-    // Given
     const objectMetadataItems: EnrichedObjectMetadataItem[] =
       getTestEnrichedObjectMetadataItemsMock();
     const objectMetadataItem = objectMetadataItems.find(
@@ -124,12 +118,11 @@ describe('getRecordNodeFromRecord', () => {
       ...peopleMock[0],
       [oneToManyRelationField.name]: null,
     };
-    const recordGqlFields = {
+    const recordGqlFields: RecordGqlFields = {
       name: true,
       [oneToManyRelationField.name]: true,
     };
 
-    // When / Then
     expect(() =>
       getRecordNodeFromRecord({
         objectMetadataItems,

@@ -1,28 +1,50 @@
-import { UseGuards, UseInterceptors } from '@nestjs/common';
+import { UseGuards, UseInterceptors, UseFilters } from '@nestjs/common';
 import { Args, Mutation, Query } from '@nestjs/graphql';
+
+import { CalendarChannelSyncStage } from 'twenty-shared/types';
+import { isDefined } from 'twenty-shared/utils';
 
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { AuthUserWorkspaceId } from 'src/engine/decorators/auth/auth-user-workspace-id.decorator';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
-import { NoPermissionGuard } from 'src/engine/guards/no-permission.guard';
-import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
+import { AllowSuspendedWorkspace } from 'src/engine/decorators/auth/allow-suspended-workspace.decorator';
 import { CalendarChannelMetadataService } from 'src/engine/metadata-modules/calendar-channel/calendar-channel-metadata.service';
 import { CalendarChannelDTO } from 'src/engine/metadata-modules/calendar-channel/dtos/calendar-channel.dto';
 import { UpdateCalendarChannelInput } from 'src/engine/metadata-modules/calendar-channel/dtos/update-calendar-channel.input';
 import { CalendarChannelGraphqlApiExceptionInterceptor } from 'src/engine/metadata-modules/calendar-channel/interceptors/calendar-channel-graphql-api-exception.interceptor';
+import { AuthGraphqlApiExceptionFilter } from 'src/engine/core-modules/auth/filters/auth-graphql-api-exception.filter';
+import { CalendarChannelSyncStatusService } from 'src/modules/calendar/common/services/calendar-channel-sync-status.service';
+import { AccessPolicyGuard } from 'src/engine/guards/access-policy.guard';
 
-@UseGuards(WorkspaceAuthGuard)
+@UseGuards(
+  AccessPolicyGuard({
+    authPrincipals: {
+      userSession: {
+        standard: true,
+        impersonated: true,
+        playground: true,
+        workspaceAgnostic: false,
+      },
+      apiKey: true,
+      oauthClient: true,
+      application: true,
+    },
+    requiredPermissionFlags: [],
+  }),
+)
 @UseInterceptors(CalendarChannelGraphqlApiExceptionInterceptor)
 @MetadataResolver(() => CalendarChannelDTO)
+@UseFilters(AuthGraphqlApiExceptionFilter)
 export class CalendarChannelResolver {
   constructor(
     private readonly calendarChannelMetadataService: CalendarChannelMetadataService,
+    private readonly calendarChannelSyncStatusService: CalendarChannelSyncStatusService,
   ) {}
 
   @Query(() => [CalendarChannelDTO])
-  @UseGuards(NoPermissionGuard)
+  @AllowSuspendedWorkspace()
   async myCalendarChannels(
     @AuthWorkspace() workspace: WorkspaceEntity,
     @AuthUserWorkspaceId() userWorkspaceId: string,
@@ -49,22 +71,41 @@ export class CalendarChannelResolver {
   }
 
   @Mutation(() => CalendarChannelDTO)
-  @UseGuards(NoPermissionGuard)
   async updateCalendarChannel(
     @Args('input') input: UpdateCalendarChannelInput,
     @AuthWorkspace() workspace: WorkspaceEntity,
     @AuthUserWorkspaceId() userWorkspaceId: string,
   ): Promise<CalendarChannelDTO> {
-    await this.calendarChannelMetadataService.verifyOwnership({
-      id: input.id,
-      userWorkspaceId,
-      workspaceId: workspace.id,
-    });
+    const calendarChannel =
+      await this.calendarChannelMetadataService.verifyOwnership({
+        id: input.id,
+        userWorkspaceId,
+        workspaceId: workspace.id,
+      });
 
-    return this.calendarChannelMetadataService.update({
-      id: input.id,
-      workspaceId: workspace.id,
-      data: input.update,
-    });
+    const updatedCalendarChannel =
+      await this.calendarChannelMetadataService.update({
+        id: input.id,
+        workspaceId: workspace.id,
+        data: input.update,
+      });
+
+    const hasStartedSyncing =
+      calendarChannel.syncStage !==
+      CalendarChannelSyncStage.PENDING_CONFIGURATION;
+
+    const hasExcludePrivateEventsChanged =
+      isDefined(input.update.excludePrivateEvents) &&
+      input.update.excludePrivateEvents !==
+        calendarChannel.excludePrivateEvents;
+
+    if (hasStartedSyncing && hasExcludePrivateEventsChanged) {
+      await this.calendarChannelSyncStatusService.resetAndMarkAsCalendarEventListFetchPending(
+        [calendarChannel.id],
+        workspace.id,
+      );
+    }
+
+    return updatedCalendarChannel;
   }
 }

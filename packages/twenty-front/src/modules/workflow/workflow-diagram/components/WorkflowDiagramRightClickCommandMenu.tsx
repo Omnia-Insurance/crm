@@ -1,17 +1,19 @@
+import { ListItemButton } from 'twenty-ui/components/navigation';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useCloseRightClickMenu } from '@/workflow/workflow-diagram/hooks/useCloseRightClickMenu';
+import { flowComponentState } from '@/workflow/states/flowComponentState';
 import { useStartNodeCreation } from '@/workflow/workflow-diagram/hooks/useStartNodeCreation';
 import { useWorkflowDiagramScreenToFlowPosition } from '@/workflow/workflow-diagram/hooks/useWorkflowDiagramScreenToFlowPosition';
 import { workflowDiagramRightClickMenuPositionState } from '@/workflow/workflow-diagram/states/workflowDiagramRightClickMenuPositionState';
+import { isWorkflowLayoutManual } from '@/workflow/workflow-diagram/utils/isWorkflowLayoutManual';
 import { useTidyUp } from '@/workflow/workflow-version/hooks/useTidyUp';
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
 import { useRef } from 'react';
 import { isDefined } from 'twenty-shared/utils';
 import { IconPlus, IconReorder } from 'twenty-ui/icon';
-import { MenuItem } from 'twenty-ui/navigation';
 import { WorkflowDiagramRightClickCommandMenuClickOutsideEffect } from './WorkflowDiagramRightClickCommandMenuClickOutsideEffect';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 const StyledContainer = styled.div<{ x: number; y: number }>`
   background: ${themeCssVariables.background.primary};
@@ -42,6 +44,8 @@ export const WorkflowDiagramRightClickCommandMenu = () => {
     workflowDiagramRightClickMenuPositionState,
   );
 
+  const flow = useAtomComponentStateValue(flowComponentState);
+
   const { tidyUp } = useTidyUp();
 
   const handleReorderWorkflowDiagram = async () => {
@@ -71,12 +75,16 @@ export const WorkflowDiagramRightClickCommandMenu = () => {
         x={workflowDiagramRightClickMenuPosition.x}
         y={workflowDiagramRightClickMenuPosition.y}
       >
-        <MenuItem text={t`Add node`} LeftIcon={IconPlus} onClick={addNode} />
-        <MenuItem
-          text={t`Tidy up workflow`}
-          LeftIcon={IconReorder}
-          onClick={handleReorderWorkflowDiagram}
-        />
+        <ListItemButton
+          startIcon={<IconPlus />}
+          onClick={addNode}
+        >{t`Add node`}</ListItemButton>
+        {isWorkflowLayoutManual(flow) && (
+          <ListItemButton
+            startIcon={<IconReorder />}
+            onClick={handleReorderWorkflowDiagram}
+          >{t`Tidy up workflow`}</ListItemButton>
+        )}
       </StyledContainer>
       <WorkflowDiagramRightClickCommandMenuClickOutsideEffect
         rightClickCommandMenuRef={rightClickCommandMenuRef}

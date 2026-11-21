@@ -1,7 +1,6 @@
 import { Field, Int, ObjectType } from '@nestjs/graphql';
 
 import GraphQLJSON from 'graphql-type-json';
-import { RestrictedFieldsPermissions } from 'twenty-shared/types';
 
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
 import { RowLevelPermissionPredicateGroupDTO } from 'src/engine/metadata-modules/row-level-permission-predicate/dtos/row-level-permission-predicate-group.dto';
@@ -12,28 +11,39 @@ export class ObjectPermissionDTO {
   @Field(() => UUIDScalarType, { nullable: false })
   objectMetadataId: string;
 
-  @Field({ nullable: true })
-  canReadObjectRecords?: boolean;
+  @Field(() => Boolean, { nullable: true })
+  canReadObjectRecords?: boolean | null;
 
-  @Field({ nullable: true })
-  canUpdateObjectRecords?: boolean;
+  @Field(() => Boolean, { nullable: true })
+  canUpdateObjectRecords?: boolean | null;
 
-  @Field({ nullable: true })
-  canSoftDeleteObjectRecords?: boolean;
+  @Field(() => Boolean, { nullable: true })
+  canSoftDeleteObjectRecords?: boolean | null;
 
-  @Field({ nullable: true })
-  canDestroyObjectRecords?: boolean;
+  @Field(() => Boolean, { nullable: true })
+  canDestroyObjectRecords?: boolean | null;
 
-  @Field({ nullable: true })
-  showInSidebar?: boolean;
+  // OMNIA-CUSTOM: per-object sidebar visibility and edit window (C3, C4)
+  @Field(() => Boolean, { nullable: true })
+  showInSidebar?: boolean | null;
 
   @Field(() => Int, { nullable: true })
   editWindowMinutes?: number | null;
 
   @Field(() => GraphQLJSON, {
     nullable: true,
+    deprecationReason: 'Use unreadableFields and uneditableFields',
   })
-  restrictedFields?: RestrictedFieldsPermissions;
+  restrictedFields?: Record<
+    string,
+    { canRead: boolean | null; canUpdate: boolean | null }
+  >;
+
+  @Field(() => [UUIDScalarType], { nullable: true })
+  unreadableFields?: string[];
+
+  @Field(() => [UUIDScalarType], { nullable: true })
+  uneditableFields?: string[];
 
   @Field(() => [RowLevelPermissionPredicateDTO], { nullable: true })
   rowLevelPermissionPredicates?: RowLevelPermissionPredicateDTO[];

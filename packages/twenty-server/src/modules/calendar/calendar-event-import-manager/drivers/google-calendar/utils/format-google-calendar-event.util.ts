@@ -2,7 +2,7 @@ import { type calendar_v3 as calendarV3 } from 'googleapis';
 
 import { sanitizeCalendarEvent } from 'src/modules/calendar/calendar-event-import-manager/drivers/utils/sanitizeCalendarEvent';
 import { CalendarEventParticipantResponseStatus } from 'src/modules/calendar/common/standard-objects/calendar-event-participant.workspace-entity';
-import { type FetchedCalendarEvent } from 'src/modules/calendar/common/types/fetched-calendar-event';
+import { type FetchedCalendarEvent } from 'src/modules/calendar/common/types/fetched-calendar-event.type';
 
 export const formatGoogleCalendarEvents = (
   events: calendarV3.Schema$Event[],
@@ -26,10 +26,11 @@ const formatGoogleCalendarEvent = (
     }
   };
 
-  // Create the event object
   const calendarEvent: FetchedCalendarEvent = {
     title: event.summary ?? '',
     isCanceled: event.status === 'cancelled',
+    isPrivate:
+      event.visibility === 'private' || event.visibility === 'confidential',
     isFullDay: event.start?.dateTime == null,
     startsAt: event.start?.dateTime ?? event.start?.date ?? '',
     endsAt: event.end?.dateTime ?? event.end?.date ?? '',
@@ -44,9 +45,10 @@ const formatGoogleCalendarEvent = (
     conferenceLinkLabel: event.conferenceData?.entryPoints?.[0]?.uri ?? '',
     conferenceLinkUrl: event.conferenceData?.entryPoints?.[0]?.uri ?? '',
     recurringEventExternalId: event.recurringEventId ?? '',
+    organizerHandle: event.organizer?.email?.toLowerCase() ?? '',
     participants:
       event.attendees?.map((attendee) => ({
-        handle: attendee.email ?? '',
+        handle: attendee.email?.toLowerCase() ?? '',
         displayName: attendee.displayName ?? '',
         isOrganizer: attendee.organizer === true,
         responseStatus: formatResponseStatus(attendee.responseStatus),
@@ -68,6 +70,7 @@ const formatGoogleCalendarEvent = (
     'conferenceLinkLabel',
     'conferenceLinkUrl',
     'recurringEventExternalId',
+    'organizerHandle',
     'status',
   ];
 

@@ -1,34 +1,43 @@
 import { type FlatApplication } from 'src/engine/core-modules/application/types/flat-application.type';
 import { getLambdaDepsLayerName } from 'src/engine/core-modules/logic-function/logic-function-drivers/drivers/lambda/utils/get-lambda-deps-layer-name.util';
 
+const APPLICATION_UNIVERSAL_IDENTIFIER = '20202020-0000-0000-0000-00000000000a';
+
 const buildFlatApplication = (
   overrides: Partial<FlatApplication> = {},
 ): FlatApplication =>
   ({
+    universalIdentifier: APPLICATION_UNIVERSAL_IDENTIFIER,
+    packageJsonChecksum: 'def456',
     yarnLockChecksum: 'abc123',
     ...overrides,
   }) as FlatApplication;
 
 describe('getLambdaDepsLayerName', () => {
-  it('returns deps-<checksum> when yarnLockChecksum is set', () => {
-    expect(getLambdaDepsLayerName(buildFlatApplication())).toBe('deps-abc123');
+  it('names the layer of an application after its yarn.lock', () => {
+    expect(
+      getLambdaDepsLayerName({
+        flatApplication: buildFlatApplication(),
+        namespace: 'ns123',
+      }),
+    ).toBe(`depsv1-ns123-${APPLICATION_UNIVERSAL_IDENTIFIER}-abc123`);
   });
 
-  it('falls back to deps-default when yarnLockChecksum is undefined', () => {
+  it('names the layer of an application without a yarn.lock after its package.json', () => {
     expect(
-      getLambdaDepsLayerName(
-        buildFlatApplication({ yarnLockChecksum: undefined }),
-      ),
-    ).toBe('deps-default');
+      getLambdaDepsLayerName({
+        flatApplication: buildFlatApplication({ yarnLockChecksum: null }),
+        namespace: 'ns123',
+      }),
+    ).toBe(`depsv1-ns123-${APPLICATION_UNIVERSAL_IDENTIFIER}-nolock-def456`);
   });
 
-  it('falls back to deps-default when yarnLockChecksum is null', () => {
+  it('omits the namespace segment when it is an empty string', () => {
     expect(
-      getLambdaDepsLayerName(
-        buildFlatApplication({
-          yarnLockChecksum: null as unknown as string,
-        }),
-      ),
-    ).toBe('deps-default');
+      getLambdaDepsLayerName({
+        flatApplication: buildFlatApplication(),
+        namespace: '',
+      }),
+    ).toBe(`depsv1-${APPLICATION_UNIVERSAL_IDENTIFIER}-abc123`);
   });
 });

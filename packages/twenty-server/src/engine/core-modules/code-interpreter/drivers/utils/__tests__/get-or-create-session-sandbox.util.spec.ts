@@ -1,4 +1,4 @@
-import { type Sandbox } from '@e2b/code-interpreter';
+import { Sandbox } from '@e2b/code-interpreter';
 
 import { SESSION_SANDBOX_METADATA_KEY } from 'src/engine/core-modules/code-interpreter/constants/session-sandbox-metadata-key.constant';
 import { getOrCreateSessionSandbox } from 'src/engine/core-modules/code-interpreter/drivers/utils/get-or-create-session-sandbox.util';
@@ -10,16 +10,27 @@ type SandboxApiMock = {
   kill: jest.Mock;
 };
 
+let mockSandboxApi: SandboxApiMock;
+
+jest.mock('@e2b/code-interpreter', () => ({
+  Sandbox: {
+    list: (...args: unknown[]) => mockSandboxApi.list(...args),
+    connect: (...args: unknown[]) => mockSandboxApi.connect(...args),
+    create: (...args: unknown[]) => mockSandboxApi.create(...args),
+    kill: (...args: unknown[]) => mockSandboxApi.kill(...args),
+  },
+}));
+
 type ListedSandbox = { sandboxId: string; metadata: Record<string, string> };
 
 const apiKey = 'test-api-key';
+const template = 'test-template';
 const sessionId = 'workspace-1:thread-1';
 const timeoutMs = 600_000;
 const idleTimeoutMs = 300_000;
 // The resolver keeps the sandbox alive for the larger of the two.
 const aliveTimeoutMs = 600_000;
 
-// Sandbox.list() returns a paginator; emit the tagged sandboxes as a single page.
 const paginatorOf = (items: ListedSandbox[]) => {
   let fetched = false;
 
@@ -35,25 +46,22 @@ const paginatorOf = (items: ListedSandbox[]) => {
   };
 };
 
-const buildSandboxApi = (
-  overrides: Partial<SandboxApiMock> = {},
-): { api: typeof Sandbox; mock: SandboxApiMock } => {
-  const mock: SandboxApiMock = {
-    list: jest.fn(() => paginatorOf([])),
+const buildSandboxApi = (overrides: Partial<SandboxApiMock> = {}) => {
+  mockSandboxApi = {
+    list: jest.fn().mockImplementation(() => paginatorOf([])),
     connect: jest.fn(),
     create: jest.fn(),
     kill: jest.fn().mockResolvedValue(true),
     ...overrides,
   };
 
-  return { api: mock as unknown as typeof Sandbox, mock };
+  return { api: Sandbox, mock: mockSandboxApi };
 };
 
-const buildFakeSandbox = (): Sandbox =>
-  ({
-    setTimeout: jest.fn().mockResolvedValue(undefined),
-    kill: jest.fn().mockResolvedValue(undefined),
-  }) as unknown as Sandbox;
+const buildFakeSandbox = () => ({
+  setTimeout: jest.fn().mockResolvedValue(undefined),
+  kill: jest.fn().mockResolvedValue(undefined),
+});
 
 const listedSandbox = (
   sandboxId: string,
@@ -74,6 +82,7 @@ describe('getOrCreateSessionSandbox', () => {
     const result = await getOrCreateSessionSandbox({
       sandboxApi: api,
       apiKey,
+      template,
       sessionId,
       timeoutMs,
       idleTimeoutMs,
@@ -103,13 +112,14 @@ describe('getOrCreateSessionSandbox', () => {
     const result = await getOrCreateSessionSandbox({
       sandboxApi: api,
       apiKey,
+      template,
       sessionId,
       timeoutMs,
       idleTimeoutMs,
     });
 
     expect(result).toEqual({ sandbox, isReused: false });
-    expect(mock.create).toHaveBeenCalledWith({
+    expect(mock.create).toHaveBeenCalledWith(template, {
       apiKey,
       timeoutMs: aliveTimeoutMs,
       lifecycle: { onTimeout: 'pause', autoResume: true },
@@ -134,6 +144,7 @@ describe('getOrCreateSessionSandbox', () => {
     const result = await getOrCreateSessionSandbox({
       sandboxApi: api,
       apiKey,
+      template,
       sessionId,
       timeoutMs,
       idleTimeoutMs,
@@ -159,6 +170,7 @@ describe('getOrCreateSessionSandbox', () => {
     const result = await getOrCreateSessionSandbox({
       sandboxApi: api,
       apiKey,
+      template,
       sessionId,
       timeoutMs,
       idleTimeoutMs,
@@ -184,6 +196,7 @@ describe('getOrCreateSessionSandbox', () => {
     const result = await getOrCreateSessionSandbox({
       sandboxApi: api,
       apiKey,
+      template,
       sessionId,
       timeoutMs,
       idleTimeoutMs,
@@ -198,8 +211,7 @@ describe('getOrCreateSessionSandbox', () => {
   it('never reuses a sandbox whose metadata does not exactly match the session', async () => {
     const created = buildFakeSandbox();
     const { api, mock } = buildSandboxApi({
-      // A sandbox from a different session/tenant that a loose server-side match
-      // could surface — it must be ignored, never connected to or reaped.
+      // Another session's sandbox surfaced by a loose server-side match must be ignored.
       list: jest.fn(() =>
         paginatorOf([listedSandbox('sbx-foreign', 'workspace-2:thread-9')]),
       ),
@@ -209,6 +221,7 @@ describe('getOrCreateSessionSandbox', () => {
     const result = await getOrCreateSessionSandbox({
       sandboxApi: api,
       apiKey,
+      template,
       sessionId,
       timeoutMs,
       idleTimeoutMs,
@@ -226,7 +239,7 @@ describe('getOrCreateSessionSandbox', () => {
         .fn()
         .mockRejectedValue(new Error('timeout refresh failed')),
       kill: jest.fn().mockResolvedValue(undefined),
-    } as unknown as Sandbox;
+    };
     const created = buildFakeSandbox();
     const { api, mock } = buildSandboxApi({
       list: jest.fn(() => paginatorOf([listedSandbox('sbx-stale')])),
@@ -237,6 +250,7 @@ describe('getOrCreateSessionSandbox', () => {
     const result = await getOrCreateSessionSandbox({
       sandboxApi: api,
       apiKey,
+      template,
       sessionId,
       timeoutMs,
       idleTimeoutMs,
@@ -246,5 +260,64 @@ describe('getOrCreateSessionSandbox', () => {
     expect(stale.setTimeout).toHaveBeenCalledWith(aliveTimeoutMs);
     expect(stale.kill).toHaveBeenCalledTimes(1);
     expect(mock.create).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Participant isolation', () => {
+  it.each([undefined, 'owner:direct', 'editor:other-app'])(
+    'does not reuse a sandbox authenticated as %s',
+    async (previousActor) => {
+      const previous = listedSandbox('old-sandbox');
+      if (previousActor) {
+        previous.metadata.twentySessionActor = previousActor;
+      }
+      const sandbox = buildFakeSandbox();
+      const { api, mock } = buildSandboxApi({
+        list: jest.fn(() => paginatorOf([previous])),
+        create: jest.fn().mockResolvedValue(sandbox),
+      });
+      const result = await getOrCreateSessionSandbox({
+        sandboxApi: api,
+        apiKey,
+        template,
+        sessionId,
+        timeoutMs,
+        idleTimeoutMs,
+        actorKey: 'editor:direct',
+      });
+      expect(result.isReused).toBe(false);
+      expect(mock.connect).not.toHaveBeenCalled();
+      expect(mock.kill).toHaveBeenCalledWith('old-sandbox', { apiKey });
+      expect(mock.create).toHaveBeenCalledWith(
+        template,
+        expect.objectContaining({
+          metadata: {
+            [SESSION_SANDBOX_METADATA_KEY]: sessionId,
+            twentySessionActor: 'editor:direct',
+          },
+        }),
+      );
+    },
+  );
+  it('retains the sandbox for the same authenticated participant', async () => {
+    const previous = listedSandbox('same-sandbox');
+    previous.metadata.twentySessionActor = 'editor:direct';
+    const sandbox = buildFakeSandbox();
+    const { api, mock } = buildSandboxApi({
+      list: jest.fn(() => paginatorOf([previous])),
+      connect: jest.fn().mockResolvedValue(sandbox),
+    });
+    await expect(
+      getOrCreateSessionSandbox({
+        sandboxApi: api,
+        apiKey,
+        template,
+        sessionId,
+        timeoutMs,
+        idleTimeoutMs,
+        actorKey: 'editor:direct',
+      }),
+    ).resolves.toEqual({ sandbox, isReused: true });
+    expect(mock.create).not.toHaveBeenCalled();
   });
 });

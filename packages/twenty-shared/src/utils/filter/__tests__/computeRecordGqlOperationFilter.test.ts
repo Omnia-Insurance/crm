@@ -1,8 +1,10 @@
 import { computeRecordGqlOperationFilter } from '../computeRecordGqlOperationFilter';
 import type { RecordFilter } from '../turnRecordFilterGroupIntoGqlOperationFilter';
+import type { FieldShared } from '../turnRecordFilterIntoGqlOperationFilter';
 
 import { FieldMetadataType } from '@/types/FieldMetadataType';
 import type { PartialFieldMetadataItem } from '@/types/PartialFieldMetadataItem';
+import { RelationType } from '@/types/RelationType';
 import { ViewFilterOperand } from '@/types/ViewFilterOperand';
 
 describe('computeRecordGqlOperationFilter', () => {
@@ -21,7 +23,6 @@ describe('computeRecordGqlOperationFilter', () => {
         id: 'uuid-filter',
         fieldMetadataId: companyIdField.id,
         value: uuidValue,
-        type: 'UUID',
         operand: ViewFilterOperand.IS,
       },
     ];
@@ -42,34 +43,49 @@ describe('computeRecordGqlOperationFilter', () => {
     });
   });
 
-  describe('ONE_TO_MANY relation sub-field filter', () => {
-    const policiesField: PartialFieldMetadataItem = {
+  // OMNIA-CUSTOM: one-to-many relation filters (traversal plus the canonical
+  // "has any / has no" emptiness shapes).
+  describe('one-to-many relation filters', () => {
+    const policiesField: FieldShared = {
       id: 'policies-field',
       name: 'policies',
       label: 'Policies',
       type: FieldMetadataType.RELATION,
-      relation: { type: 'ONE_TO_MANY' },
+      settings: { relationType: RelationType.ONE_TO_MANY },
     };
 
-    it('should generate nested GQL filter for SELECT sub-field with IS operand', () => {
-      const recordFilters: RecordFilter[] = [
-        {
-          id: 'status-filter',
-          fieldMetadataId: policiesField.id,
-          value: '["submitted"]',
-          type: 'SELECT',
-          operand: ViewFilterOperand.IS,
-          subFieldName: 'status',
-        },
-      ];
+    const policyStatusField: FieldShared = {
+      id: 'policy-status-field',
+      name: 'status',
+      label: 'Status',
+      type: FieldMetadataType.SELECT,
+    };
 
-      const filter = computeRecordGqlOperationFilter({
-        fields: [policiesField],
-        recordFilters,
+    const companyField: FieldShared = {
+      id: 'company-field',
+      name: 'company',
+      label: 'Company',
+      type: FieldMetadataType.RELATION,
+      settings: { relationType: RelationType.MANY_TO_ONE },
+    };
+
+    const computeFilter = (recordFilter: RecordFilter) =>
+      computeRecordGqlOperationFilter({
+        fieldMetadataItems: [policiesField, policyStatusField, companyField],
+        recordFilters: [recordFilter],
         recordFilterGroups: [],
         filterValueDependencies: {
           timeZone: 'UTC',
         },
+      });
+
+    it('should traverse into the related records for a target field filter', () => {
+      const filter = computeFilter({
+        id: 'policy-status-filter',
+        fieldMetadataId: policiesField.id,
+        relationTargetFieldMetadataId: policyStatusField.id,
+        value: '["submitted"]',
+        operand: ViewFilterOperand.IS,
       });
 
       expect(filter).toEqual({
@@ -81,122 +97,53 @@ describe('computeRecordGqlOperationFilter', () => {
       });
     });
 
-    it('should generate nested GQL filter for TEXT sub-field with CONTAINS operand', () => {
-      const recordFilters: RecordFilter[] = [
-        {
-          id: 'name-filter',
-          fieldMetadataId: policiesField.id,
-          value: 'test',
-          type: 'TEXT',
-          operand: ViewFilterOperand.CONTAINS,
-          subFieldName: 'name',
-        },
-      ];
-
-      const filter = computeRecordGqlOperationFilter({
-        fields: [policiesField],
-        recordFilters,
-        recordFilterGroups: [],
-        filterValueDependencies: {
-          timeZone: 'UTC',
-        },
+    it('should match records with at least one related record for IS_NOT_EMPTY', () => {
+      const filter = computeFilter({
+        id: 'has-policies-filter',
+        fieldMetadataId: policiesField.id,
+        value: '',
+        operand: ViewFilterOperand.IS_NOT_EMPTY,
       });
 
       expect(filter).toEqual({
         policies: {
-          name: {
-            ilike: '%test%',
+          id: {
+            is: 'NOT_NULL',
           },
         },
       });
     });
 
-    it('should generate nested GQL filter for NUMBER sub-field with GREATER_THAN_OR_EQUAL operand', () => {
-      const recordFilters: RecordFilter[] = [
-        {
-          id: 'amount-filter',
-          fieldMetadataId: policiesField.id,
-          value: '1000',
-          type: 'NUMBER',
-          operand: ViewFilterOperand.GREATER_THAN_OR_EQUAL,
-          subFieldName: 'amount',
-        },
-      ];
-
-      const filter = computeRecordGqlOperationFilter({
-        fields: [policiesField],
-        recordFilters,
-        recordFilterGroups: [],
-        filterValueDependencies: {
-          timeZone: 'UTC',
-        },
+    it('should match records without related records for IS_EMPTY', () => {
+      const filter = computeFilter({
+        id: 'has-no-policies-filter',
+        fieldMetadataId: policiesField.id,
+        value: '',
+        operand: ViewFilterOperand.IS_EMPTY,
       });
 
-      expect(filter).toEqual({
-        policies: {
-          amount: {
-            gte: 1000,
-          },
-        },
-      });
-    });
-
-    it('should fall through to emptiness filter for IS_EMPTY operand even with subFieldName', () => {
-      const recordFilters: RecordFilter[] = [
-        {
-          id: 'empty-filter',
-          fieldMetadataId: policiesField.id,
-          value: '',
-          type: 'SELECT',
-          operand: ViewFilterOperand.IS_EMPTY,
-          subFieldName: 'status',
-        },
-      ];
-
-      const filter = computeRecordGqlOperationFilter({
-        fields: [policiesField],
-        recordFilters,
-        recordFilterGroups: [],
-        filterValueDependencies: {
-          timeZone: 'UTC',
-        },
-      });
-
-      // IS_EMPTY on ONE_TO_MANY goes through emptiness filter path (existence check)
-      expect(filter).toEqual({
-        policies: {
-          is: 'NULL',
-        },
-      });
-    });
-
-    it('should fall through to emptiness filter for IS_NOT_EMPTY operand even with subFieldName', () => {
-      const recordFilters: RecordFilter[] = [
-        {
-          id: 'not-empty-filter',
-          fieldMetadataId: policiesField.id,
-          value: '',
-          type: 'SELECT',
-          operand: ViewFilterOperand.IS_NOT_EMPTY,
-          subFieldName: 'status',
-        },
-      ];
-
-      const filter = computeRecordGqlOperationFilter({
-        fields: [policiesField],
-        recordFilters,
-        recordFilterGroups: [],
-        filterValueDependencies: {
-          timeZone: 'UTC',
-        },
-      });
-
-      // IS_NOT_EMPTY on ONE_TO_MANY goes through emptiness filter path (negated NULL check)
       expect(filter).toEqual({
         not: {
           policies: {
-            is: 'NULL',
+            id: {
+              is: 'NOT_NULL',
+            },
           },
+        },
+      });
+    });
+
+    it('should keep the join column emptiness filter for many-to-one relations', () => {
+      const filter = computeFilter({
+        id: 'no-company-filter',
+        fieldMetadataId: companyField.id,
+        value: '',
+        operand: ViewFilterOperand.IS_EMPTY,
+      });
+
+      expect(filter).toEqual({
+        companyId: {
+          is: 'NULL',
         },
       });
     });

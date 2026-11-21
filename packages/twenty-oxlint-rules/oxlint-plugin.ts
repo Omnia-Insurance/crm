@@ -1,6 +1,10 @@
 import { definePlugin } from '@oxlint/plugins';
 
 import {
+  rule as applicationTargetGuards,
+  RULE_NAME as applicationTargetGuardsName,
+} from './rules/application-target-guards';
+import {
   rule as componentPropsNaming,
   RULE_NAME as componentPropsNamingName,
 } from './rules/component-props-naming';
@@ -45,13 +49,29 @@ import {
   RULE_NAME as noHardcodedColorsName,
 } from './rules/no-hardcoded-colors';
 import {
+  rule as noIcuEscapingApostrophe,
+  RULE_NAME as noIcuEscapingApostropheName,
+} from './rules/no-icu-escaping-apostrophe';
+import {
   rule as noJotaiStoreInSelector,
   RULE_NAME as noJotaiStoreInSelectorName,
 } from './rules/no-jotai-store-in-selector';
 import {
+  rule as noMiscasedAcronymInIdentifier,
+  RULE_NAME as noMiscasedAcronymInIdentifierName,
+} from './rules/no-miscased-acronym-in-identifier';
+import {
+  rule as noMiscasedAcronymInMessage,
+  RULE_NAME as noMiscasedAcronymInMessageName,
+} from './rules/no-miscased-acronym-in-message';
+import {
   rule as noNavigatePreferLink,
   RULE_NAME as noNavigatePreferLinkName,
 } from './rules/no-navigate-prefer-link';
+import {
+  rule as noRuntimeImportFromUpgradeCommand,
+  RULE_NAME as noRuntimeImportFromUpgradeCommandName,
+} from './rules/no-runtime-import-from-upgrade-command';
 import {
   rule as noStateUseref,
   RULE_NAME as noStateUserefName,
@@ -60,6 +80,14 @@ import {
   rule as noStorybookA11yDisable,
   RULE_NAME as noStorybookA11yDisableName,
 } from './rules/no-storybook-a11y-disable';
+import {
+  rule as noTwentyUiOverride,
+  RULE_NAME as noTwentyUiOverrideName,
+} from './rules/no-twenty-ui-override';
+import {
+  rule as noWindowOpen,
+  RULE_NAME as noWindowOpenName,
+} from './rules/no-window-open';
 import {
   rule as preferWorkspaceScopedRepository,
   RULE_NAME as preferWorkspaceScopedRepositoryName,
@@ -77,6 +105,10 @@ import {
   RULE_NAME as styledComponentsPrefixedWithStyledName,
 } from './rules/styled-components-prefixed-with-styled';
 import {
+  rule as typesFolderFilename,
+  RULE_NAME as typesFolderFilenameName,
+} from './rules/types-folder-filename';
+import {
   rule as upgradeCommandFilename,
   RULE_NAME as upgradeCommandFilenameName,
 } from './rules/upgrade-command-filename';
@@ -84,6 +116,7 @@ import {
 export default definePlugin({
   meta: { name: 'twenty' },
   rules: {
+    [applicationTargetGuardsName]: applicationTargetGuards,
     [componentPropsNamingName]: componentPropsNaming,
     [effectComponentsName]: effectComponents,
     [enforceModuleBoundariesName]: enforceModuleBoundaries,
@@ -96,15 +129,22 @@ export default definePlugin({
       noDataMutationInFastInstanceCommand,
     [noDirectAtomFamilyInSelectorName]: noDirectAtomFamilyInSelector,
     [noHardcodedColorsName]: noHardcodedColors,
+    [noIcuEscapingApostropheName]: noIcuEscapingApostrophe,
     [noJotaiStoreInSelectorName]: noJotaiStoreInSelector,
+    [noMiscasedAcronymInIdentifierName]: noMiscasedAcronymInIdentifier,
+    [noMiscasedAcronymInMessageName]: noMiscasedAcronymInMessage,
     [noNavigatePreferLinkName]: noNavigatePreferLink,
+    [noRuntimeImportFromUpgradeCommandName]: noRuntimeImportFromUpgradeCommand,
     [noStateUserefName]: noStateUseref,
     [noStorybookA11yDisableName]: noStorybookA11yDisable,
+    [noTwentyUiOverrideName]: noTwentyUiOverride,
+    [noWindowOpenName]: noWindowOpen,
     [preferWorkspaceScopedRepositoryName]: preferWorkspaceScopedRepository,
     [restApiMethodsShouldBeGuardedName]: restApiMethodsShouldBeGuarded,
     [sortCssPropertiesAlphabeticallyName]: sortCssPropertiesAlphabetically,
     [styledComponentsPrefixedWithStyledName]:
       styledComponentsPrefixedWithStyled,
+    [typesFolderFilenameName]: typesFolderFilename,
     [upgradeCommandFilenameName]: upgradeCommandFilename,
   },
 });

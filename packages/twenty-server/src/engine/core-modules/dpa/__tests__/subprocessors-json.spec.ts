@@ -17,9 +17,13 @@ describe('subprocessors.json integrity', () => {
       expect(subprocessor.services.length).toBeGreaterThan(0);
 
       expect(Array.isArray(subprocessor.processingLocations)).toBe(true);
-      expect(subprocessor.processingLocations.length).toBeGreaterThan(0);
 
       expect(typeof subprocessor.processesPii).toBe('boolean');
+
+      // Only PII processors must declare locations (Annex C relies on them).
+      if (subprocessor.processesPii) {
+        expect(subprocessor.processingLocations.length).toBeGreaterThan(0);
+      }
     }
   });
 

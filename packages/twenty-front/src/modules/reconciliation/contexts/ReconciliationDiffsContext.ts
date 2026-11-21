@@ -1,11 +1,10 @@
 import { createContext } from 'react';
 
-import type { FieldDiff } from '@/reconciliation/types/FieldDiff';
+import { type FieldDiff } from '@/reconciliation/types/FieldDiff';
 
 export type ReconciliationDiffsContextValue = {
-  /** All enriched fieldDiffs for the current review item */
   fieldDiffs: FieldDiff[];
-  /** Column mapping from reconciliation record (BOB header → CRM field path) */
+  // BOB file header -> CRM field path, from the reconciliation record
   columnMapping: Record<string, { crmField: string }> | null;
 };
 

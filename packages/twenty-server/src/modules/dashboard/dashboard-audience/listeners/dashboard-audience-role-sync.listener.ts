@@ -3,15 +3,9 @@ import { OnEvent } from '@nestjs/event-emitter';
 
 import { type MetadataEventBatch } from 'src/engine/subscriptions/metadata-event/types/metadata-event-batch.type';
 import { DashboardAudienceRoleSyncService } from 'src/modules/dashboard/dashboard-audience/services/dashboard-audience-role-sync.service';
+import { findObjectPermissionEventRoleAndObjectIds } from 'src/modules/dashboard/dashboard-audience/utils/find-object-permission-event-role-and-object-ids.util';
+import { isRowLevelPermissionRuleSchemaAvailable } from 'src/modules/omnia/utils/is-row-level-permission-rule-schema-available.util';
 
-/**
- * OMNIA-CUSTOM: keeps dashboard audience gating in lockstep with roles.
- * Role create/update/delete all emit `metadata.role.*` events (role is in the
- * metadata emit allowlist); on any of them we re-sync the workspace's dashboard
- * `audience` field options + per-role row-level predicates. Role deletes also
- * cascade-delete their predicates at the DB level, so the re-sync only needs to
- * drop the stale option.
- */
 @Injectable()
 export class DashboardAudienceRoleSyncListener {
   private readonly logger = new Logger(DashboardAudienceRoleSyncListener.name);
@@ -21,35 +15,57 @@ export class DashboardAudienceRoleSyncListener {
   ) {}
 
   @OnEvent('metadata.role.created')
-  async onRoleCreated(
-    batch: MetadataEventBatch<'role', 'created'>,
-  ): Promise<void> {
-    await this.safeSync(batch.workspaceId);
-  }
-
   @OnEvent('metadata.role.updated')
-  async onRoleUpdated(
-    batch: MetadataEventBatch<'role', 'updated'>,
-  ): Promise<void> {
-    await this.safeSync(batch.workspaceId);
-  }
-
   @OnEvent('metadata.role.deleted')
-  async onRoleDeleted(
-    batch: MetadataEventBatch<'role', 'deleted'>,
-  ): Promise<void> {
-    await this.safeSync(batch.workspaceId);
+  async handleRoleEvent({
+    workspaceId,
+  }: Pick<MetadataEventBatch, 'workspaceId'>): Promise<void> {
+    await this.syncSafely(workspaceId, () =>
+      this.dashboardAudienceRoleSyncService.syncWorkspace(workspaceId),
+    );
   }
 
-  private async safeSync(workspaceId: string): Promise<void> {
+  // Saving role settings replaces all of the role's object permissions, which can reopen every dashboard
+  @OnEvent('metadata.objectPermission.created')
+  @OnEvent('metadata.objectPermission.updated')
+  @OnEvent('metadata.objectPermission.deleted')
+  async handleObjectPermissionEvent({
+    workspaceId,
+    events,
+  }: Pick<MetadataEventBatch, 'workspaceId' | 'events'>): Promise<void> {
+    const objectPermissions = findObjectPermissionEventRoleAndObjectIds(events);
+
+    if (objectPermissions.length === 0) {
+      return;
+    }
+
+    await this.syncSafely(workspaceId, () =>
+      this.dashboardAudienceRoleSyncService.syncDashboardObjectPermissionChanges(
+        { workspaceId, objectPermissions },
+      ),
+    );
+  }
+
+  // A failed sync must not fail the role change that triggered it; the next event or command retries it
+  private async syncSafely(
+    workspaceId: string,
+    sync: () => Promise<void>,
+  ): Promise<void> {
+    // Earlier upgrade steps emit role events before the rules exist; the 2.58 dashboard audience
+    // upgrade command syncs every role once they do
+    if (!isRowLevelPermissionRuleSchemaAvailable()) {
+      this.logger.log(
+        `Dashboard audience sync skipped in workspace ${workspaceId}: the upgrade has not created the row level permission rules yet`,
+      );
+
+      return;
+    }
+
     try {
-      await this.dashboardAudienceRoleSyncService.syncWorkspace(workspaceId);
+      await sync();
     } catch (error) {
-      // Never let a sync failure bubble into the role mutation flow.
       this.logger.error(
-        `Failed to sync dashboard audience after a role change in workspace ${workspaceId}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `Dashboard audience sync failed in workspace ${workspaceId}: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }

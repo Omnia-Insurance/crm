@@ -1,8 +1,6 @@
 import { type FromTo } from 'twenty-shared/types';
 
-import { type FlatApplication } from 'src/engine/core-modules/application/types/flat-application.type';
 import { type AllFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/all-flat-entity-maps.type';
-import { findFlatEntityByIdInFlatEntityMapsOrThrow } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps-or-throw.util';
 import { type FieldInputTranspilationResult } from 'src/engine/metadata-modules/flat-field-metadata/types/field-input-transpilation-result.type';
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
 import { handleEnumFlatFieldMetadataUpdateSideEffects } from 'src/engine/metadata-modules/flat-field-metadata/utils/handle-enum-flat-field-metadata-update-side-effects.util';
@@ -15,22 +13,15 @@ import {
   handleIndexChangesDuringFieldUpdate,
 } from 'src/engine/metadata-modules/flat-field-metadata/utils/handle-index-changes-during-field-update.util';
 import { isEnumFlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/utils/is-enum-flat-field-metadata.util';
-import { handleSearchVectorChangesDuringFieldUpdate } from 'src/engine/metadata-modules/flat-field-metadata/utils/handle-search-vector-changes-during-field-update.util';
 import { type FlatViewFiltersToDeleteAndUpdate } from 'src/engine/metadata-modules/flat-field-metadata/utils/recompute-view-filters-on-flat-field-metadata-options-update.util';
 import { type FlatViewGroupsToDeleteUpdateAndCreate } from 'src/engine/metadata-modules/flat-field-metadata/utils/recompute-view-groups-on-flat-field-metadata-options-update.util';
-import { type UniversalFlatSearchFieldMetadata } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/types/universal-flat-search-field-metadata.type';
+import { resolveEffectiveFlatEntityProperty } from 'src/engine/metadata-modules/overrides/utils/resolve-effective-flat-entity-property.util';
 
 export type FlatFieldMetadataUpdateSideEffects =
   FlatViewFiltersToDeleteAndUpdate &
     FlatViewGroupsToDeleteUpdateAndCreate &
     FieldMetadataUpdateIndexSideEffect &
-    FieldMetadataDeactivationSideEffect & {
-      flatFieldMetadatasToUpdate: FlatFieldMetadata[];
-      // OMNIA: searchFieldMetadata deltas keeping a custom object's search vector in sync
-      // with the "all active searchable fields" rule when a field crosses the threshold.
-      searchFieldMetadatasToCreate: UniversalFlatSearchFieldMetadata[];
-      searchFieldMetadatasToDelete: UniversalFlatSearchFieldMetadata[];
-    };
+    FieldMetadataDeactivationSideEffect;
 
 type HandleFlatFieldMetadataUpdateSideEffectArgs = FromTo<
   FlatFieldMetadata,
@@ -41,14 +32,11 @@ type HandleFlatFieldMetadataUpdateSideEffectArgs = FromTo<
     | 'flatIndexMaps'
     | 'flatObjectMetadataMaps'
     | 'flatFieldMetadataMaps'
-    | 'flatSearchFieldMetadataMaps'
     | 'flatViewFilterMaps'
     | 'flatViewGroupMaps'
     | 'flatViewMaps'
     | 'flatViewFieldMaps'
-  > & {
-    flatApplication: FlatApplication;
-  };
+  >;
 
 export const FLAT_FIELD_METADATA_UPDATE_EMPTY_SIDE_EFFECTS: FlatFieldMetadataUpdateSideEffects =
   {
@@ -63,9 +51,6 @@ export const FLAT_FIELD_METADATA_UPDATE_EMPTY_SIDE_EFFECTS: FlatFieldMetadataUpd
     flatViewsToDelete: [],
     flatViewFieldsToDelete: [],
     flatViewsToUpdate: [],
-    flatFieldMetadatasToUpdate: [],
-    searchFieldMetadatasToCreate: [],
-    searchFieldMetadatasToDelete: [],
   };
 
 export const handleFlatFieldMetadataUpdateSideEffect = ({
@@ -74,20 +59,26 @@ export const handleFlatFieldMetadataUpdateSideEffect = ({
   flatObjectMetadataMaps,
   flatIndexMaps,
   flatFieldMetadataMaps,
-  flatSearchFieldMetadataMaps,
   flatViewFilterMaps,
   flatViewGroupMaps,
   flatViewMaps,
   flatViewFieldMaps,
-  flatApplication,
 }: HandleFlatFieldMetadataUpdateSideEffectArgs): FieldInputTranspilationResult<FlatFieldMetadataUpdateSideEffects> => {
   const sideEffectResult = structuredClone(
     FLAT_FIELD_METADATA_UPDATE_EMPTY_SIDE_EFFECTS,
   );
 
   const isDeactivation =
-    fromFlatFieldMetadata.isActive === true &&
-    toFlatFieldMetadata.isActive === false;
+    resolveEffectiveFlatEntityProperty({
+      metadataName: 'fieldMetadata',
+      flatEntity: fromFlatFieldMetadata,
+      property: 'isActive',
+    }) === true &&
+    resolveEffectiveFlatEntityProperty({
+      metadataName: 'fieldMetadata',
+      flatEntity: toFlatFieldMetadata,
+      property: 'isActive',
+    }) === false;
 
   if (isDeactivation) {
     const {
@@ -139,33 +130,11 @@ export const handleFlatFieldMetadataUpdateSideEffect = ({
     flatIndexMaps,
     flatObjectMetadataMaps,
     flatFieldMetadataMaps,
-    flatApplication,
   });
 
   if (indexChangesSideEffectResult.status === 'fail') {
     return indexChangesSideEffectResult;
   }
-
-  const flatObjectMetadata = findFlatEntityByIdInFlatEntityMapsOrThrow({
-    flatEntityMaps: flatObjectMetadataMaps,
-    flatEntityId: fromFlatFieldMetadata.objectMetadataId,
-  });
-
-  const { searchFieldMetadatasToCreate, searchFieldMetadatasToDelete } =
-    handleSearchVectorChangesDuringFieldUpdate({
-      fromFlatFieldMetadata,
-      toFlatFieldMetadata,
-      flatObjectMetadata,
-      flatFieldMetadataMaps,
-      flatSearchFieldMetadataMaps,
-    });
-
-  sideEffectResult.searchFieldMetadatasToCreate.push(
-    ...searchFieldMetadatasToCreate,
-  );
-  sideEffectResult.searchFieldMetadatasToDelete.push(
-    ...searchFieldMetadatasToDelete,
-  );
 
   const {
     flatIndexMetadatasToUpdate,

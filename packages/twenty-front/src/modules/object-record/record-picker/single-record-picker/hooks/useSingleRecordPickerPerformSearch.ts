@@ -1,3 +1,4 @@
+import { type ErrorLike } from '@apollo/client';
 import { useEffect, useMemo } from 'react';
 import { useStore } from 'jotai';
 
@@ -6,13 +7,20 @@ import { DEFAULT_SEARCH_REQUEST_LIMIT } from '@/object-record/constants/DefaultS
 import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
 import { useObjectRecordSearchRecords } from '@/object-record/hooks/useObjectRecordSearchRecords';
 import { searchRecordStoreFamilyState } from '@/object-record/record-picker/multiple-record-picker/states/searchRecordStoreComponentFamilyState';
-import { combineFilters } from '@/object-record/record-picker/multiple-record-picker/utils/combineFilters';
 import { SingleRecordPickerComponentInstanceContext } from '@/object-record/record-picker/single-record-picker/states/contexts/SingleRecordPickerComponentInstanceContext';
 import { singleRecordPickerSearchableObjectMetadataItemsComponentState } from '@/object-record/record-picker/single-record-picker/states/singleRecordPickerSearchableObjectMetadataItemsComponentState';
 import { type RecordPickerPickableMorphItem } from '@/object-record/record-picker/types/RecordPickerPickableMorphItem';
-import { getObjectPermissionsFromMapByObjectMetadataId } from '@/settings/roles/role-permissions/objects-permissions/utils/getObjectPermissionsFromMapByObjectMetadataId';
+import { getObjectPermissionsForObject } from '@/object-metadata/utils/getObjectPermissionsForObject';
 import { useAvailableComponentInstanceIdOrThrow } from '@/ui/utilities/state/component-state/hooks/useAvailableComponentInstanceIdOrThrow';
-import { CustomError, isDefined } from 'twenty-shared/utils';
+import { type RecordGqlOperationFilter } from 'twenty-shared/types';
+import {
+  canReachSomeRecords,
+  combineFilters,
+  CustomError,
+  isDefined,
+  isEmptyObject,
+} from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
 
 export const useSingleRecordPickerPerformSearch = ({
   selectedIds,
@@ -27,10 +35,14 @@ export const useSingleRecordPickerPerformSearch = ({
   excludedRecordIds?: string[];
   objectNameSingulars: string[];
   searchFilter?: string;
-  additionalFilter?: Record<string, unknown>;
+  // OMNIA-CUSTOM: narrows the selectable records (Carrier -> Product bridge)
+  additionalFilter?: RecordGqlOperationFilter;
 }): {
   pickableMorphItems: RecordPickerPickableMorphItem[];
   loading: boolean;
+  selectedRecordsError: ErrorLike | undefined;
+  filteredSelectedRecordsError: ErrorLike | undefined;
+  recordsToSelectError: ErrorLike | undefined;
 } => {
   const store = useStore();
   const singleRecordPickerInstanceId = useAvailableComponentInstanceIdOrThrow(
@@ -50,12 +62,13 @@ export const useSingleRecordPickerPerformSearch = ({
         return false;
       }
 
-      return (
-        getObjectPermissionsFromMapByObjectMetadataId({
+      return canReachSomeRecords({
+        objectRecordsPermissions: getObjectPermissionsForObject(
           objectPermissionsByObjectMetadataId,
-          objectMetadataId: objectMetadataItem.id,
-        }).canReadObjectRecords === true
-      );
+          objectMetadataItem.id,
+        ),
+        operationType: 'read',
+      });
     },
   );
 
@@ -64,17 +77,21 @@ export const useSingleRecordPickerPerformSearch = ({
     ? { id: { in: selectedIds } }
     : undefined;
 
-  const { loading: selectedRecordsLoading, searchRecords: selectedRecords } =
-    useObjectRecordSearchRecords({
-      objectNameSingulars: readableObjectNameSingulars,
-      filter: selectedIdsFilter,
-      skip: !hasSelectedIds,
-      searchInput: '',
-    });
+  const {
+    loading: selectedRecordsLoading,
+    searchRecords: selectedRecords,
+    error: selectedRecordsError,
+  } = useObjectRecordSearchRecords({
+    objectNameSingulars: readableObjectNameSingulars,
+    filter: selectedIdsFilter,
+    skip: !hasSelectedIds,
+    searchInput: '',
+  });
 
   const {
     loading: filteredSelectedRecordsLoading,
     searchRecords: filteredSelectedRecords,
+    error: filteredSelectedRecordsError,
   } = useObjectRecordSearchRecords({
     objectNameSingulars: readableObjectNameSingulars,
     filter: selectedIdsFilter,
@@ -86,14 +103,25 @@ export const useSingleRecordPickerPerformSearch = ({
   const notFilter = notFilterIds.length
     ? { not: { id: { in: notFilterIds } } }
     : undefined;
-  const { loading: recordsToSelectLoading, searchRecords: recordsToSelect } =
-    useObjectRecordSearchRecords({
-      objectNameSingulars: readableObjectNameSingulars,
-      filter: combineFilters([notFilter, additionalFilter]),
-      limit: limit ?? DEFAULT_SEARCH_REQUEST_LIMIT,
-      searchInput: searchFilter,
-      fetchPolicy: 'cache-and-network',
-    });
+  // OMNIA-CUSTOM: the search API filters only ids and dates, so an
+  // object-specific filter arrives as an id allowlist; the current value stays listed
+  const recordsToSelectFilter = combineFilters([
+    notFilter ?? {},
+    additionalFilter ?? {},
+  ]);
+  const {
+    loading: recordsToSelectLoading,
+    searchRecords: recordsToSelect,
+    error: recordsToSelectError,
+  } = useObjectRecordSearchRecords({
+    objectNameSingulars: readableObjectNameSingulars,
+    filter: isEmptyObject(recordsToSelectFilter)
+      ? undefined
+      : recordsToSelectFilter,
+    limit: limit ?? DEFAULT_SEARCH_REQUEST_LIMIT,
+    searchInput: searchFilter,
+    fetchPolicy: 'cache-and-network',
+  });
 
   const allSearchRecords = useMemo(
     () => [...selectedRecords, ...filteredSelectedRecords, ...recordsToSelect],
@@ -138,8 +166,9 @@ export const useSingleRecordPickerPerformSearch = ({
 
       if (!isDefined(objectMetadataItem)) {
         throw new CustomError(
-          'Object metadata item not found for object name singular: ' +
-            record.objectNameSingular,
+          doNotTranslate(
+            'Object metadata item not found for object name singular: ',
+          ) + record.objectNameSingular,
           'OBJECT_METADATA_ITEM_NOT_FOUND',
         );
       }
@@ -163,6 +192,9 @@ export const useSingleRecordPickerPerformSearch = ({
     });
 
   return {
+    selectedRecordsError,
+    filteredSelectedRecordsError,
+    recordsToSelectError,
     pickableMorphItems,
     loading:
       recordsToSelectLoading ||

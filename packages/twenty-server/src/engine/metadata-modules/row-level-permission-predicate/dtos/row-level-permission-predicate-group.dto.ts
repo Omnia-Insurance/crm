@@ -2,16 +2,10 @@
 
 import { Field, ObjectType, registerEnumType } from '@nestjs/graphql';
 
-import {
-  RowLevelPermissionPredicateGroupLogicalOperator,
-  RowLevelPermissionPredicateScope,
-} from 'twenty-shared/types';
+import { RowLevelPermissionPredicateGroupLogicalOperator } from 'twenty-shared/types';
 
 registerEnumType(RowLevelPermissionPredicateGroupLogicalOperator, {
   name: 'RowLevelPermissionPredicateGroupLogicalOperator',
-});
-registerEnumType(RowLevelPermissionPredicateScope, {
-  name: 'RowLevelPermissionPredicateScope',
 });
 @ObjectType('RowLevelPermissionPredicateGroup')
 export class RowLevelPermissionPredicateGroupDTO {
@@ -24,11 +18,20 @@ export class RowLevelPermissionPredicateGroupDTO {
   @Field(() => RowLevelPermissionPredicateGroupLogicalOperator)
   logicalOperator: RowLevelPermissionPredicateGroupLogicalOperator;
 
-  @Field(() => RowLevelPermissionPredicateScope)
-  scope: RowLevelPermissionPredicateScope;
-
   @Field(() => Number, { nullable: true })
   positionInRowLevelPermissionPredicateGroup?: number | null;
+
+  @Field(() => Boolean)
+  canReadRecords: boolean;
+
+  @Field(() => Boolean)
+  canUpdateRecords: boolean;
+
+  @Field(() => Boolean)
+  canSoftDeleteRecords: boolean;
+
+  @Field(() => Boolean)
+  canDestroyRecords: boolean;
 
   @Field(() => String)
   roleId: string;

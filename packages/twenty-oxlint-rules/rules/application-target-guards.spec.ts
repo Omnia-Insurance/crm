@@ -1,0 +1,159 @@
+import { RuleTester } from 'oxlint/plugins-dev';
+
+import { rule, RULE_NAME } from './application-target-guards';
+
+const ACCESS_POLICY_GUARD =
+  'AccessPolicyGuard({ authPrincipals: { userSession: true, apiKey: true, oauthClient: true, application: true }, requiredPermissionFlags: [] })';
+
+const targetArg = (requireApplicationRegistrationOwnership: string) =>
+  `@ApplicationTargetArg('id', { kind: 'applicationRegistrationId', requireApplicationRegistrationOwnership: ${requireApplicationRegistrationOwnership} }) id: string`;
+
+const ruleTester = new RuleTester();
+
+ruleTester.run(RULE_NAME, rule, {
+  valid: [
+    {
+      code: `
+        class TestResolver {
+          @Query()
+          @UseGuards(AccessPolicyGuard(APPLICATION_WRITE_ACCESS_POLICY), ApplicationTargetGuard)
+          testQuery(${targetArg('true')}) {}
+        }
+      `,
+      filename: 'test.ts',
+    },
+    {
+      code: `
+        @UseGuards(${ACCESS_POLICY_GUARD}, NoPermissionGuard)
+        class TestResolver {
+          @Mutation()
+          @UseGuards(ApplicationTargetGuard)
+          testMutation(${targetArg('false')}) {}
+        }
+      `,
+      filename: 'test.ts',
+    },
+    {
+      code: `
+        class TestResolver {
+          @UseGuards(CustomPermissionGuard, ApplicationTargetGuard)
+          @Query()
+          @UseGuards(${ACCESS_POLICY_GUARD})
+          testQuery(${targetArg('false')}) {}
+        }
+      `,
+      filename: 'test.ts',
+    },
+    {
+      code: `
+        class TestController {
+          @Get(':applicationId')
+          @UseGuards(NoPermissionGuard, ApplicationTargetGuard)
+          getAsset(@ApplicationTargetParam('applicationId', { kind: 'applicationId', requireApplicationRegistrationOwnership: false }) applicationId: string) {}
+        }
+      `,
+      filename: 'test.ts',
+    },
+    {
+      code: `
+        class TestResolver {
+          @Query()
+          @UseGuards(${ACCESS_POLICY_GUARD}, NoPermissionGuard)
+          testQuery(@Args('id') id: string) {}
+        }
+      `,
+      filename: 'test.ts',
+    },
+    {
+      code: `
+        class TestResolver {
+          helper(${targetArg('true')}) {}
+        }
+      `,
+      filename: 'test.ts',
+    },
+  ],
+  invalid: [
+    {
+      code: `
+        class TestResolver {
+          @Query()
+          @UseGuards(${ACCESS_POLICY_GUARD}, NoPermissionGuard)
+          testQuery(${targetArg('true')}) {}
+        }
+      `,
+      filename: 'test.ts',
+      errors: [{ messageId: 'missingTargetGuard' }],
+    },
+    {
+      code: `
+        class TestResolver {
+          @Query()
+          @UseGuards(${ACCESS_POLICY_GUARD}, ApplicationTargetGuard, NoPermissionGuard)
+          testQuery(${targetArg('false')}) {}
+        }
+      `,
+      filename: 'test.ts',
+      errors: [{ messageId: 'targetGuardNotLast' }],
+    },
+    {
+      code: `
+        class TestResolver {
+          @UseGuards(CustomPermissionGuard)
+          @Query()
+          @UseGuards(${ACCESS_POLICY_GUARD}, ApplicationTargetGuard)
+          testQuery(${targetArg('false')}) {}
+        }
+      `,
+      filename: 'test.ts',
+      errors: [{ messageId: 'targetGuardNotLast' }],
+    },
+    {
+      code: `
+        class TestResolver {
+          @Query()
+          @UseGuards(${ACCESS_POLICY_GUARD}, ApplicationTargetGuard, ApplicationTargetGuard)
+          testQuery(${targetArg('true')}) {}
+        }
+      `,
+      filename: 'test.ts',
+      errors: [{ messageId: 'targetGuardNotLast' }],
+    },
+    {
+      code: `
+        @UseGuards(${ACCESS_POLICY_GUARD}, NoPermissionGuard, ApplicationTargetGuard)
+        class TestResolver {
+          @Query()
+          testQuery(${targetArg('false')}) {}
+        }
+      `,
+      filename: 'test.ts',
+      errors: [
+        { messageId: 'targetGuardOnClass' },
+        { messageId: 'missingTargetGuard' },
+      ],
+    },
+    {
+      code: `
+        class TestResolver {
+          @Query()
+          @UseGuards(${ACCESS_POLICY_GUARD}, NoPermissionGuard, ApplicationTargetGuard)
+          testQuery(@Args('id') id: string) {}
+        }
+      `,
+      filename: 'test.ts',
+      errors: [{ messageId: 'guardWithoutTarget' }],
+    },
+    {
+      code: `
+        class TestResolver {
+          @Query()
+          @UseGuards(${ACCESS_POLICY_GUARD}, NoPermissionGuard, ApplicationTargetGuard)
+          testQuery(${targetArg('requiresOwnership')}) {}
+        }
+      `,
+      filename: 'test.ts',
+      errors: [{ messageId: 'ownershipFlagNotInline' }],
+    },
+  ],
+});

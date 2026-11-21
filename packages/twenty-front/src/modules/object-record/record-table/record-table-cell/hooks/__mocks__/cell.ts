@@ -3,8 +3,8 @@ import { RecordTableRowContextValue } from '@/object-record/record-table/context
 import { RecordTableRowDraggableContextValue } from '@/object-record/record-table/contexts/RecordTableRowDraggableContext';
 
 export const recordTableRowContextValue: RecordTableRowContextValue = {
-  rowIndex: 2,
   isSelected: false,
+  restrictedFieldNames: [],
   recordId: 'recordId',
   pathToShowPage: '/',
   objectNameSingular: 'objectNameSingular',
@@ -12,7 +12,6 @@ export const recordTableRowContextValue: RecordTableRowContextValue = {
 
 export const recordTableRowDraggableContextValue: RecordTableRowDraggableContextValue =
   {
-    dragHandleProps: {} as any,
     isDragging: false,
   };
 
@@ -24,8 +23,5 @@ export const recordTableCellContextValue: RecordTableCellContextValue = {
     id: 'id',
     isVisible: true,
   },
-  cellPosition: {
-    row: 2,
-    column: 3,
-  },
+  columnIndex: 3,
 };

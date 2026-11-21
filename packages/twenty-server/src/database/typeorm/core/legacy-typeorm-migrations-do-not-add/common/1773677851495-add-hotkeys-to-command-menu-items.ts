@@ -5,7 +5,7 @@ export class AddHotkeysToCommandMenuItems1773677851495 implements MigrationInter
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
-      `ALTER TABLE "core"."commandMenuItem" ADD COLUMN IF NOT EXISTS "hotKeys" text array`,
+      `ALTER TABLE "core"."commandMenuItem" ADD "hotKeys" text array`,
     );
   }
 

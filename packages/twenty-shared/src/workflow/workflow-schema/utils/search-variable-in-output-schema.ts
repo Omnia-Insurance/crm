@@ -4,7 +4,7 @@ import { isObject } from 'class-validator';
 
 import { CAPTURE_ALL_VARIABLE_TAG_INNER_REGEX } from '../../constants/CaptureAllVariableTagInnerRegex';
 import { parseVariablePath } from '../../utils/variable-path.util';
-import { type BaseOutputSchemaV2 } from '../types/base-output-schema.type';
+import { type BaseOutputSchemaV2 } from '../types/BaseOutputSchema';
 import {
   type FieldOutputSchemaV2,
   type FindRecordsOutputSchema,
@@ -15,7 +15,8 @@ import {
   type RecordFieldNodeValue,
   type RecordOutputSchemaV2,
   type VariableSearchResult,
-} from '../types/output-schema.type';
+} from '../types/OutputSchema';
+import { isBaseOutputSchemaV2 } from '../guards/isBaseOutputSchemaV2';
 import { isFlattenedArrayOutputSchema } from './flattened-array-output-schema';
 
 const EMPTY_RESULT: VariableSearchResult = {
@@ -51,8 +52,6 @@ const stripBrackets = (rawVariableName: string): string =>
     CAPTURE_ALL_VARIABLE_TAG_INNER_REGEX,
     (_, variableName) => variableName,
   );
-
-// Record output schema navigation
 
 const getFieldFromSchema = (
   fieldKey: string,
@@ -177,8 +176,6 @@ export const searchRecordOutputSchema = ({
   );
 };
 
-// Base output schema navigation
-
 const navigateBaseToTargetField = (
   startingSchema: BaseOutputSchemaV2,
   pathSegments: string[],
@@ -240,8 +237,6 @@ const searchBaseOutputSchema = ({
     variableType: targetField.type,
   };
 };
-
-// Per-schema-type search functions
 
 const searchThroughRecordOutputSchema = ({
   stepName,
@@ -454,6 +449,8 @@ const searchThroughFormOutputSchema = ({
       variableLabel: formField.label,
       variablePathLabel: `${stepName} > ${formField.label}`,
       variableType: formField.type,
+      fieldMetadataId:
+        'fieldMetadataId' in formField ? formField.fieldMetadataId : undefined,
     };
   }
 
@@ -479,24 +476,13 @@ const searchThroughCodeOutputSchema = ({
   codeOutputSchema: unknown;
   rawVariableName: string;
 }): VariableSearchResult => {
-  if (!isDefined(codeOutputSchema)) {
-    return EMPTY_RESULT;
-  }
-
-  if (
-    isObject(codeOutputSchema) &&
-    '_outputSchemaType' in codeOutputSchema &&
-    codeOutputSchema._outputSchemaType === 'LINK'
-  ) {
+  if (!isBaseOutputSchemaV2(codeOutputSchema)) {
     return EMPTY_RESULT;
   }
 
   const parts = parseVariablePath(stripBrackets(rawVariableName));
 
-  if (
-    parts.length === 1 &&
-    isFlattenedArrayOutputSchema(codeOutputSchema as BaseOutputSchemaV2)
-  ) {
+  if (parts.length === 1 && isFlattenedArrayOutputSchema(codeOutputSchema)) {
     return {
       variableLabel: stepName,
       variablePathLabel: stepName,
@@ -506,7 +492,7 @@ const searchThroughCodeOutputSchema = ({
 
   return searchThroughBaseOutputSchema({
     stepName,
-    baseOutputSchema: codeOutputSchema as BaseOutputSchemaV2,
+    baseOutputSchema: codeOutputSchema,
     rawVariableName,
   });
 };
@@ -555,7 +541,7 @@ const searchThroughIteratorOutputSchema = ({
   }
 
   if (iteratorResultKey === 'currentItem') {
-    const schema = iteratorOutputSchema.currentItem.value;
+    const schema = iteratorOutputSchema.currentItem?.value;
 
     if (!isDefined(schema)) {
       return EMPTY_RESULT;
@@ -662,8 +648,6 @@ const searchThroughManualTriggerOutputSchema = ({
 
   return EMPTY_RESULT;
 };
-
-// Main dispatcher
 
 export const searchVariableInOutputSchema = ({
   schema,

@@ -1,8 +1,8 @@
 import { styled } from '@linaria/react';
 import React from 'react';
-import { Label } from 'twenty-ui/typography';
 import { isDefined } from 'twenty-shared/utils';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { Text } from 'twenty-ui/primitives/typography';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 const StyledGroupHeadingContainer = styled.div`
   align-items: center;
@@ -31,7 +31,9 @@ export const SidePanelGroup = ({ heading, children }: SidePanelGroupProps) => {
   return (
     <>
       <StyledGroupHeadingContainer>
-        <Label>{heading}</Label>
+        <Text size="xs" weight="semibold" color="light">
+          {heading}
+        </Text>
       </StyledGroupHeadingContainer>
       <StyledGroup>{children}</StyledGroup>
     </>

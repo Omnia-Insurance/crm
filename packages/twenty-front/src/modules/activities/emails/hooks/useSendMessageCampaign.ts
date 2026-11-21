@@ -1,76 +1,126 @@
 import { useMutation } from '@apollo/client/react';
-import { useCallback } from 'react';
 
 import { SEND_MESSAGE_CAMPAIGN } from '@/activities/emails/graphql/mutations/sendMessageCampaign';
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
-import { t } from '@lingui/core/macro';
+import { buildExcludedRecipientReasons } from '@/activities/emails/utils/buildExcludedRecipientReasons';
+import { formatCampaignSendTime } from '@/activities/emails/utils/formatCampaignSendTime';
+import { getToastOptionsFromError } from '@/error-handler/utils/getToastOptionsFromError';
+import { useDateTimeFormat } from '@/localization/hooks/useDateTimeFormat';
+import { useNumberFormat } from '@/localization/hooks/useNumberFormat';
+import { useUpsertRecordsInStore } from '@/object-record/record-store/hooks/useUpsertRecordsInStore';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { plural } from '@lingui/core/macro';
+import { isNonEmptyString } from '@sniptt/guards';
+import { MessageCampaignStatus } from 'twenty-shared/types';
+import { useToast } from 'twenty-ui/components/feedback';
 import {
   type SendMessageCampaignMutation,
   type SendMessageCampaignMutationVariables,
 } from '~/generated-metadata/graphql';
+import { dateLocaleState } from '@/localization/states/dateLocaleState';
+import { useLingui } from '@lingui/react/macro';
 
 type SendMessageCampaignParams = {
-  listId: string;
-  unsubscribeTopicId?: string;
-  subject: string;
-  body: string;
-  fromAddress: string;
+  campaignId: string;
+  scheduledAt?: string;
+  wasAlreadyScheduled?: boolean;
 };
 
 export const useSendMessageCampaign = () => {
+  const { t } = useLingui();
   const [sendMessageCampaignMutation, { loading }] = useMutation<
     SendMessageCampaignMutation,
     SendMessageCampaignMutationVariables
   >(SEND_MESSAGE_CAMPAIGN);
 
-  const { enqueueSuccessSnackBar, enqueueErrorSnackBar } = useSnackBar();
+  const { enqueueToast } = useToast();
+  const { upsertRecordsInStore } = useUpsertRecordsInStore();
+  const { formatNumber } = useNumberFormat();
+  const { timeFormat, timeZone } = useDateTimeFormat();
+  const { localeCatalog } = useAtomStateValue(dateLocaleState);
 
-  const sendMessageCampaign = useCallback(
-    async (params: SendMessageCampaignParams): Promise<boolean> => {
-      try {
-        const result = await sendMessageCampaignMutation({
-          variables: { input: params },
-        });
+  const sendMessageCampaign = async ({
+    campaignId,
+    scheduledAt,
+    wasAlreadyScheduled = false,
+  }: SendMessageCampaignParams): Promise<boolean> => {
+    try {
+      const result = await sendMessageCampaignMutation({
+        variables: { input: { campaignId, scheduledAt } },
+      });
 
-        const queued = result.data?.sendMessageCampaign;
+      const queued = result.data?.sendMessageCampaign;
 
-        if (!queued) {
-          enqueueErrorSnackBar({ message: t`Failed to send campaign` });
-
-          return false;
-        }
-
-        const { queuedCount, skipped } = queued;
-        const skippedCount =
-          skipped.noEmail + skipped.deduped + skipped.overCap;
-
-        if (queuedCount === 0) {
-          enqueueErrorSnackBar({
-            message: t`No recipients to send to (${skippedCount} skipped)`,
-          });
-
-          return false;
-        }
-
-        enqueueSuccessSnackBar({
-          message:
-            skippedCount > 0
-              ? t`Campaign queued to ${queuedCount} recipient(s), ${skippedCount} skipped`
-              : t`Campaign queued to ${queuedCount} recipient(s)`,
-        });
-
-        return true;
-      } catch (error) {
-        enqueueErrorSnackBar({
-          message:
-            error instanceof Error ? error.message : t`Failed to send campaign`,
+      if (!queued) {
+        enqueueToast({
+          status: 'error',
+          children: t`Failed to send campaign`,
         });
 
         return false;
       }
-    },
-    [sendMessageCampaignMutation, enqueueSuccessSnackBar, enqueueErrorSnackBar],
-  );
+
+      // The fetched record only catches up on the next refetch, so the
+      // composer would stay editable until then without this.
+      upsertRecordsInStore({
+        partialRecords: [
+          {
+            __typename: 'MessageCampaign',
+            id: campaignId,
+            status: isNonEmptyString(scheduledAt)
+              ? MessageCampaignStatus.SCHEDULED
+              : MessageCampaignStatus.SENDING,
+            scheduledAt: scheduledAt ?? null,
+          },
+        ],
+      });
+
+      const { queuedCount, audience } = queued;
+      const skipReasons = buildExcludedRecipientReasons({
+        counts: audience,
+        formatNumber,
+      }).join(', ');
+
+      if (isNonEmptyString(scheduledAt)) {
+        const sendTime = formatCampaignSendTime({
+          value: scheduledAt,
+          timeZone,
+          timeFormat,
+          localeCatalog,
+        });
+
+        enqueueToast({
+          status: 'success',
+          children: wasAlreadyScheduled
+            ? t`Campaign moved to ${sendTime}`
+            : t`Campaign scheduled for ${sendTime}`,
+        });
+      } else if (queuedCount === 0) {
+        enqueueToast({
+          status: 'error',
+          children: t`No recipients to send to (${skipReasons})`,
+        });
+      } else {
+        const queuedMessage = plural(queuedCount, {
+          one: `Campaign queued to ${formatNumber(queuedCount)} recipient`,
+          other: `Campaign queued to ${formatNumber(queuedCount)} recipients`,
+        });
+
+        enqueueToast({
+          status: 'success',
+          children:
+            skipReasons.length > 0
+              ? t`${queuedMessage}, skipping ${skipReasons}`
+              : queuedMessage,
+        });
+      }
+
+      return true;
+    } catch (error) {
+      enqueueToast(getToastOptionsFromError({ error }));
+
+      return false;
+    }
+  };
 
   return { sendMessageCampaign, loading };
 };

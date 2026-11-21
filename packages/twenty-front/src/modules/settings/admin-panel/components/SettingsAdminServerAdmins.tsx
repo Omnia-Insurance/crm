@@ -7,16 +7,14 @@ import { TableHeader } from '@/ui/layout/table/components/TableHeader';
 import { TableRow } from '@/ui/layout/table/components/TableRow';
 import { useQuery } from '@apollo/client/react';
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
-import { useContext } from 'react';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath } from 'twenty-shared/utils';
+import { Section } from 'twenty-ui/components/layout';
+import { OverflowingTextWithTooltip } from 'twenty-ui/primitives/typography';
 import { IconChevronRight } from 'twenty-ui/icon';
-import { OverflowingTextWithTooltip } from 'twenty-ui/surfaces';
-import { H2Title } from 'twenty-ui/typography';
-import { Section } from 'twenty-ui/layout';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
 import { GetServerAdminsDocument } from '~/generated-admin/graphql';
+import { useLingui } from '@lingui/react/macro';
 
 const SERVER_ADMINS_GRID_TEMPLATE_COLUMNS = '1fr 2fr 1fr 36px';
 
@@ -26,7 +24,8 @@ const StyledEmptyState = styled.div`
 `;
 
 export const SettingsAdminServerAdmins = () => {
-  const { theme } = useContext(ThemeContext);
+  const { t } = useLingui();
+  const theme = useTheme();
   const apolloAdminClient = useApolloAdminClient();
 
   const { data, loading, error } = useQuery(GetServerAdminsDocument, {
@@ -36,8 +35,8 @@ export const SettingsAdminServerAdmins = () => {
   const serverAdmins = data?.getServerAdmins ?? [];
 
   return (
-    <Section>
-      <H2Title
+    <Section.Root>
+      <Section.Header
         title={t`Administrators`}
         description={t`Users with server-level access. Open a user to grant or revoke access; use the search below to find anyone.`}
       />
@@ -92,6 +91,6 @@ export const SettingsAdminServerAdmins = () => {
           </TableBody>
         </Table>
       )}
-    </Section>
+    </Section.Root>
   );
 };

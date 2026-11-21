@@ -1,0 +1,278 @@
+import { defineAgent } from '@/sdk/define/agents/define-agent';
+
+const VALID_AGENT_CONFIG = {
+  universalIdentifier: 'a29ae15d-dd16-4b99-bb6c-079842da55ab',
+  name: 'sales-assistant',
+  label: 'Sales Assistant',
+  prompt: 'You are a sales assistant.',
+  responseFormat: { type: 'text' as const },
+};
+
+describe('defineAgent', () => {
+  it('should accept a valid agent config', () => {
+    const result = defineAgent(VALID_AGENT_CONFIG);
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toEqual([]);
+    expect(result.config).toEqual(VALID_AGENT_CONFIG);
+  });
+
+  it('should accept an optional roleUniversalIdentifier', () => {
+    const roleUniversalIdentifier = 'b7d36e10-2a8d-4c1b-9e50-8bfd6c3a1940';
+    const result = defineAgent({
+      ...VALID_AGENT_CONFIG,
+      roleUniversalIdentifier,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.config?.roleUniversalIdentifier).toBe(
+      roleUniversalIdentifier,
+    );
+  });
+
+  it('should error when roleUniversalIdentifier is not a valid UUID', () => {
+    const result = defineAgent({
+      ...VALID_AGENT_CONFIG,
+      roleUniversalIdentifier: 'not-a-uuid',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.errors).toContain(
+      `Agent 'sales-assistant' roleUniversalIdentifier must be a valid UUID`,
+    );
+  });
+
+  it('should accept a modelConfiguration and isSystem', () => {
+    const result = defineAgent({
+      ...VALID_AGENT_CONFIG,
+      isSystem: true,
+      modelConfiguration: {
+        webSearch: { enabled: true, configuration: { maxResults: 5 } },
+        twitterSearch: { enabled: false },
+      },
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toEqual([]);
+    expect(result.config?.modelConfiguration?.webSearch?.enabled).toBe(true);
+    expect(result.config?.isSystem).toBe(true);
+  });
+
+  it('should error on an unknown or malformed modelConfiguration capability', () => {
+    const result = defineAgent({
+      ...VALID_AGENT_CONFIG,
+      modelConfiguration: {
+        // @ts-expect-error apps written in JavaScript can pass any shape
+        webSearch: { enabled: 'yes' },
+        // @ts-expect-error apps written in JavaScript can pass any shape
+        twitterSearch: { enabled: true, configuration: 'fast' },
+        websearch: { enabled: true },
+      },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.errors).toEqual([
+      `Agent 'sales-assistant' modelConfiguration.webSearch.enabled must be a boolean`,
+      `Agent 'sales-assistant' modelConfiguration.twitterSearch.configuration must be an object`,
+      `Agent 'sales-assistant' modelConfiguration.websearch is not supported, use one of: webSearch, twitterSearch`,
+    ]);
+  });
+
+  it('should error when modelConfiguration or isSystem have the wrong type', () => {
+    const result = defineAgent({
+      ...VALID_AGENT_CONFIG,
+      // @ts-expect-error apps written in JavaScript can pass any shape
+      modelConfiguration: [],
+      // @ts-expect-error apps written in JavaScript can pass any shape
+      isSystem: 'true',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.errors).toEqual([
+      `Agent 'sales-assistant' isSystem must be a boolean`,
+      `Agent 'sales-assistant' modelConfiguration must be an object`,
+    ]);
+  });
+
+  it('should error on an unknown avatar color or shape', () => {
+    const result = defineAgent({
+      ...VALID_AGENT_CONFIG,
+      // @ts-expect-error apps written in JavaScript can pass any shape
+      avatarColor: 'teal',
+      // @ts-expect-error apps written in JavaScript can pass any shape
+      avatarShape: 'star',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.errors).toEqual([
+      `Agent 'sales-assistant' avatarColor must be one of: blue, sky, turquoise, green, yellow, orange, red, pink, purple, gray`,
+      `Agent 'sales-assistant' avatarShape must be one of: circle, cookie, cloud, clover, flower, burst, pill, arch, gem, hexagon`,
+    ]);
+  });
+
+  it('should accept triggers', () => {
+    const result = defineAgent({
+      ...VALID_AGENT_CONFIG,
+      triggers: [
+        {
+          universalIdentifier: 'c1f0a7b2-5d3e-4f6a-8b9c-0d1e2f3a4b5c',
+          type: 'DATABASE_EVENT',
+          settings: { eventName: 'company.created' },
+          instructions: 'Qualify the new company',
+        },
+        {
+          universalIdentifier: 'd2e1b8c3-6e4f-4a7b-9c0d-1e2f3a4b5c6d',
+          type: 'CRON',
+          settings: { pattern: '0 9 * * 1' },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it('should error when a trigger universalIdentifier is not a valid UUID', () => {
+    const result = defineAgent({
+      ...VALID_AGENT_CONFIG,
+      triggers: [
+        {
+          universalIdentifier: 'weekly-digest',
+          type: 'CRON',
+          settings: { pattern: '0 9 * * 1' },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.errors).toContain(
+      `Agent 'sales-assistant' trigger universalIdentifier must be a valid UUID`,
+    );
+  });
+
+  it('should error on duplicated triggers and wildcard event names', () => {
+    const trigger = {
+      universalIdentifier: 'c1f0a7b2-5d3e-4f6a-8b9c-0d1e2f3a4b5c',
+      type: 'DATABASE_EVENT' as const,
+      settings: { eventName: '*.created' },
+    };
+
+    const result = defineAgent({
+      ...VALID_AGENT_CONFIG,
+      triggers: [trigger, trigger],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        `Agent 'sales-assistant' trigger universalIdentifiers must be unique`,
+        `Agent 'sales-assistant' trigger event name '*.created' must look like 'company.created'`,
+      ]),
+    );
+  });
+
+  it('should error instead of throwing when a database event trigger has no settings', () => {
+    const result = defineAgent({
+      ...VALID_AGENT_CONFIG,
+      triggers: [
+        // @ts-expect-error apps written in JavaScript can omit settings
+        {
+          universalIdentifier: 'c1f0a7b2-5d3e-4f6a-8b9c-0d1e2f3a4b5c',
+          type: 'DATABASE_EVENT',
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.errors).toContain(
+      `Agent 'sales-assistant' trigger must have settings`,
+    );
+  });
+
+  it('should accept a trigger on an object, its fields and a condition', () => {
+    const result = defineAgent({
+      ...VALID_AGENT_CONFIG,
+      triggers: [
+        {
+          universalIdentifier: 'c1f0a7b2-5d3e-4f6a-8b9c-0d1e2f3a4b5c',
+          type: 'EVENT',
+          settings: {
+            on: 'recordEvent',
+            objectUniversalIdentifier: 'b7e6c2a1-3f4d-4e5a-9b8c-7d6e5f4a3b2c',
+            action: 'updated',
+            watchedFieldUniversalIdentifiers: [
+              'e3d2c1b0-9a8f-4e7d-8c6b-5a4f3e2d1c0b',
+            ],
+            condition: "stage == 'CUSTOMER' and previous.stage != 'CUSTOMER'",
+          },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it('should error when an object trigger has no object or a wildcard action', () => {
+    const result = defineAgent({
+      ...VALID_AGENT_CONFIG,
+      triggers: [
+        {
+          universalIdentifier: 'c1f0a7b2-5d3e-4f6a-8b9c-0d1e2f3a4b5c',
+          type: 'EVENT',
+          settings: {
+            on: 'recordEvent',
+            action: '*',
+            condition: 'employees > 10',
+          },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        `Agent 'sales-assistant' trigger action '*' must be one of: created, updated, deleted, destroyed, restored, upserted`,
+        `Agent 'sales-assistant' trigger needs an objectUniversalIdentifier to watch fields or check a condition`,
+      ]),
+    );
+  });
+
+  it('should error when fields are watched on an action other than updated or upserted', () => {
+    const result = defineAgent({
+      ...VALID_AGENT_CONFIG,
+      triggers: [
+        {
+          universalIdentifier: 'c1f0a7b2-5d3e-4f6a-8b9c-0d1e2f3a4b5c',
+          type: 'EVENT',
+          settings: {
+            on: 'recordEvent',
+            objectUniversalIdentifier: 'b7e6c2a1-3f4d-4e5a-9b8c-7d6e5f4a3b2c',
+            action: 'created',
+            watchedFieldUniversalIdentifiers: [
+              'e3d2c1b0-9a8f-4e7d-8c6b-5a4f3e2d1c0b',
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.errors).toEqual([
+      `Agent 'sales-assistant' trigger watchedFieldUniversalIdentifiers only apply to the updated and upserted actions`,
+    ]);
+  });
+
+  it('should warn when responseFormat is missing', () => {
+    const { responseFormat: _responseFormat, ...configWithoutFormat } =
+      VALID_AGENT_CONFIG;
+    const result = defineAgent(configWithoutFormat);
+
+    expect(result.success).toBe(true);
+    expect(result.warnings).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('has no responseFormat'),
+      ]),
+    );
+  });
+});

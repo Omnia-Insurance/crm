@@ -4,8 +4,10 @@ import { type SettingsRoleObjectPermissionKey } from '@/settings/roles/role-perm
 import { settingsDraftRoleFamilyState } from '@/settings/roles/states/settingsDraftRoleFamilyState';
 import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
 import { isDefined } from 'twenty-shared/utils';
-import { type FieldPermission } from '~/generated-metadata/graphql';
-import { type OmniaObjectPermission } from '@/settings/roles/types/OmniaRoleExtensions';
+import {
+  type FieldPermission,
+  type ObjectPermission,
+} from '~/generated-metadata/graphql';
 
 const OBJECT_PERMISSION_KEYS: SettingsRoleObjectPermissionKey[] = [
   'canReadObjectRecords',
@@ -48,7 +50,7 @@ export const useResetObjectPermission = (roleId: string) => {
       const newObjectPermission = {
         objectMetadataId: objectMetadataItemId,
         ...resetPermissions,
-      } satisfies OmniaObjectPermission;
+      } satisfies ObjectPermission;
 
       upsertObjectPermissionInDraftRole(newObjectPermission);
     } else {

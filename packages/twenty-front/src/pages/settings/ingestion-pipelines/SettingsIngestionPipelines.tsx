@@ -1,159 +1,141 @@
-/* eslint-disable twenty/no-navigate-prefer-link -- OMNIA-CUSTOM: this settings page navigates from a Button action and a clickable table row, neither of which is a semantic <Link>. */
 import { styled } from '@linaria/react';
-import { Trans, useLingui } from '@lingui/react/macro';
-import { useNavigate } from 'react-router-dom';
+import { useLingui } from '@lingui/react/macro';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath } from 'twenty-shared/utils';
-import { IconPlus } from 'twenty-ui/icon';
-import { H2Title } from 'twenty-ui/typography';
-import { Button } from 'twenty-ui/input';
-import { Section } from 'twenty-ui/layout';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { Section } from 'twenty-ui/components/layout';
+import { IconChevronRight, IconPlus } from 'twenty-ui/icon';
+import { Status, Tag } from 'twenty-ui/primitives/data-display';
+import { OverflowingTextWithTooltip } from 'twenty-ui/primitives/typography';
+import { themeCssVariables, useTheme } from 'twenty-ui/theme';
 
-import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
-import { useIngestionPipelines } from '@/settings/ingestion-pipeline/hooks/useIngestionPipelines';
+import { ToastOnQueryErrorEffect } from '@/apollo/components/ToastOnQueryErrorEffect';
 import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
+import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
+import { SettingsSkeletonLoader } from '@/settings/components/SettingsSkeletonLoader';
+import { useIngestionPipelines } from '@/settings/ingestion-pipeline/hooks/useIngestionPipelines';
+import { NavigationButton } from '@/ui/input/components/NavigationButton';
+import { Table } from '@/ui/layout/table/components/Table';
+import { TableBody } from '@/ui/layout/table/components/TableBody';
+import { TableCell } from '@/ui/layout/table/components/TableCell';
+import { TableFooter } from '@/ui/layout/table/components/TableFooter';
+import { TableHeader } from '@/ui/layout/table/components/TableHeader';
+import { TableRow } from '@/ui/layout/table/components/TableRow';
 
-const StyledTable = styled.table`
-  border-collapse: collapse;
-  width: 100%;
-`;
+const INGESTION_PIPELINE_TABLE_GRID_TEMPLATE_COLUMNS = '2fr 1fr 1fr 1fr 28px';
 
-const StyledTh = styled.th`
-  border-bottom: 1px solid ${themeCssVariables.border.color.light};
+const StyledIconChevronRightContainer = styled.span`
+  align-items: center;
   color: ${themeCssVariables.font.color.tertiary};
-  font-size: ${themeCssVariables.font.size.sm};
-  font-weight: ${themeCssVariables.font.weight.medium};
-  padding: ${themeCssVariables.spacing[2]};
-  text-align: left;
-`;
-
-const StyledTd = styled.td`
-  border-bottom: 1px solid ${themeCssVariables.border.color.light};
-  cursor: pointer;
-  font-size: ${themeCssVariables.font.size.md};
-  padding: ${themeCssVariables.spacing[2]};
-`;
-
-const StyledModeTag = styled.span<{ mode: string }>`
-  background: ${({ mode }) =>
-    mode === 'push'
-      ? themeCssVariables.color.blue10
-      : themeCssVariables.color.green10};
-  border-radius: ${themeCssVariables.border.radius.sm};
-  color: ${({ mode }) =>
-    mode === 'push'
-      ? themeCssVariables.color.blue
-      : themeCssVariables.color.green};
-  font-size: ${themeCssVariables.font.size.xs};
-  font-weight: ${themeCssVariables.font.weight.medium};
-  padding: ${themeCssVariables.spacing['0.5']} ${themeCssVariables.spacing[1]};
-  text-transform: uppercase;
-`;
-
-const StyledStatusDot = styled.span<{ isEnabled: boolean }>`
-  background: ${({ isEnabled }) =>
-    isEnabled
-      ? themeCssVariables.color.green
-      : themeCssVariables.font.color.light};
-  border-radius: 50%;
-  display: inline-block;
-  height: 8px;
-  margin-right: ${themeCssVariables.spacing[1]};
-  width: 8px;
+  display: flex;
 `;
 
 export const SettingsIngestionPipelines = () => {
   const { t } = useLingui();
-  const navigate = useNavigate();
-  const { pipelines, loading } = useIngestionPipelines();
+  const theme = useTheme();
+  const { pipelines, loading, error } = useIngestionPipelines();
 
-  const handleCreatePipeline = () => {
-    navigate(getSettingsPath(SettingsPath.NewIngestionPipeline));
-  };
-
-  const handlePipelineClick = (pipelineId: string) => {
-    navigate(
-      getSettingsPath(SettingsPath.IngestionPipelineDetail, {
-        pipelineId,
-      }),
-    );
-  };
+  if (loading) {
+    return <SettingsSkeletonLoader />;
+  }
 
   return (
     <SettingsPageLayout
-      title={t`Ingestion Pipelines`}
-      actionButton={
-        <Button
-          Icon={IconPlus}
-          title={t`New pipeline`}
-          size="small"
-          variant="secondary"
-          onClick={handleCreatePipeline}
-        />
-      }
+      title={t`Ingestion pipelines`}
       links={[
-        { children: <Trans>Settings</Trans>, href: '/settings' },
-        { children: <Trans>Ingestion Pipelines</Trans> },
+        {
+          children: t`Workspace`,
+          href: getSettingsPath(SettingsPath.General),
+        },
+        { children: t`Ingestion pipelines` },
       ]}
     >
+      <ToastOnQueryErrorEffect
+        error={error}
+        message={t`Failed to load ingestion pipelines`}
+      />
       <SettingsPageContainer>
-        <Section>
-          <H2Title
+        <Section.Root>
+          <Section.Header
             title={t`Pipelines`}
             description={t`Configure data ingestion pipelines to sync external data into your CRM`}
           />
-          {loading ? (
-            <div>
-              <Trans>Loading...</Trans>
-            </div>
-          ) : pipelines.length === 0 ? (
-            <div>
-              <Trans>
-                No pipelines configured yet. Create one to start ingesting data.
-              </Trans>
-            </div>
-          ) : (
-            <StyledTable>
-              <thead>
-                <tr>
-                  <StyledTh>
-                    <Trans>Name</Trans>
-                  </StyledTh>
-                  <StyledTh>
-                    <Trans>Mode</Trans>
-                  </StyledTh>
-                  <StyledTh>
-                    <Trans>Target Object</Trans>
-                  </StyledTh>
-                  <StyledTh>
-                    <Trans>Status</Trans>
-                  </StyledTh>
-                </tr>
-              </thead>
-              <tbody>
-                {pipelines.map((pipeline) => (
-                  <tr
+          <Table>
+            <TableRow
+              gridTemplateColumns={
+                INGESTION_PIPELINE_TABLE_GRID_TEMPLATE_COLUMNS
+              }
+            >
+              <TableHeader>{t`Name`}</TableHeader>
+              <TableHeader>{t`Mode`}</TableHeader>
+              <TableHeader>{t`Target object`}</TableHeader>
+              <TableHeader>{t`Status`}</TableHeader>
+              <TableHeader />
+            </TableRow>
+            <TableBody>
+              {pipelines.length === 0 ? (
+                <TableCell color={themeCssVariables.font.color.tertiary}>
+                  {t`No pipelines configured yet. Create one to start ingesting data.`}
+                </TableCell>
+              ) : (
+                pipelines.map((pipeline) => (
+                  <TableRow
                     key={pipeline.id}
-                    onClick={() => handlePipelineClick(pipeline.id)}
+                    gridTemplateColumns={
+                      INGESTION_PIPELINE_TABLE_GRID_TEMPLATE_COLUMNS
+                    }
+                    to={getSettingsPath(SettingsPath.IngestionPipelineDetail, {
+                      pipelineId: pipeline.id,
+                    })}
                   >
-                    <StyledTd>{pipeline.name}</StyledTd>
-                    <StyledTd>
-                      <StyledModeTag mode={pipeline.mode}>
-                        {pipeline.mode}
-                      </StyledModeTag>
-                    </StyledTd>
-                    <StyledTd>{pipeline.targetObjectNameSingular}</StyledTd>
-                    <StyledTd>
-                      <StyledStatusDot isEnabled={pipeline.isEnabled} />
-                      {pipeline.isEnabled ? t`Active` : t`Inactive`}
-                    </StyledTd>
-                  </tr>
-                ))}
-              </tbody>
-            </StyledTable>
-          )}
-        </Section>
+                    <TableCell
+                      color={themeCssVariables.font.color.primary}
+                      overflow="hidden"
+                    >
+                      <OverflowingTextWithTooltip text={pipeline.name} />
+                    </TableCell>
+                    <TableCell>
+                      <Tag color="gray">
+                        {pipeline.mode === 'pull' ? t`Pull` : t`Push`}
+                      </Tag>
+                    </TableCell>
+                    <TableCell overflow="hidden">
+                      <OverflowingTextWithTooltip
+                        text={pipeline.targetObjectNameSingular}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Status
+                        color={pipeline.isEnabled ? 'green' : 'gray'}
+                        weight="medium"
+                      >
+                        {pipeline.isEnabled ? t`Active` : t`Inactive`}
+                      </Status>
+                    </TableCell>
+                    <TableCell
+                      align="center"
+                      padding={`0 ${themeCssVariables.spacing[1]} 0 0`}
+                    >
+                      <StyledIconChevronRightContainer>
+                        <IconChevronRight
+                          size={theme.icon.size.md}
+                          stroke={theme.icon.stroke.sm}
+                        />
+                      </StyledIconChevronRightContainer>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+          <TableFooter>
+            <NavigationButton
+              startIcon={<IconPlus />}
+              size="sm"
+              variant="outline"
+              to={getSettingsPath(SettingsPath.NewIngestionPipeline)}
+            >{t`Create pipeline`}</NavigationButton>
+          </TableFooter>
+        </Section.Root>
       </SettingsPageContainer>
     </SettingsPageLayout>
   );

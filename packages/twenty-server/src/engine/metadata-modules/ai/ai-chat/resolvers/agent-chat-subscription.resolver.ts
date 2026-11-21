@@ -1,89 +1,172 @@
+import { createSubscriptionAuthorization } from 'src/engine/subscriptions/utils/create-subscription-authorization';
+import { aiGraphqlApiExceptionHandler } from 'src/engine/metadata-modules/ai/utils/ai-graphql-api-exception-handler.util';
+import { AgentChatConversationAccessService } from 'src/engine/metadata-modules/ai/ai-chat/services/agent-chat-conversation-access.service';
+import { filterMapAsyncIterator } from 'src/engine/subscriptions/utils/filter-map-async-iterator';
+import { withAsyncIteratorAuthorization } from 'src/engine/subscriptions/utils/with-async-iterator-authorization';
+import { InjectAgentHistoryRepository } from 'src/engine/metadata-modules/ai/ai-history/repositories/inject-agent-history-repository.decorator';
+import { AgentHistoryRepository } from 'src/engine/metadata-modules/ai/ai-history/repositories/agent-history-repository';
 import { UseGuards, UseInterceptors } from '@nestjs/common';
 import { Args, Subscription } from '@nestjs/graphql';
 
+import { type AgentChatSubscriptionEvent } from 'twenty-shared/ai';
 import { PermissionFlagType } from 'twenty-shared/constants';
 import { isDefined } from 'twenty-shared/utils';
 
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
-import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
-import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
-import { AuthUserWorkspaceId } from 'src/engine/decorators/auth/auth-user-workspace-id.decorator';
+import { type ApplicationCallerOperation } from 'src/engine/core-modules/application/types/application-caller-operation.type';
+import { type FlatWorkspace } from 'src/engine/core-modules/workspace/types/flat-workspace.type';
+import { AuthApplication } from 'src/engine/decorators/auth/auth-application.decorator';
+import { AuthWorkspaceMemberId } from 'src/engine/decorators/auth/auth-workspace-member-id.decorator';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
-import { SettingsPermissionGuard } from 'src/engine/guards/settings-permission.guard';
-import { UserAuthGuard } from 'src/engine/guards/user-auth.guard';
-import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
-import {
-  AiException,
-  AiExceptionCode,
-} from 'src/engine/metadata-modules/ai/ai.exception';
 import { AiGraphqlApiExceptionInterceptor } from 'src/engine/metadata-modules/ai/interceptors/ai-graphql-api-exception.interceptor';
 import { AGENT_CHAT_KEEPALIVE_INTERVAL_MS } from 'src/engine/metadata-modules/ai/ai-chat/constants/agent-chat-keepalive-interval-ms.constant';
+import { AGENT_CHAT_STREAM_REAP_CHECK_INTERVAL_MS } from 'src/engine/metadata-modules/ai/ai-chat/constants/agent-chat-stream-reap-check-interval-ms.constant';
+import { AgentChatEventInput } from 'src/engine/metadata-modules/ai/ai-chat/dtos/agent-chat-event.input';
+import { type AgentChatChannel } from 'src/engine/metadata-modules/ai/ai-chat/types/agent-chat-channel.type';
 import { AgentChatEventDTO } from 'src/engine/metadata-modules/ai/ai-chat/dtos/agent-chat-event.dto';
-import { AgentChatThreadEntity } from 'src/engine/metadata-modules/ai/ai-chat/entities/agent-chat-thread.entity';
+import { AgentChatThreadWorkspaceEntity } from 'src/engine/metadata-modules/ai/ai-history/standard-objects/agent-chat-thread.workspace-entity';
+import { AgentChatStreamRecoveryService } from 'src/engine/metadata-modules/ai/ai-chat/services/agent-chat-stream-recovery.service';
 import { SubscriptionService } from 'src/engine/subscriptions/subscription.service';
 import { wrapAsyncIteratorWithLifecycle } from 'src/engine/subscriptions/utils/wrap-async-iterator-with-lifecycle';
-import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
-import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
+import { AccessPolicyGuard } from 'src/engine/guards/access-policy.guard';
+
+type AgentChatEventPayload = {
+  onAgentChatEvent: {
+    threadId: string | null;
+    event: AgentChatSubscriptionEvent;
+  };
+};
+
 @MetadataResolver()
-@UseGuards(WorkspaceAuthGuard, UserAuthGuard)
+@UseGuards(
+  AccessPolicyGuard({
+    authPrincipals: {
+      userSession: {
+        standard: true,
+        impersonated: true,
+        playground: true,
+        workspaceAgnostic: false,
+      },
+      apiKey: false,
+      oauthClient: { withUser: true, withoutUser: false },
+      application: true,
+    },
+    requiredPermissionFlags: [PermissionFlagType.AI],
+  }),
+)
 @UseInterceptors(AiGraphqlApiExceptionInterceptor)
 export class AgentChatSubscriptionResolver {
   constructor(
     private readonly subscriptionService: SubscriptionService,
-    @InjectWorkspaceScopedRepository(AgentChatThreadEntity)
-    private readonly threadRepository: WorkspaceScopedRepository<AgentChatThreadEntity>,
+    private readonly streamRecoveryService: AgentChatStreamRecoveryService,
+    private readonly conversationAccessService: AgentChatConversationAccessService,
+    @InjectAgentHistoryRepository('agentChatThread')
+    private readonly threadRepository: AgentHistoryRepository<AgentChatThreadWorkspaceEntity>,
   ) {}
 
-  @Subscription(() => AgentChatEventDTO, {
-    filter: (
-      payload: { onAgentChatEvent: AgentChatEventDTO },
-      variables: { threadId: string },
-    ) => {
-      return payload.onAgentChatEvent.threadId === variables.threadId;
-    },
-  })
-  @UseGuards(SettingsPermissionGuard(PermissionFlagType.AI))
+  @Subscription(() => AgentChatEventDTO)
   async onAgentChatEvent(
-    @Args('threadId', { type: () => UUIDScalarType }) threadId: string,
-    @AuthWorkspace() workspace: WorkspaceEntity,
-    @AuthUserWorkspaceId() userWorkspaceId: string,
+    @Args() source: AgentChatEventInput,
+    @AuthWorkspace()
+    workspace: Pick<FlatWorkspace, 'id' | 'workspaceCustomApplicationId'>,
+    @AuthApplication({ allowUndefined: true })
+    callerApplication: ApplicationCallerOperation['callingApplication'],
+    @AuthWorkspaceMemberId() workspaceMemberId: string | undefined,
   ) {
-    const thread = await this.threadRepository.findOne(workspace.id, {
-      where: { id: threadId, userWorkspaceId },
-      select: ['id'],
-    });
-
-    if (!isDefined(thread)) {
-      throw new AiException(
-        'Thread not found',
-        AiExceptionCode.THREAD_NOT_FOUND,
-      );
-    }
-
-    const iterator = await this.subscriptionService.subscribeToAgentChat({
-      workspaceId: workspace.id,
-      threadId,
-    });
-
-    const keepalivePayload = {
-      onAgentChatEvent: {
-        threadId,
-        event: { type: 'keepalive' as const },
+    let channel: AgentChatChannel = { kind: 'thread', channelId: '' };
+    const authorize = createSubscriptionAuthorization({
+      check: async () => {
+        channel = await this.conversationAccessService
+          .resolveReadableChannelOrThrow({
+            workspace,
+            callerApplication,
+            workspaceMemberId,
+            source,
+          })
+          .catch(aiGraphqlApiExceptionHandler);
       },
-    };
+      maxAgeMs: AGENT_CHAT_KEEPALIVE_INTERVAL_MS,
+    });
 
-    return wrapAsyncIteratorWithLifecycle(iterator, {
-      initialValue: keepalivePayload,
-      onHeartbeat: async () => {
-        await this.subscriptionService.publishToAgentChat({
+    await authorize();
+
+    const { kind, channelId } = channel;
+    const threadId = kind === 'thread' ? channelId : null;
+    const filterVisibleEvent = isDefined(threadId)
+      ? this.conversationAccessService.createLiveEventFilter({
           workspaceId: workspace.id,
           threadId,
-          payload: keepalivePayload,
-        });
+          workspaceMemberId,
+          applicationId: callerApplication?.id,
+        })
+      : null;
 
-        return true;
-      },
-      heartbeatIntervalMs: AGENT_CHAT_KEEPALIVE_INTERVAL_MS,
+    const iterator = filterMapAsyncIterator(
+      await this.subscriptionService.subscribeToAgentChat<AgentChatEventPayload>(
+        { workspaceId: workspace.id, threadId: channelId },
+      ),
+      async ({ onAgentChatEvent: { event } }) => ({
+        onAgentChatEvent: {
+          threadId,
+          event: isDefined(filterVisibleEvent)
+            ? await filterVisibleEvent(event)
+            : event,
+        },
+      }),
+    );
+
+    const keepalivePayload: AgentChatEventPayload = {
+      onAgentChatEvent: { threadId, event: { type: 'keepalive' } },
+    };
+
+    let lastReapCheckAt = 0;
+
+    return withAsyncIteratorAuthorization({
+      iterator: wrapAsyncIteratorWithLifecycle(() => iterator, {
+        initialValue: keepalivePayload,
+        heartbeatErrorBehavior: 'close',
+        onHeartbeat: async () => {
+          await authorize(true);
+          if (
+            isDefined(threadId) &&
+            Date.now() - lastReapCheckAt >=
+              AGENT_CHAT_STREAM_REAP_CHECK_INTERVAL_MS
+          ) {
+            lastReapCheckAt = Date.now();
+            await this.reapWatchedStreamIfDead(workspace.id, threadId);
+          }
+
+          await this.subscriptionService.publishToAgentChat({
+            workspaceId: workspace.id,
+            threadId: channelId,
+            payload: keepalivePayload,
+          });
+
+          return true;
+        },
+        heartbeatIntervalMs: AGENT_CHAT_KEEPALIVE_INTERVAL_MS,
+      }),
+      authorize,
     });
+  }
+
+  private async reapWatchedStreamIfDead(
+    workspaceId: string,
+    threadId: string,
+  ): Promise<void> {
+    const thread = await this.threadRepository
+      .findOne(workspaceId, {
+        where: { id: threadId },
+        select: ['id', 'activeStreamId'],
+      })
+      .catch(() => null);
+
+    if (!isDefined(thread)) {
+      return;
+    }
+
+    await this.streamRecoveryService
+      .reapDeadStream({ thread, workspaceId })
+      .catch(() => {});
   }
 }

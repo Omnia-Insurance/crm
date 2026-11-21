@@ -1,15 +1,21 @@
-import { type ObjectLiteral, type Repository } from 'typeorm';
+import { type ObjectRecord } from 'twenty-shared/types';
+import { isDefined } from 'twenty-shared/utils';
 
+import { resolveImportRelations } from 'src/engine/core-modules/import-job/utils/resolve-import-relations.util';
 import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
-
-import { resolveImportRelations } from '../resolve-import-relations.util';
+import {
+  PermissionsException,
+  PermissionsExceptionCode,
+} from 'src/engine/permissions/permissions.exception';
+import { type WorkspaceRepository } from 'src/engine/twenty-orm/repository/workspace-repository';
 
 type QueryBuilderOptions = {
   manyRecords?: Record<string, unknown>[];
-  rawPhoneRecords?: Record<string, unknown>[];
-  rawEmailRecords?: Record<string, unknown>[];
+  phoneIndexRecords?: Record<string, unknown>[];
+  emailIndexRecords?: Record<string, unknown>[];
+  indexQueryError?: Error;
 };
 
 type MockQueryBuilder = {
@@ -18,14 +24,15 @@ type MockQueryBuilder = {
   andWhere: jest.MockedFunction<() => MockQueryBuilder>;
   limit: jest.MockedFunction<() => MockQueryBuilder>;
   getMany: jest.MockedFunction<() => Promise<Record<string, unknown>[]>>;
-  getRawMany: jest.MockedFunction<() => Promise<Record<string, unknown>[]>>;
 };
 
+// The phone and email indexes select explicit columns; every other query reads whole records
 const makeRepository = ({
   manyRecords = [],
-  rawPhoneRecords = [],
-  rawEmailRecords = [],
-}: QueryBuilderOptions): Repository<ObjectLiteral> => {
+  phoneIndexRecords = [],
+  emailIndexRecords = [],
+  indexQueryError,
+}: QueryBuilderOptions): WorkspaceRepository<ObjectRecord> => {
   const createQueryBuilder = jest.fn(() => {
     let selectedColumns: string[] = [];
 
@@ -38,20 +45,25 @@ const makeRepository = ({
       where: jest.fn(() => queryBuilder),
       andWhere: jest.fn(() => queryBuilder),
       limit: jest.fn(() => queryBuilder),
-      getMany: jest.fn(async () => manyRecords),
-      getRawMany: jest.fn(async () =>
-        selectedColumns.some((column) =>
-          column.includes('phonesPrimaryPhoneNumber'),
-        )
-          ? rawPhoneRecords
-          : rawEmailRecords,
-      ),
+      getMany: jest.fn(async () => {
+        if (selectedColumns.length === 0) {
+          return manyRecords;
+        }
+
+        if (isDefined(indexQueryError)) {
+          throw indexQueryError;
+        }
+
+        return selectedColumns.includes('phonesPrimaryPhoneNumber')
+          ? phoneIndexRecords
+          : emailIndexRecords;
+      }),
     };
 
     return queryBuilder;
   });
 
-  return { createQueryBuilder } as unknown as Repository<ObjectLiteral>;
+  return { createQueryBuilder } as unknown as WorkspaceRepository<ObjectRecord>;
 };
 
 const objectMaps = {
@@ -100,23 +112,23 @@ describe('resolveImportRelations', () => {
       manyRecords: [
         {
           id: 'person-1',
-          name: { firstName: 'Thomas', lastName: 'Anderson' },
-          phones: { primaryPhoneNumber: '8649325438' },
-          emails: { primaryEmail: 'cheetchanderson238@gmail.com' },
+          name: { firstName: 'Jordan', lastName: 'Testlead' },
+          phones: { primaryPhoneNumber: '2025550187' },
+          emails: { primaryEmail: 'jordan.testlead@example.com' },
           addressCustom: {},
           dateOfBirth: null,
         },
       ],
-      rawPhoneRecords: [
+      phoneIndexRecords: [
         {
           id: 'person-1',
-          phonesPrimaryPhoneNumber: '8649325438',
+          phonesPrimaryPhoneNumber: '2025550187',
         },
       ],
-      rawEmailRecords: [
+      emailIndexRecords: [
         {
           id: 'person-1',
-          emailsPrimaryEmail: 'cheetchanderson238@gmail.com',
+          emailsPrimaryEmail: 'jordan.testlead@example.com',
         },
       ],
     });
@@ -125,15 +137,15 @@ describe('resolveImportRelations', () => {
       [
         {
           id: 'policy-1',
-          'lead.name.firstName': 'Thomas',
-          'lead.name.lastName': 'Anderson',
-          'lead.dateOfBirth': '1971-12-10',
-          'lead.phones.primaryPhoneNumber': '8649325438',
-          'lead.emails.primaryEmail': 'cheetchanderson238@gmail.com',
-          'lead.addressCustom.addressStreet1': '507 JOHNSON ST',
-          'lead.addressCustom.addressCity': 'ANDERSON',
-          'lead.addressCustom.addressState': 'SC',
-          'lead.addressCustom.addressPostcode': '29624',
+          'lead.name.firstName': 'Jordan',
+          'lead.name.lastName': 'Testlead',
+          'lead.dateOfBirth': '1980-01-01',
+          'lead.phones.primaryPhoneNumber': '2025550187',
+          'lead.emails.primaryEmail': 'jordan.testlead@example.com',
+          'lead.addressCustom.addressStreet1': '100 SAMPLE ST',
+          'lead.addressCustom.addressCity': 'TESTVILLE',
+          'lead.addressCustom.addressState': 'TX',
+          'lead.addressCustom.addressPostcode': '12345',
         },
       ],
       [
@@ -164,12 +176,12 @@ describe('resolveImportRelations', () => {
         recordId: 'person-1',
         objectNameSingular: 'person',
         fields: {
-          dateOfBirth: '1971-12-10',
+          dateOfBirth: '1980-01-01',
           addressCustom: {
-            addressStreet1: '507 JOHNSON ST',
-            addressCity: 'ANDERSON',
-            addressState: 'SC',
-            addressPostcode: '29624',
+            addressStreet1: '100 SAMPLE ST',
+            addressCity: 'TESTVILLE',
+            addressState: 'TX',
+            addressPostcode: '12345',
           },
         },
         sourceRowIndices: [0],
@@ -266,21 +278,21 @@ describe('resolveImportRelations', () => {
       manyRecords: [
         {
           id: commissionLeadId,
-          name: { firstName: 'Thomas', lastName: 'Anderson' },
-          phones: { primaryPhoneNumber: '8649325438' },
-          emails: { primaryEmail: 'cheetchanderson238@gmail.com' },
+          name: { firstName: 'Jordan', lastName: 'Testlead' },
+          phones: { primaryPhoneNumber: '2025550187' },
+          emails: { primaryEmail: 'jordan.testlead@example.com' },
         },
       ],
-      rawPhoneRecords: [
+      phoneIndexRecords: [
         {
           id: commissionLeadId,
-          phonesPrimaryPhoneNumber: '8649325438',
+          phonesPrimaryPhoneNumber: '2025550187',
         },
       ],
-      rawEmailRecords: [
+      emailIndexRecords: [
         {
           id: commissionLeadId,
-          emailsPrimaryEmail: 'cheetchanderson238@gmail.com',
+          emailsPrimaryEmail: 'jordan.testlead@example.com',
         },
       ],
     });
@@ -372,5 +384,131 @@ describe('resolveImportRelations', () => {
         policyId: commissionPolicyId,
       },
     ]);
+  });
+
+  // Updates check edit permission on every column they send, so a requester whose role locks policy.agent
+  // could update no policy at all if each row carried the foreign keys the CSV leaves alone
+  it('keeps the foreign keys the CSV does not change out of an existing record row', async () => {
+    const agentId = '44444444-4444-4444-8444-444444444444';
+    const carrierId = '55555555-5555-4555-8555-555555555555';
+    const leadId = '66666666-6666-4666-8666-666666666666';
+    const mainRepository = makeRepository({
+      manyRecords: [{ id: 'policy-1', agentId, carrierId, leadId }],
+    });
+    const carrierRepository = makeRepository({
+      manyRecords: [{ id: carrierId, name: 'Ambetter' }],
+    });
+
+    const policyObjectMaps = {
+      byUniversalIdentifier: {
+        policy: { id: 'policy-object-id', nameSingular: 'policy' },
+        agentProfile: {
+          id: 'agent-profile-object-id',
+          nameSingular: 'agentProfile',
+        },
+        carrier: { id: 'carrier-object-id', nameSingular: 'carrier' },
+        person: { id: 'person-object-id', nameSingular: 'person' },
+      },
+    } as unknown as FlatEntityMaps<FlatObjectMetadata>;
+
+    const policyFieldMaps = {
+      byUniversalIdentifier: {
+        agent: {
+          id: 'agent-field-id',
+          objectMetadataId: 'policy-object-id',
+          name: 'agent',
+          relationTargetObjectMetadataId: 'agent-profile-object-id',
+          settings: { joinColumnName: 'agentId' },
+        },
+        carrier: {
+          id: 'carrier-field-id',
+          objectMetadataId: 'policy-object-id',
+          name: 'carrier',
+          relationTargetObjectMetadataId: 'carrier-object-id',
+          settings: { joinColumnName: 'carrierId' },
+        },
+        lead: {
+          id: 'lead-field-id',
+          objectMetadataId: 'policy-object-id',
+          name: 'lead',
+          relationTargetObjectMetadataId: 'person-object-id',
+          settings: { joinColumnName: 'leadId' },
+        },
+      },
+    } as unknown as FlatEntityMaps<FlatFieldMetadata>;
+
+    const plan = await resolveImportRelations(
+      [{ id: 'policy-1', premium: 120, 'carrier.id': carrierId }],
+      [
+        {
+          relationFieldName: 'agent',
+          behavior: 'LOOKUP_ASSIGN',
+          onNotFound: 'ERROR',
+        },
+        {
+          relationFieldName: 'carrier',
+          behavior: 'LOOKUP_ASSIGN',
+          onNotFound: 'ERROR',
+        },
+        {
+          relationFieldName: 'lead',
+          behavior: 'SMART_UPDATE',
+          onNotFound: 'CREATE',
+          uniqueConstraintFields: ['phones'],
+        },
+      ],
+      'policy',
+      policyObjectMaps,
+      policyFieldMaps,
+      async (objectName) => {
+        if (objectName === 'policy') {
+          return mainRepository;
+        }
+
+        return objectName === 'carrier'
+          ? carrierRepository
+          : makeRepository({});
+      },
+    );
+
+    expect(plan.errors).toEqual([]);
+    expect(plan.reassignments).toEqual([]);
+    expect(plan.processedRows).toEqual([{ id: 'policy-1', premium: 120 }]);
+  });
+
+  it('fails instead of creating a duplicate when the requester cannot read the lookup fields', async () => {
+    const mainRepository = makeRepository({});
+    const personRepository = makeRepository({
+      indexQueryError: new PermissionsException(
+        'Permission denied',
+        PermissionsExceptionCode.PERMISSION_DENIED,
+      ),
+    });
+
+    await expect(
+      resolveImportRelations(
+        [
+          {
+            id: 'policy-1',
+            'lead.name.firstName': 'Jordan',
+            'lead.name.lastName': 'Testlead',
+            'lead.phones.primaryPhoneNumber': '2025550187',
+          },
+        ],
+        [
+          {
+            relationFieldName: 'lead',
+            behavior: 'SMART_UPDATE',
+            onNotFound: 'CREATE',
+            uniqueConstraintFields: ['phones'],
+          },
+        ],
+        'policy',
+        objectMaps,
+        fieldMaps,
+        async (objectName) =>
+          objectName === 'policy' ? mainRepository : personRepository,
+      ),
+    ).rejects.toBeInstanceOf(PermissionsException);
   });
 });

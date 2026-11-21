@@ -15,6 +15,8 @@ import { type FailedFlatEntityValidation } from 'src/engine/workspace-manager/wo
 import { getEmptyFlatEntityValidationError } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/builders/utils/get-flat-entity-validation-error.util';
 import { type FlatEntityUpdateValidationArgs } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/types/universal-flat-entity-update-validation-args.type';
 import { type UniversalFlatEntityValidationArgs } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/types/universal-flat-entity-validation-args.type';
+import { validateLogicFunctionForwardedRequestHeaders } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/utils/validate-logic-function-forwarded-request-headers.util';
+import { validateLogicFunctionServerRouteApplication } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/utils/validate-logic-function-server-route-application.util';
 
 @Injectable()
 export class FlatLogicFunctionValidatorService {
@@ -26,6 +28,7 @@ export class FlatLogicFunctionValidatorService {
     optimisticFlatEntityMapsAndRelatedFlatEntityMaps: {
       flatLogicFunctionMaps: optimisticFlatLogicFunctionMaps,
     },
+    buildOptions,
   }: FlatEntityUpdateValidationArgs<
     typeof ALL_METADATA_NAME.logicFunction
   >): FailedFlatEntityValidation<'logicFunction', 'update'> {
@@ -93,6 +96,17 @@ export class FlatLogicFunctionValidatorService {
       });
     }
 
+    validationResult.errors.push(
+      ...validateLogicFunctionForwardedRequestHeaders(flatEntityUpdate),
+      ...validateLogicFunctionServerRouteApplication({
+        applicationUniversalIdentifier:
+          existingFlatLogicFunction.applicationUniversalIdentifier,
+        serverRouteTriggerSettings: flatEntityUpdate.serverRouteTriggerSettings,
+        workspaceCustomApplicationUniversalIdentifier:
+          buildOptions.workspaceCustomApplicationUniversalIdentifier,
+      }),
+    );
+
     const mergedPrebuiltState = {
       executionMode:
         flatEntityUpdate.executionMode ??
@@ -158,6 +172,7 @@ export class FlatLogicFunctionValidatorService {
     optimisticFlatEntityMapsAndRelatedFlatEntityMaps: {
       flatLogicFunctionMaps: optimisticFlatLogicFunctionMaps,
     },
+    buildOptions,
   }: UniversalFlatEntityValidationArgs<
     typeof ALL_METADATA_NAME.logicFunction
   >): FailedFlatEntityValidation<'logicFunction', 'create'> {
@@ -224,6 +239,20 @@ export class FlatLogicFunctionValidatorService {
         userFriendlyMessage: msg`Handler name is invalid`,
       });
     }
+
+    validationResult.errors.push(
+      ...validateLogicFunctionForwardedRequestHeaders(
+        flatLogicFunctionToValidate,
+      ),
+      ...validateLogicFunctionServerRouteApplication({
+        applicationUniversalIdentifier:
+          flatLogicFunctionToValidate.applicationUniversalIdentifier,
+        serverRouteTriggerSettings:
+          flatLogicFunctionToValidate.serverRouteTriggerSettings,
+        workspaceCustomApplicationUniversalIdentifier:
+          buildOptions.workspaceCustomApplicationUniversalIdentifier,
+      }),
+    );
 
     if (
       flatLogicFunctionToValidate.executionMode ===

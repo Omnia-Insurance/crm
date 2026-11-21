@@ -3,11 +3,14 @@ import { useIsThirdPartyApplication } from '@/applications/hooks/useIsThirdParty
 import { logicFunctionsSelector } from '@/logic-functions/states/logicFunctionsSelector';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { type WorkflowDiagramStepNodeData } from '@/workflow/workflow-diagram/types/WorkflowDiagram';
-import { capitalize, isDefined } from 'twenty-shared/utils';
+import { isDefined } from 'twenty-shared/utils';
+import { getActionHeaderTypeOrThrow } from '@/workflow/workflow-steps/workflow-actions/utils/getActionHeaderTypeOrThrow';
+import { useLingui } from '@lingui/react/macro';
 
 export const useWorkflowNodeLabel = (
   data: WorkflowDiagramStepNodeData,
 ): string => {
+  const { t } = useLingui();
   const logicFunctions = useAtomStateValue(logicFunctionsSelector);
 
   const logicFunctionId =
@@ -27,5 +30,7 @@ export const useWorkflowNodeLabel = (
     return applicationChipData.name;
   }
 
-  return capitalize(data.nodeType);
+  return data.nodeType === 'action'
+    ? t(getActionHeaderTypeOrThrow(data.actionType))
+    : t`Trigger`;
 };

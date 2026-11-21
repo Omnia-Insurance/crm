@@ -16,7 +16,6 @@ export const useCreateEmptyRecordFilterFromFieldMetadataItem = () => {
 
     const availableOperandsForFilter = getRecordFilterOperands({
       filterType,
-      relationType: fieldMetadataItem.relation?.type,
     });
 
     const defaultOperand = availableOperandsForFilter[0];

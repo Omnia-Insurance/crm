@@ -3,14 +3,10 @@ import { Extension, type Editor, type Range } from '@tiptap/core';
 import Suggestion, { type SuggestionOptions } from '@tiptap/suggestion';
 import { type IconComponent } from 'twenty-ui/icon';
 
-import {
-  DEFAULT_SLASH_COMMANDS,
-  type SlashCommandConfig,
-} from '@/advanced-text-editor/extensions/slash-command/DefaultSlashCommands';
-import {
-  SlashCommandMenu,
-  type SlashCommandMenuProps,
-} from '@/advanced-text-editor/extensions/slash-command/SlashCommandMenu';
+import { DEFAULT_SLASH_COMMANDS } from '@/advanced-text-editor/extensions/slash-command/DefaultSlashCommands';
+import { SlashCommandMenu } from '@/advanced-text-editor/extensions/slash-command/SlashCommandMenu';
+import { type SlashCommandMenuProps } from '@/advanced-text-editor/extensions/slash-command/types/SlashCommandMenuProps';
+import { type SlashCommandConfig } from '@/advanced-text-editor/extensions/slash-command/types/SlashCommandConfig';
 import { createSuggestionRenderLifecycle } from '@/ui/suggestion/components/createSuggestionRenderLifecycle';
 
 export type SlashCommandItem = {

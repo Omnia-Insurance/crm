@@ -84,17 +84,17 @@ const createCommand = ({
   const carrierRepo = {
     findOne: jest.fn(async () => carrier),
   };
-  const globalWorkspaceOrmManager = {
+  const workspaceOrmManager = {
     executeInWorkspaceContext: jest.fn(
       async (callback: () => Promise<unknown>) => callback(),
     ),
-    getRepository: jest.fn(async (_workspaceId: string, objectName: string) =>
+    getRepositoryWithoutPermissionChecks: jest.fn((objectName: string) =>
       objectName === 'carrierConfig' ? carrierConfigRepo : carrierRepo,
     ),
   };
   const command = new SeedCarrierConfigCommand(
     {} as never,
-    globalWorkspaceOrmManager as never,
+    workspaceOrmManager as never,
   );
   const errorSpy = jest
     .spyOn((command as any).logger, 'error')

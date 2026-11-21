@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
 import { isDefined } from 'twenty-shared/utils';
-import { ILike, IsNull } from 'typeorm';
 
 import { ApplicationService } from 'src/engine/core-modules/application/application.service';
 import { type CreateAgentInput } from 'src/engine/metadata-modules/ai/ai-agent/dtos/create-agent.input';
@@ -9,8 +8,10 @@ import { type UpdateAgentInput } from 'src/engine/metadata-modules/ai/ai-agent/d
 import { fromCreateAgentInputToFlatAgent } from 'src/engine/metadata-modules/ai/ai-agent/utils/from-create-agent-input-to-flat-agent.util';
 import { fromUpdateAgentInputToFlatAgentToUpdate } from 'src/engine/metadata-modules/ai/ai-agent/utils/from-update-agent-input-to-flat-agent-to-update.util';
 import { FlatAgentWithRoleId } from 'src/engine/metadata-modules/flat-agent/types/flat-agent.type';
+import { resolveEffectiveAgent } from 'src/engine/metadata-modules/flat-agent/utils/resolve-effective-agent.util';
 import { findFlatEntityByIdInFlatEntityMapsOrThrow } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps-or-throw.util';
 import { findFlatEntityByIdInFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps.util';
+import { findManyFlatEntityByIdInFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/utils/find-many-flat-entity-by-id-in-flat-entity-maps.util';
 import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
 import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
@@ -47,33 +48,10 @@ export class AgentService {
         const roleId = flatRoleTargetByAgentIdMaps[flatAgent.id]?.roleId;
 
         return {
-          ...flatAgent,
+          ...resolveEffectiveAgent(flatAgent),
           roleId: roleId ?? null,
         };
       });
-  }
-
-  async findOneAgentByName({
-    name,
-    workspaceId,
-  }: {
-    workspaceId: string;
-    name: string;
-  }): Promise<AgentEntity> {
-    const agent = await this.agentRepository.findOne(workspaceId, {
-      where: { name },
-    });
-
-    if (!agent) {
-      const identifier = `name "${name}"`;
-
-      throw new AiException(
-        `Agent with ${identifier} not found`,
-        AiExceptionCode.AGENT_NOT_FOUND,
-      );
-    }
-
-    return agent;
   }
 
   async findOneAgentById({
@@ -100,11 +78,11 @@ export class AgentService {
 
     const roleId = flatRoleTargetByAgentIdMaps[flatAgent.id]?.roleId;
 
-    return { ...flatAgent, roleId: roleId ?? null };
+    return { ...resolveEffectiveAgent(flatAgent), roleId: roleId ?? null };
   }
 
   async createOneAgent(
-    input: CreateAgentInput & { isCustom: boolean },
+    { isSystem = false, ...input }: CreateAgentInput & { isSystem?: boolean },
     workspaceId: string,
   ): Promise<FlatAgentWithRoleId> {
     const { flatApplicationMaps, flatRoleMaps } =
@@ -130,6 +108,7 @@ export class AgentService {
     const { flatAgentToCreate, flatRoleTargetToCreate } =
       fromCreateAgentInputToFlatAgent({
         createAgentInput: input,
+        isSystem,
         workspaceId,
         flatApplication: resolvedFlatApplication,
         flatRoleMaps,
@@ -177,7 +156,7 @@ export class AgentService {
     });
 
     return {
-      ...createdAgent,
+      ...resolveEffectiveAgent(createdAgent),
       roleId: flatRoleTargetToCreate?.roleId ?? null,
     };
   }
@@ -213,6 +192,10 @@ export class AgentService {
       flatAgentMaps,
       flatRoleTargetByAgentIdMaps,
       flatRoleMaps,
+      callerApplicationUniversalIdentifier:
+        workspaceCustomFlatApplication.universalIdentifier,
+      workspaceCustomApplicationUniversalIdentifier:
+        workspaceCustomFlatApplication.universalIdentifier,
     });
 
     const validateAndBuildResult =
@@ -267,7 +250,7 @@ export class AgentService {
       recomputedFlatRoleTargetByAgentIdMaps[flatAgentToUpdate.id];
 
     return {
-      ...updatedAgent,
+      ...resolveEffectiveAgent(updatedAgent),
       roleId: existingRoleTarget?.roleId ?? null,
     };
   }
@@ -313,11 +296,15 @@ export class AgentService {
         },
       );
 
-    const { flatAgentMaps, flatRoleTargetByAgentIdMaps } =
-      await this.workspaceCacheService.getOrRecompute(workspaceId, [
-        'flatAgentMaps',
-        'flatRoleTargetByAgentIdMaps',
-      ]);
+    const {
+      flatAgentMaps,
+      flatRoleTargetByAgentIdMaps,
+      flatNavigationMenuItemMaps,
+    } = await this.workspaceCacheService.getOrRecompute(workspaceId, [
+      'flatAgentMaps',
+      'flatRoleTargetByAgentIdMaps',
+      'flatNavigationMenuItemMaps',
+    ]);
 
     const agentsToDelete = ids
       .map((id) =>
@@ -336,6 +323,13 @@ export class AgentService {
       .map((agent) => flatRoleTargetByAgentIdMaps[agent.id])
       .filter(isDefined);
 
+    const navigationMenuItemsToDelete = agentsToDelete.flatMap((agent) =>
+      findManyFlatEntityByIdInFlatEntityMaps({
+        flatEntityIds: agent.navigationMenuItemIds,
+        flatEntityMaps: flatNavigationMenuItemMaps,
+      }),
+    );
+
     const validateAndBuildResult =
       await this.workspaceMigrationValidateBuildAndRunService.validateBuildAndRunWorkspaceMigration(
         {
@@ -348,6 +342,11 @@ export class AgentService {
             roleTarget: {
               flatEntityToCreate: [],
               flatEntityToDelete: roleTargetsToDelete,
+              flatEntityToUpdate: [],
+            },
+            navigationMenuItem: {
+              flatEntityToCreate: [],
+              flatEntityToDelete: navigationMenuItemsToDelete,
               flatEntityToUpdate: [],
             },
           },
@@ -366,29 +365,8 @@ export class AgentService {
     }
 
     return agentsToDelete.map((agent) => ({
-      ...agent,
+      ...resolveEffectiveAgent(agent),
       roleId: flatRoleTargetByAgentIdMaps[agent.id]?.roleId ?? null,
     }));
-  }
-
-  async searchAgents(
-    query: string,
-    workspaceId: string,
-    options: { limit: number } = { limit: 2 },
-  ): Promise<AgentEntity[]> {
-    const queryLower = query.toLowerCase();
-
-    return this.agentRepository.find(workspaceId, {
-      where: [
-        { deletedAt: IsNull(), name: ILike(`%${queryLower}%`) },
-        {
-          deletedAt: IsNull(),
-          description: ILike(`%${queryLower}%`),
-        },
-        { deletedAt: IsNull(), label: ILike(`%${queryLower}%`) },
-      ],
-      take: options.limit,
-      order: { name: 'ASC' },
-    });
   }
 }

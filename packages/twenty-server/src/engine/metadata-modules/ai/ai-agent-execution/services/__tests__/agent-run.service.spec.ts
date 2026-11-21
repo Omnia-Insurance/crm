@@ -1,145 +1,175 @@
-import { Test, type TestingModule } from '@nestjs/testing';
+import { type AgentResponseFormat } from 'twenty-shared/ai';
 
-import { type FlatWorkspace } from 'src/engine/core-modules/workspace/types/flat-workspace.type';
-import { ApplicationService } from 'src/engine/core-modules/application/application.service';
-import { AgentAsyncExecutorService } from 'src/engine/metadata-modules/ai/ai-agent-execution/services/agent-async-executor.service';
+import { AgentRunCallerContextService } from 'src/engine/metadata-modules/ai/ai-agent-execution/services/agent-run-caller-context.service';
 import { AgentRunService } from 'src/engine/metadata-modules/ai/ai-agent-execution/services/agent-run.service';
-import { AgentEntity } from 'src/engine/metadata-modules/ai/ai-agent/entities/agent.entity';
-import { getWorkspaceScopedRepositoryToken } from 'src/engine/twenty-orm/workspace-scoped-repository/get-workspace-scoped-repository-token.util';
+import {
+  AiException,
+  AiExceptionCode,
+} from 'src/engine/metadata-modules/ai/ai.exception';
+
+const WORKSPACE_ID = 'workspace-id';
+const APPLICATION_ID = 'application-id';
+const AGENT_ID = 'agent-id';
+const AGENT_UNIVERSAL_IDENTIFIER = 'agent-universal-identifier';
+const WORKSPACE_CUSTOM_APPLICATION_UNIVERSAL_IDENTIFIER =
+  '00000000-0000-4000-8000-000000000002';
+
+const APPLICATION = {
+  id: APPLICATION_ID,
+  name: 'Research app',
+  defaultRoleId: null,
+};
+
+const JSON_RESPONSE_FORMAT: AgentResponseFormat = {
+  type: 'json',
+  schema: {
+    type: 'object',
+    properties: { summary: { type: 'string' } },
+  },
+};
+
+const buildService = (overrides: Record<string, unknown>) => {
+  const agentRow = {
+    id: AGENT_ID,
+    universalIdentifier: AGENT_UNIVERSAL_IDENTIFIER,
+    applicationId: APPLICATION_ID,
+    name: 'researcher',
+    label: 'Researcher',
+    responseFormat: { type: 'text' },
+    isActive: true,
+    triggers: [],
+    overrides: {
+      [WORKSPACE_CUSTOM_APPLICATION_UNIVERSAL_IDENTIFIER]: overrides,
+    },
+  };
+  const agentRepository = {
+    findOne: jest.fn().mockResolvedValue(agentRow),
+  };
+  const applicationLookupService = {
+    findById: jest.fn().mockResolvedValue(APPLICATION),
+  };
+  const agentActorContextService = {
+    buildApplicationAgentContext: jest.fn().mockResolvedValue({
+      application: APPLICATION,
+      authContext: { type: 'application', application: APPLICATION },
+      agentRoleId: undefined,
+    }),
+  };
+  const agentRunnerService = { start: jest.fn().mockResolvedValue(undefined) };
+
+  const service = new AgentRunService(
+    agentActorContextService as never,
+    agentRunnerService as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    new AgentRunCallerContextService(
+      agentActorContextService as never,
+      {} as never,
+    ),
+    {} as never,
+    applicationLookupService as never,
+    agentRepository as never,
+  );
+
+  return { service, agentRunnerService };
+};
+
+const runAgent = (service: AgentRunService) =>
+  service.run({
+    workspace: { id: WORKSPACE_ID } as never,
+    requestUserWorkspaceId: null,
+    requestWorkspaceMemberId: null,
+    callerApplication: APPLICATION as never,
+    input: {
+      agentUniversalIdentifier: AGENT_UNIVERSAL_IDENTIFIER,
+      prompt: 'Summarize the market',
+      waitForCompletion: false,
+    },
+  });
 
 describe('AgentRunService', () => {
-  let service: AgentRunService;
-  let agentRepository: { findOne: jest.Mock };
-  let applicationService: { findById: jest.Mock };
-  let agentAsyncExecutorService: { executeAgent: jest.Mock };
+  describe('buildExecutionContext', () => {
+    it('reads the thread as the calling application when a run resumes', async () => {
+      const { service } = buildService({});
 
-  const workspace = { id: 'workspace-1' } as FlatWorkspace;
-
-  const agent = { id: 'agent-1', applicationId: 'app-1' } as AgentEntity;
-
-  const input = {
-    agentUniversalIdentifier: 'agent-uid',
-    prompt: 'Enrich record 123',
-  };
-
-  beforeEach(async () => {
-    agentRepository = { findOne: jest.fn().mockResolvedValue(agent) };
-    applicationService = {
-      findById: jest.fn().mockResolvedValue({ id: 'app-1' }),
-    };
-    agentAsyncExecutorService = {
-      executeAgent: jest.fn().mockResolvedValue({
-        result: { response: 'done' },
-        hasNoMoreAvailableCredits: false,
-      }),
-    };
-
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        AgentRunService,
-        {
-          provide: AgentAsyncExecutorService,
-          useValue: agentAsyncExecutorService,
+      const executionContext = await service.buildExecutionContext({
+        workspaceId: WORKSPACE_ID,
+        caller: {
+          type: 'AGENT_API_RUN',
+          ref: {
+            agentId: AGENT_ID,
+            runAsWorkspaceMemberId: null,
+            requestUserWorkspaceId: null,
+            createdBy: {
+              source: 'APPLICATION',
+              name: APPLICATION.name,
+              workspaceMemberId: null,
+              context: { applicationId: APPLICATION_ID },
+            },
+          },
         },
-        {
-          provide: ApplicationService,
-          useValue: applicationService,
-        },
-        {
-          provide: getWorkspaceScopedRepositoryToken(AgentEntity),
-          useValue: agentRepository,
-        },
-      ],
-    }).compile();
+      });
 
-    service = module.get(AgentRunService);
-  });
-
-  it('runs the agent found by its universal identifier and returns a success result', async () => {
-    const result = await service.run({
-      workspace,
-      requestUserWorkspaceId: 'user-workspace-1',
-      input,
-    });
-
-    expect(agentRepository.findOne).toHaveBeenCalledWith(workspace.id, {
-      where: {
-        universalIdentifier: input.agentUniversalIdentifier,
-      },
-    });
-    expect(applicationService.findById).toHaveBeenCalledWith(
-      agent.applicationId,
-    );
-    expect(result).toEqual({
-      result: { response: 'done' },
-      error: null,
-      success: true,
+      expect(executionContext.conversationViewer).toEqual({
+        workspaceMemberId: undefined,
+        applicationId: APPLICATION_ID,
+      });
     });
   });
 
-  it('builds the application auth context from the agent application', async () => {
-    await service.run({
-      workspace,
-      requestUserWorkspaceId: 'user-workspace-1',
-      input,
+  describe('run', () => {
+    it('runs with the overridden label and response format', async () => {
+      const { service, agentRunnerService } = buildService({
+        label: 'Market researcher',
+        responseFormat: JSON_RESPONSE_FORMAT,
+      });
+
+      await runAgent(service);
+
+      expect(agentRunnerService.start).toHaveBeenCalledWith(
+        expect.objectContaining({
+          spec: expect.objectContaining({
+            agentId: AGENT_ID,
+            title: 'Market researcher',
+          }),
+        }),
+      );
     });
 
-    expect(agentAsyncExecutorService.executeAgent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        authContext: {
-          type: 'application',
-          workspace,
-          application: { id: 'app-1' },
-        },
-      }),
-    );
-  });
+    it('returns the id of the turn the run opens', async () => {
+      const { service, agentRunnerService } = buildService({});
 
-  it('returns an error result when the workspace ran out of credits', async () => {
-    agentAsyncExecutorService.executeAgent.mockResolvedValue({
-      result: { response: 'partial' },
-      hasNoMoreAvailableCredits: true,
+      const { runId } = await runAgent(service);
+
+      expect(agentRunnerService.start).toHaveBeenCalledWith(
+        expect.objectContaining({
+          turnId: runId,
+        }),
+      );
     });
 
-    const result = await service.run({
-      workspace,
-      requestUserWorkspaceId: 'user-workspace-1',
-      input,
+    it('rejects an overridden response format without output fields', async () => {
+      const { service, agentRunnerService } = buildService({
+        responseFormat: { type: 'json', schema: { type: 'object' } },
+      });
+
+      await expect(runAgent(service)).rejects.toMatchObject(
+        new AiException(
+          'This agent has no output fields. Add at least one output field to its response format.',
+          AiExceptionCode.INVALID_AGENT_INPUT,
+        ),
+      );
+      expect(agentRunnerService.start).not.toHaveBeenCalled();
     });
 
-    expect(result).toEqual({
-      result: null,
-      error: 'AI agent stopped: no more available credits.',
-      success: false,
+    it('refuses an agent archived through its overrides', async () => {
+      const { service } = buildService({ isActive: false });
+
+      await expect(runAgent(service)).rejects.toMatchObject({
+        code: AiExceptionCode.AGENT_IS_INACTIVE,
+      });
     });
-  });
-
-  it('throws when no agent matches the identifier', async () => {
-    agentRepository.findOne.mockResolvedValue(null);
-
-    await expect(
-      service.run({
-        workspace,
-        requestUserWorkspaceId: null,
-        input,
-      }),
-    ).rejects.toThrow(/not found/);
-
-    expect(applicationService.findById).not.toHaveBeenCalled();
-    expect(agentAsyncExecutorService.executeAgent).not.toHaveBeenCalled();
-  });
-
-  it("throws when the agent's application cannot be found", async () => {
-    applicationService.findById.mockResolvedValue(null);
-
-    await expect(
-      service.run({
-        workspace,
-        requestUserWorkspaceId: null,
-        input,
-      }),
-    ).rejects.toThrow(/not found/);
-
-    expect(agentAsyncExecutorService.executeAgent).not.toHaveBeenCalled();
   });
 });

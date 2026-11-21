@@ -2,7 +2,7 @@ import { FieldMetadataType } from '@/types/FieldMetadataType';
 import {
   type FormOutputSchema,
   type RecordOutputSchemaV2,
-} from '../../types/output-schema.type';
+} from '../../types/OutputSchema';
 import { searchVariableInOutputSchema } from '../search-variable-in-output-schema';
 
 const searchVariableThroughFormOutputSchema = ({
@@ -60,28 +60,31 @@ describe('searchVariableInOutputSchema - form output schema', () => {
   };
 
   const mockFormSchema: FormOutputSchema = {
-    // Simple text field
     companyName: {
       isLeaf: true,
       type: FieldMetadataType.TEXT,
       label: 'Company Name',
       value: 'Acme Corp',
     },
-    // Number field
     revenue: {
       isLeaf: true,
       type: FieldMetadataType.NUMBER,
       label: 'Annual Revenue',
       value: 1000000,
     },
-    // Email field
     contactEmail: {
       isLeaf: true,
       type: FieldMetadataType.EMAILS,
       label: 'Contact Email',
       value: 'contact@acme.com',
     },
-    // Record field (nested record)
+    status: {
+      isLeaf: true,
+      type: FieldMetadataType.SELECT,
+      label: 'Status',
+      value: 'OPEN',
+      fieldMetadataId: 'status-field-metadata-id',
+    },
     contactPerson: {
       isLeaf: false,
       label: 'Contact Person',
@@ -131,6 +134,22 @@ describe('searchVariableInOutputSchema - form output schema', () => {
       variableLabel: 'Contact Email',
       variablePathLabel: 'Company Form > Contact Email',
       variableType: FieldMetadataType.EMAILS,
+    });
+  });
+
+  it('should return the selected field metadata id of a select field', () => {
+    const result = searchVariableThroughFormOutputSchema({
+      stepName: 'Company Form',
+      formOutputSchema: mockFormSchema,
+      rawVariableName: '{{step1.status}}',
+      isFullRecord: false,
+    });
+
+    expect(result).toEqual({
+      variableLabel: 'Status',
+      variablePathLabel: 'Company Form > Status',
+      variableType: FieldMetadataType.SELECT,
+      fieldMetadataId: 'status-field-metadata-id',
     });
   });
 

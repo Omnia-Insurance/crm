@@ -5,13 +5,12 @@ import { TableCell } from '@/ui/layout/table/components/TableCell';
 import { TableRow } from '@/ui/layout/table/components/TableRow';
 import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
-import { useContext } from 'react';
+import { useLingui } from '@lingui/react/macro';
 import { isDefined } from 'twenty-shared/utils';
 import { IconClockHour8 } from 'twenty-ui/icon';
-import { type SelectOption } from 'twenty-ui/input';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
-import { type OmniaObjectPermission } from '@/settings/roles/types/OmniaRoleExtensions';
+import { type SelectOption } from 'twenty-ui/primitives/input';
+import { themeCssVariables, useTheme } from 'twenty-ui/theme';
+import { type ObjectPermission } from '~/generated-metadata/graphql';
 
 const StyledTableRow = styled(TableRow)`
   align-items: center;
@@ -72,7 +71,7 @@ type SettingsRolePermissionsObjectLevelEditWindowRowProps = {
   roleId: string;
   objectMetadataItemId: string;
   isEditable: boolean;
-  settingsDraftRoleObjectPermissions: OmniaObjectPermission | undefined;
+  settingsDraftRoleObjectPermissions: ObjectPermission | undefined;
 };
 
 export const SettingsRolePermissionsObjectLevelEditWindowRow = ({
@@ -81,7 +80,8 @@ export const SettingsRolePermissionsObjectLevelEditWindowRow = ({
   isEditable,
   settingsDraftRoleObjectPermissions,
 }: SettingsRolePermissionsObjectLevelEditWindowRowProps) => {
-  const { theme } = useContext(ThemeContext);
+  const { t } = useLingui();
+  const theme = useTheme();
 
   const editWindowOptions: SelectOption<number | null>[] = [
     { value: null, label: t`No limit` },
@@ -106,24 +106,23 @@ export const SettingsRolePermissionsObjectLevelEditWindowRow = ({
 
   const roleDefault = settingsDraftRole.editWindowMinutes ?? null;
 
-  const effectiveValue = isDefined(
-    settingsDraftRoleObjectPermissions?.editWindowMinutes,
-  )
-    ? settingsDraftRoleObjectPermissions?.editWindowMinutes
-    : roleDefault;
+  const objectEditWindowMinutes =
+    settingsDraftRoleObjectPermissions?.editWindowMinutes;
 
-  const isInherited = !isDefined(
-    settingsDraftRoleObjectPermissions?.editWindowMinutes,
-  );
+  const isInherited = !isDefined(objectEditWindowMinutes);
+
+  const effectiveValue = isInherited ? roleDefault : objectEditWindowMinutes;
+
+  const roleDefaultLabel =
+    editWindowOptions.find((option) => option.value === roleDefault)?.label ??
+    t`${roleDefault} minutes`;
 
   const handleChange = (value: number | null) => {
-    const updatedPermission: OmniaObjectPermission = {
+    upsertObjectPermissionInDraftRole({
       ...settingsDraftRoleObjectPermissions,
       objectMetadataId: objectMetadataItemId,
       editWindowMinutes: value,
-    };
-
-    upsertObjectPermissionInDraftRole(updatedPermission);
+    });
   };
 
   return (
@@ -141,15 +140,12 @@ export const SettingsRolePermissionsObjectLevelEditWindowRow = ({
           {isInherited && isDefined(roleDefault) ? (
             <>
               {' · '}
-              {t`Inherited from role`} (
-              {editWindowOptions.find((o) => o.value === roleDefault)?.label ??
-                `${roleDefault} min`}
-              )
+              {t`Inherited from role (${roleDefaultLabel})`}
             </>
           ) : null}
         </StyledOverrideInfo>
       </StyledPermissionCell>
-      <StyledSelectCell onClick={(e) => e.stopPropagation()}>
+      <StyledSelectCell onClick={(event) => event.stopPropagation()}>
         <Select
           dropdownId={`edit-window-${objectMetadataItemId}`}
           options={editWindowOptions}

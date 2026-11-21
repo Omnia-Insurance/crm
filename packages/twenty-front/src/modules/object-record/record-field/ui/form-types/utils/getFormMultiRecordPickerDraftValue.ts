@@ -2,7 +2,7 @@ import {
   type RecordId,
   type Variable,
 } from '@/object-record/record-field/ui/form-types/types/RecordPickerValue';
-import { isStandaloneVariableString } from '@/workflow/utils/isStandaloneVariableString';
+import { isStandaloneVariableString } from 'twenty-shared/workflow';
 import { isArray, isNonEmptyString, isString } from '@sniptt/guards';
 import { isValidUuid } from 'twenty-shared/utils';
 
@@ -26,12 +26,7 @@ const keepRecordIdsAndVariables = (
   );
 
 export const getFormMultiRecordPickerDraftValue = (
-  defaultValue:
-    | Array<RecordId | Variable>
-    | Variable
-    | string
-    | null
-    | undefined,
+  defaultValue: unknown[] | Variable | string | null | undefined,
 ): FormMultiRecordPickerDraftValue => {
   if (isArray(defaultValue)) {
     return {

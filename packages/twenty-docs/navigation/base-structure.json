@@ -6,7 +6,7 @@
       "groups": [
         {
           "key": "welcome",
-          "label": "Welcome",
+          "label": "Getting Started",
           "pages": [
             "getting-started/introduction",
             "getting-started/key-features",
@@ -35,13 +35,12 @@
       "groups": [
         {
           "key": "userGuideOverview",
-          "label": "Overview",
+          "label": "User Guide",
           "pages": ["user-guide/introduction"]
         },
         {
           "key": "dataModel",
           "label": "Data Model",
-          "icon": "database",
           "pages": [
             "user-guide/data-model/overview",
             {
@@ -50,7 +49,8 @@
               "pages": [
                 "user-guide/data-model/capabilities/objects",
                 "user-guide/data-model/capabilities/fields",
-                "user-guide/data-model/capabilities/relation-fields"
+                "user-guide/data-model/capabilities/relation-fields",
+                "user-guide/data-model/capabilities/validation-rules"
               ]
             },
             {
@@ -70,7 +70,6 @@
         {
           "key": "dataMigration",
           "label": "Data Migration",
-          "icon": "cloud-arrow-up",
           "pages": [
             "user-guide/data-migration/overview",
             {
@@ -105,7 +104,6 @@
         {
           "key": "calendarEmails",
           "label": "Calendar & Emails",
-          "icon": "envelope",
           "pages": [
             "user-guide/calendar-emails/overview",
             {
@@ -113,6 +111,7 @@
               "label": "Reference",
               "pages": [
                 "user-guide/calendar-emails/capabilities/mailbox",
+                "user-guide/calendar-emails/capabilities/email-channels",
                 "user-guide/calendar-emails/capabilities/calendar"
               ]
             },
@@ -121,6 +120,9 @@
               "label": "How-Tos",
               "pages": [
                 "user-guide/calendar-emails/how-tos/connect-several-mailboxes-per-user",
+                "user-guide/calendar-emails/how-tos/forward-a-shared-inbox-from-microsoft-365",
+                "user-guide/calendar-emails/how-tos/forward-a-shared-inbox-from-google-workspace",
+                "user-guide/calendar-emails/how-tos/forward-a-shared-inbox-from-any-mail-provider",
                 "user-guide/calendar-emails/how-tos/limit-emails-imported",
                 "user-guide/calendar-emails/how-tos/can-i-track-email-activity-on-all-objects",
                 "user-guide/calendar-emails/how-tos/can-i-send-emails-from-twenty",
@@ -131,9 +133,26 @@
           ]
         },
         {
+          "key": "emailCampaigns",
+          "label": "Email Campaigns",
+          "pages": [
+            "user-guide/email-campaigns/overview",
+            {
+              "key": "emailCampaignsHowTos",
+              "label": "How-Tos",
+              "pages": [
+                "user-guide/email-campaigns/how-tos/set-up-a-sending-domain",
+                "user-guide/email-campaigns/how-tos/email-campaign-best-practices",
+                "user-guide/email-campaigns/how-tos/send-your-first-campaign",
+                "user-guide/email-campaigns/how-tos/create-a-campaign-with-ai",
+                "user-guide/email-campaigns/how-tos/manage-unsubscribes-and-topics"
+              ]
+            }
+          ]
+        },
+        {
           "key": "workflows",
           "label": "Workflows",
-          "icon": "bolt",
           "pages": [
             "user-guide/workflows/overview",
             {
@@ -203,7 +222,6 @@
         {
           "key": "ai",
           "label": "AI",
-          "icon": "robot",
           "pages": [
             "user-guide/ai/overview",
             {
@@ -225,7 +243,6 @@
         {
           "key": "layout",
           "label": "Layout",
-          "icon": "table-columns",
           "pages": [
             "user-guide/layout/overview",
             {
@@ -266,7 +283,6 @@
         {
           "key": "dashboards",
           "label": "Dashboards",
-          "icon": "chart-bar",
           "pages": [
             "user-guide/dashboards/overview",
             {
@@ -291,7 +307,6 @@
         {
           "key": "permissionsAccess",
           "label": "Permissions & Access",
-          "icon": "lock",
           "pages": [
             "user-guide/permissions-access/overview",
             {
@@ -312,7 +327,6 @@
         {
           "key": "billing",
           "label": "Billing",
-          "icon": "credit-card",
           "pages": [
             "user-guide/billing/overview",
             {
@@ -320,7 +334,8 @@
               "label": "Reference",
               "pages": [
                 "user-guide/billing/capabilities/pricing-plans",
-                "user-guide/billing/capabilities/credits"
+                "user-guide/billing/capabilities/credits",
+                "user-guide/billing/capabilities/usage-limits"
               ]
             },
             {
@@ -333,7 +348,6 @@
         {
           "key": "settings",
           "label": "Settings",
-          "icon": "gear",
           "pages": [
             "user-guide/settings/overview",
             {
@@ -345,13 +359,25 @@
                 "user-guide/settings/capabilities/profile-settings",
                 "user-guide/settings/capabilities/experience-settings",
                 "user-guide/settings/capabilities/domains-settings",
-                "user-guide/settings/capabilities/updates-settings"
+                "user-guide/settings/capabilities/community-settings"
               ]
             },
             {
               "key": "settingsHowTos",
               "label": "How-Tos",
               "pages": ["user-guide/settings/how-tos/settings-faq"]
+            }
+          ]
+        },
+        {
+          "key": "legal",
+          "label": "Legal",
+          "pages": [
+            "user-guide/legal/overview",
+            {
+              "key": "legalHowTos",
+              "label": "How-Tos",
+              "pages": ["user-guide/legal/how-tos/legal-faq"]
             }
           ]
         }
@@ -363,7 +389,7 @@
       "groups": [
         {
           "key": "developersOverview",
-          "label": "Overview",
+          "label": "Developers",
           "pages": ["developers/introduction"]
         },
         {
@@ -379,14 +405,28 @@
                 "developers/extend/apps/getting-started/project-structure",
                 "developers/extend/apps/getting-started/local-server",
                 "developers/extend/apps/getting-started/scaffolding",
+                "developers/extend/apps/getting-started/good-practices",
                 "developers/extend/apps/getting-started/troubleshooting"
+              ]
+            },
+            {
+              "key": "appsTutorial",
+              "label": "Tutorial",
+              "root": "developers/extend/apps/tutorials/document-generator/overview",
+              "pages": [
+                "developers/extend/apps/tutorials/document-generator/data-model",
+                "developers/extend/apps/tutorials/document-generator/generating-documents",
+                "developers/extend/apps/tutorials/document-generator/http-routes",
+                "developers/extend/apps/tutorials/document-generator/building-the-ui",
+                "developers/extend/apps/tutorials/document-generator/ai-agent",
+                "developers/extend/apps/tutorials/document-generator/publishing"
               ]
             },
             {
               "key": "appsConfig",
               "label": "Config",
+              "root": "developers/extend/apps/config/overview",
               "pages": [
-                "developers/extend/apps/config/overview",
                 "developers/extend/apps/config/application",
                 "developers/extend/apps/config/roles",
                 "developers/extend/apps/config/install-hooks",
@@ -396,29 +436,37 @@
             {
               "key": "appsData",
               "label": "Data",
+              "root": "developers/extend/apps/data/overview",
               "pages": [
-                "developers/extend/apps/data/overview",
                 "developers/extend/apps/data/objects",
                 "developers/extend/apps/data/extending-objects",
-                "developers/extend/apps/data/relations"
+                "developers/extend/apps/data/system-fields",
+                "developers/extend/apps/data/relations",
+                "developers/extend/apps/data/timeline-activity-types",
+                "developers/extend/apps/data/validation-rules"
               ]
             },
             {
               "key": "appsLogic",
               "label": "Logic",
+              "root": "developers/extend/apps/logic/overview",
               "pages": [
-                "developers/extend/apps/logic/overview",
                 "developers/extend/apps/logic/logic-functions",
                 "developers/extend/apps/logic/key-value-store",
+                "developers/extend/apps/logic/background-jobs",
                 "developers/extend/apps/logic/skills-and-agents",
-                "developers/extend/apps/logic/connections"
+                "developers/extend/apps/logic/workflows",
+                "developers/extend/apps/logic/connections",
+                "developers/extend/apps/logic/messaging-channels",
+                "developers/extend/apps/logic/inbox",
+                "developers/extend/apps/logic/credits"
               ]
             },
             {
               "key": "appsLayout",
               "label": "Layout",
+              "root": "developers/extend/apps/layout/overview",
               "pages": [
-                "developers/extend/apps/layout/overview",
                 "developers/extend/apps/layout/views",
                 "developers/extend/apps/layout/navigation-menu-items",
                 "developers/extend/apps/layout/page-layouts",
@@ -429,12 +477,15 @@
             {
               "key": "appsOperations",
               "label": "Operations",
+              "root": "developers/extend/apps/operations/overview",
               "pages": [
-                "developers/extend/apps/operations/overview",
                 "developers/extend/apps/operations/cli",
                 "developers/extend/apps/operations/sync-and-recovery",
                 "developers/extend/apps/operations/testing",
-                "developers/extend/apps/operations/publishing"
+                "developers/extend/apps/operations/translations",
+                "developers/extend/apps/operations/publishing",
+                "developers/extend/apps/operations/marketplace-review",
+                "developers/extend/apps/operations/monitoring"
               ]
             }
           ]
@@ -454,6 +505,7 @@
           "pages": [
             "developers/self-host/capabilities/docker-compose",
             "developers/self-host/capabilities/setup",
+            "developers/self-host/capabilities/security",
             "developers/self-host/capabilities/upgrade-guide",
             "developers/self-host/capabilities/troubleshooting"
           ]
@@ -465,6 +517,198 @@
             "developers/contribute/capabilities/local-setup",
             "developers/contribute/commands",
             "developers/contribute/style-guide"
+          ]
+        },
+        {
+          "key": "uiLibrary",
+          "label": "UI Library",
+          "pages": [
+            {
+              "key": "uiGuides",
+              "label": "Guides",
+              "pages": [
+                "ui/getting-started",
+                "ui/theming",
+                "ui/tokens",
+                "ui/dark-mode",
+                "ui/ssr",
+                "ui/accessibility",
+                "ui/icons",
+                "ui/testing"
+              ]
+            },
+            {
+              "key": "uiPrimitives",
+              "label": "Primitives",
+              "root": "ui/primitives/overview",
+              "pages": [
+                {
+                  "key": "uiAccessibility",
+                  "label": "Accessibility",
+                  "pages": ["ui/primitives/accessibility/visually-hidden"]
+                },
+                {
+                  "key": "uiDataDisplay",
+                  "label": "Data display",
+                  "pages": [
+                    "ui/primitives/data-display/avatar",
+                    "ui/primitives/data-display/chip",
+                    "ui/primitives/data-display/tag",
+                    "ui/primitives/data-display/status",
+                    "ui/primitives/data-display/color-sample",
+                    "ui/primitives/data-display/badge"
+                  ]
+                },
+                {
+                  "key": "uiFeedback",
+                  "label": "Feedback",
+                  "pages": [
+                    "ui/primitives/feedback/banner",
+                    "ui/primitives/feedback/loader",
+                    "ui/primitives/feedback/progress",
+                    "ui/primitives/feedback/progress-bar",
+                    "ui/primitives/feedback/progress-ring",
+                    "ui/primitives/feedback/skeleton"
+                  ]
+                },
+                {
+                  "key": "uiForms",
+                  "label": "Forms",
+                  "pages": [
+                    "ui/primitives/input/button",
+                    "ui/primitives/input/button-group",
+                    "ui/primitives/input/field",
+                    "ui/primitives/input/input",
+                    "ui/primitives/input/input-group",
+                    "ui/primitives/input/number-field",
+                    "ui/primitives/input/textarea",
+                    "ui/primitives/input/checkbox",
+                    "ui/primitives/input/radio",
+                    "ui/primitives/input/radio-group",
+                    "ui/primitives/input/select",
+                    "ui/primitives/input/slider",
+                    "ui/primitives/input/switch"
+                  ]
+                },
+                {
+                  "key": "uiLayout",
+                  "label": "Layout",
+                  "pages": [
+                    "ui/primitives/layout/collapsible",
+                    "ui/primitives/layout/separator",
+                    "ui/primitives/layout/resize-handle",
+                    "ui/primitives/layout/direction-provider"
+                  ]
+                },
+                {
+                  "key": "uiNavigation",
+                  "label": "Navigation",
+                  "pages": [
+                    "ui/primitives/navigation/breadcrumb",
+                    "ui/primitives/navigation/list-item",
+                    "ui/primitives/navigation/tabs"
+                  ]
+                },
+                {
+                  "key": "uiSurfaces",
+                  "label": "Surfaces",
+                  "pages": [
+                    "ui/primitives/surfaces/alert-dialog",
+                    "ui/primitives/surfaces/card",
+                    "ui/primitives/surfaces/dialog",
+                    "ui/primitives/surfaces/popover",
+                    "ui/primitives/surfaces/tooltip"
+                  ]
+                },
+                {
+                  "key": "uiTypography",
+                  "label": "Typography",
+                  "pages": [
+                    "ui/primitives/typography/heading",
+                    "ui/primitives/typography/text",
+                    "ui/primitives/typography/shortcut",
+                    "ui/primitives/typography/overflowing-text-with-tooltip"
+                  ]
+                }
+              ]
+            },
+            {
+              "key": "uiComponents",
+              "label": "Components",
+              "root": "ui/components/overview",
+              "pages": [
+                {
+                  "key": "uiComponentsDataDisplay",
+                  "label": "Data display",
+                  "pages": [
+                    "ui/components/data-display/assistant-avatar",
+                    "ui/components/data-display/avatar-group",
+                    "ui/components/data-display/command-block",
+                    "ui/components/data-display/details-row",
+                    "ui/components/data-display/json-tree",
+                    "ui/components/data-display/metric-row",
+                    "ui/components/data-display/stack-icon",
+                    "ui/components/data-display/tinted-icon-tile"
+                  ]
+                },
+                {
+                  "key": "uiComponentsFeedback",
+                  "label": "Feedback",
+                  "pages": [
+                    "ui/components/feedback/callout",
+                    "ui/components/feedback/inline-banner",
+                    "ui/components/feedback/toast"
+                  ]
+                },
+                {
+                  "key": "uiComponentsInput",
+                  "label": "Input",
+                  "pages": [
+                    "ui/components/input/main-button",
+                    "ui/components/input/light-button",
+                    "ui/components/input/icon-button",
+                    "ui/components/input/light-icon-button",
+                    "ui/components/input/reaction-button",
+                    "ui/components/input/country-select",
+                    "ui/components/input/currency-picker",
+                    "ui/components/input/phone-country-picker",
+                    "ui/components/input/form-field-row",
+                    "ui/components/input/image-input",
+                    "ui/components/input/search-input",
+                    "ui/components/input/number-stepper",
+                    "ui/components/input/segmented-control"
+                  ]
+                },
+                {
+                  "key": "uiComponentsLayout",
+                  "label": "Layout",
+                  "pages": [
+                    "ui/components/layout/section",
+                    "ui/components/layout/overflowing-list",
+                    "ui/components/layout/animated-icon-crossfade"
+                  ]
+                },
+                {
+                  "key": "uiComponentsNavigation",
+                  "label": "Navigation",
+                  "pages": [
+                    "ui/components/navigation/list-item-button",
+                    "ui/components/navigation/dropdown",
+                    "ui/components/navigation/tab-button"
+                  ]
+                },
+                {
+                  "key": "uiComponentsSettings",
+                  "label": "Settings",
+                  "pages": ["ui/components/settings/settings-row"]
+                },
+                {
+                  "key": "uiComponentsCodeEditor",
+                  "label": "Code editor",
+                  "pages": ["ui/components/code-editor/code-editor"]
+                }
+              ]
+            }
           ]
         }
       ]

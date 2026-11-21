@@ -1,7 +1,6 @@
 import { useParams } from 'react-router-dom';
 
 import { useQuery } from '@apollo/client/react';
-import { t } from '@lingui/core/macro';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath } from 'twenty-shared/utils';
 
@@ -12,11 +11,12 @@ import { GET_ADMIN_CHAT_THREAD_MESSAGES } from '@/settings/admin-panel/graphql/q
 import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
 import { SettingsSkeletonLoader } from '@/settings/components/SettingsSkeletonLoader';
 import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
-import { H2Title } from 'twenty-ui/typography';
-import { Section } from 'twenty-ui/layout';
 import { type GetAdminChatThreadMessagesQuery } from '~/generated-admin/graphql';
+import { Section } from 'twenty-ui/components/layout';
+import { useLingui } from '@lingui/react/macro';
 
 export const SettingsAdminWorkspaceChatThread = () => {
+  const { t } = useLingui();
   const { workspaceId, threadId } = useParams<{
     workspaceId: string;
     threadId: string;
@@ -26,8 +26,8 @@ export const SettingsAdminWorkspaceChatThread = () => {
   const { data, loading: isLoading } =
     useQuery<GetAdminChatThreadMessagesQuery>(GET_ADMIN_CHAT_THREAD_MESSAGES, {
       client: apolloAdminClient,
-      variables: { threadId },
-      skip: !threadId,
+      variables: { workspaceId, threadId },
+      skip: !workspaceId || !threadId,
     });
 
   const thread = data?.getAdminChatThreadMessages?.thread;
@@ -62,10 +62,13 @@ export const SettingsAdminWorkspaceChatThread = () => {
       ]}
     >
       <SettingsPageContainer>
-        <Section>
-          <H2Title title={threadTitle} description={t`Chat conversation`} />
+        <Section.Root>
+          <Section.Header
+            title={threadTitle}
+            description={t`Chat conversation`}
+          />
           <SettingsAdminChatThreadMessageList messages={messages} />
-        </Section>
+        </Section.Root>
       </SettingsPageContainer>
     </SettingsPageLayout>
   );

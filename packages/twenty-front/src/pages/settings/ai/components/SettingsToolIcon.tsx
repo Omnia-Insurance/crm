@@ -1,21 +1,23 @@
 import { styled } from '@linaria/react';
-import { useContext } from 'react';
 
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { getObjectColorWithFallback } from '@/object-metadata/utils/getObjectColorWithFallback';
-import { getAbsoluteImageUrl } from '~/utils/image/getAbsoluteImageUrl';
 import { isDefined } from 'twenty-shared/utils';
-import { Avatar, getIconTileColorShades } from 'twenty-ui/data-display';
+import { TintedIconTile } from 'twenty-ui/components/data-display';
 import {
-  IconCode,
   IconEdit,
   IconPlus,
   IconSearch,
+  IconTool,
   IconTrash,
-  useIcons,
   type IconComponent,
 } from 'twenty-ui/icon';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { useIcons } from 'twenty-ui/icon/provider';
+import { Avatar } from 'twenty-ui/primitives/data-display';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
+import { type SettingsAgentToolApplication } from '~/pages/settings/ai/types/SettingsAgentToolApplication';
+import { type SettingsAgentToolMarketplaceApp } from '~/pages/settings/ai/types/SettingsAgentToolMarketplaceApp';
+import { getAbsoluteImageUrl } from '~/utils/image/getAbsoluteImageUrl';
 
 type SettingsToolIconProps = {
   icon?: string | null;
@@ -25,28 +27,29 @@ type SettingsToolIconProps = {
   marketplaceApp?: MarketplaceAppInfo;
 };
 
-type ApplicationInfo = {
-  name: string;
-};
+type ApplicationInfo = Pick<SettingsAgentToolApplication, 'name'>;
 
-type MarketplaceAppInfo = {
-  logo?: string | null;
-};
+type MarketplaceAppInfo = Pick<SettingsAgentToolMarketplaceApp, 'logoUrl'>;
 
 const getOperationIcon = (toolName: string): IconComponent | null => {
-  if (toolName.startsWith('create_')) return IconPlus;
-  if (toolName.startsWith('update_')) return IconEdit;
-  if (toolName.startsWith('delete_')) return IconTrash;
-  if (toolName.startsWith('find_') || toolName.startsWith('get_'))
+  if (toolName.startsWith('create_')) {
+    return IconPlus;
+  }
+  if (toolName.startsWith('update_')) {
+    return IconEdit;
+  }
+  if (toolName.startsWith('delete_')) {
+    return IconTrash;
+  }
+  if (toolName.startsWith('find_') || toolName.startsWith('get_')) {
     return IconSearch;
+  }
 
   return null;
 };
 
 const StyledCompositeContainer = styled.div`
   align-items: center;
-  border-radius: 4px;
-  box-sizing: border-box;
   display: flex;
   flex-shrink: 0;
   height: 16px;
@@ -55,26 +58,10 @@ const StyledCompositeContainer = styled.div`
   width: 16px;
 `;
 
-const StyledMainIconWrapper = styled.div<{
-  $backgroundColor: string;
-  $borderColor?: string;
-}>`
-  align-items: center;
-  background-color: ${({ $backgroundColor }) => $backgroundColor};
-  border: ${({ $borderColor }) =>
-    $borderColor ? `1px solid ${$borderColor}` : 'none'};
-  border-radius: 4px;
-  box-sizing: border-box;
-  display: flex;
-  inset: 0;
-  justify-content: center;
-  position: absolute;
-`;
-
 const StyledOperationOverlay = styled.div`
   align-items: center;
   background-color: ${themeCssVariables.grayScale.gray4};
-  border-radius: 4px;
+  border-radius: ${themeCssVariables.border.radius.sm};
   bottom: -5px;
   display: flex;
   height: 14px;
@@ -92,16 +79,16 @@ export const SettingsToolIcon = ({
   marketplaceApp,
 }: SettingsToolIconProps) => {
   const { getIcon } = useIcons();
-  const { theme } = useContext(ThemeContext);
+  const theme = useTheme();
   const { objectMetadataItems } = useObjectMetadataItems();
 
-  if (isDefined(application) && isDefined(marketplaceApp?.logo)) {
+  if (isDefined(application) && isDefined(marketplaceApp?.logoUrl)) {
     return (
       <Avatar
-        avatarUrl={getAbsoluteImageUrl(marketplaceApp.logo)}
-        placeholder={application.name}
-        placeholderColorSeed={application.name}
-        type="squared"
+        src={getAbsoluteImageUrl(marketplaceApp.logoUrl)}
+        name={application.name}
+        colorSeed={application.name}
+        shape="square"
         size="xs"
       />
     );
@@ -110,38 +97,42 @@ export const SettingsToolIcon = ({
   if (isDefined(application)) {
     return (
       <Avatar
-        placeholder={application.name}
-        placeholderColorSeed={application.name}
-        type="squared"
+        name={application.name}
+        colorSeed={application.name}
+        shape="square"
         size="xs"
       />
     );
   }
 
-  const MainIcon = isDefined(icon) ? getIcon(icon) : IconCode;
+  const MainIcon = isDefined(icon) ? getIcon(icon) : IconTool;
   const OperationIcon = isDefined(toolName) ? getOperationIcon(toolName) : null;
 
   const objectMetadata = isDefined(objectName)
     ? objectMetadataItems.find((item) => item.nameSingular === objectName)
     : undefined;
 
-  const objectStyle = isDefined(objectMetadata)
-    ? getIconTileColorShades(getObjectColorWithFallback(objectMetadata))
+  const objectColor = isDefined(objectMetadata)
+    ? getObjectColorWithFallback(objectMetadata)
     : null;
+
+  const objectIconTile = isDefined(objectColor) ? (
+    <TintedIconTile
+      color={objectColor}
+      icon={<MainIcon size="14px" stroke={theme.icon.stroke.md} />}
+    />
+  ) : null;
 
   if (isDefined(OperationIcon)) {
     return (
       <StyledCompositeContainer>
-        <StyledMainIconWrapper
-          $backgroundColor={objectStyle?.backgroundColor ?? 'transparent'}
-          $borderColor={objectStyle?.borderColor}
-        >
+        {objectIconTile ?? (
           <MainIcon
             size="14px"
             stroke={theme.icon.stroke.md}
-            color={objectStyle?.iconColor ?? theme.font.color.secondary}
+            color={theme.font.color.secondary}
           />
-        </StyledMainIconWrapper>
+        )}
         <StyledOperationOverlay>
           <OperationIcon
             size="12px"
@@ -153,21 +144,8 @@ export const SettingsToolIcon = ({
     );
   }
 
-  if (isDefined(objectStyle)) {
-    return (
-      <StyledCompositeContainer>
-        <StyledMainIconWrapper
-          $backgroundColor={objectStyle.backgroundColor}
-          $borderColor={objectStyle.borderColor}
-        >
-          <MainIcon
-            size="14px"
-            stroke={theme.icon.stroke.md}
-            color={objectStyle.iconColor}
-          />
-        </StyledMainIconWrapper>
-      </StyledCompositeContainer>
-    );
+  if (isDefined(objectIconTile)) {
+    return objectIconTile;
   }
 
   return (

@@ -1,18 +1,14 @@
 import { styled } from '@linaria/react';
-import { Card } from 'twenty-ui/surfaces';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { Card } from 'twenty-ui/primitives/surfaces';
+import { themeCssVariables } from 'twenty-ui/theme';
 
-const StyledCardContainer = styled.div`
+const StyledSkeletonCard = styled.div`
   height: 40px;
-
-  > * {
-    background-color: ${themeCssVariables.background.secondary};
-    height: 100%;
-  }
 `;
 
 export const SettingsListSkeletonCard = () => (
-  <StyledCardContainer>
-    <Card />
-  </StyledCardContainer>
+  <Card.Root
+    backgroundColor={themeCssVariables.background.secondary}
+    render={<StyledSkeletonCard />}
+  />
 );

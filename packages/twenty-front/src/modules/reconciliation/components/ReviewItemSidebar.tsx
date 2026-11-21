@@ -1,8 +1,12 @@
 import { styled } from '@linaria/react';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
-import { Tag } from 'twenty-ui/data-display';
+import { type MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { useLingui } from '@lingui/react/macro';
+import { isDefined } from 'twenty-shared/utils';
+import { Tag } from 'twenty-ui/primitives/data-display';
+import { themeCssVariables } from 'twenty-ui/theme';
 
-import type { ReviewItemRecord } from '@/reconciliation/components/ReconciliationReviewPageContent';
+import { type ReviewItemRecord } from '@/reconciliation/components/ReconciliationReviewPageContent';
 
 type ReviewItemSidebarProps = {
   items: ReviewItemRecord[];
@@ -11,16 +15,14 @@ type ReviewItemSidebarProps = {
   loading: boolean;
 };
 
-const FLAG_LABELS: Record<string, string> = {
-  STATUS_CHANGE: 'Status change',
-  PAYMENT_ERROR: 'Payment issue',
-  BROKER_EFF_AUDIT: 'Broker date',
-  NAME_MISMATCH: 'Name mismatch',
-  REINSTATEMENT: 'Reinstated',
-  MULTI_MATCH: 'Multi-match',
+const FLAG_LABELS: Record<string, MessageDescriptor> = {
+  STATUS_CHANGE: msg`Status change`,
+  PAYMENT_ERROR: msg`Payment issue`,
+  BROKER_EFF_AUDIT: msg`Broker date`,
+  NAME_MISMATCH: msg`Name mismatch`,
+  REINSTATEMENT: msg`Reinstated`,
+  MULTI_MATCH: msg`Multi-match`,
 };
-
-// ── Styled components ──
 
 const StyledSidebar = styled.nav`
   background: ${themeCssVariables.background.primary};
@@ -82,12 +84,15 @@ const StyledEmpty = styled.div`
   text-align: center;
 `;
 
-// ── Helpers ──
-
+// Review item names read "<policy number> → <CRM policy name>"
 const extractDisplayName = (item: ReviewItemRecord): string => {
-  if (item.policy?.name) return item.policy.name;
+  if (item.policy?.name) {
+    return item.policy.name;
+  }
   const parts = item.name.split(' → ');
-  if (parts.length > 1 && parts[1] !== 'none') return parts[1];
+  if (parts.length > 1 && parts[1] !== 'none') {
+    return parts[1];
+  }
   return item.name;
 };
 
@@ -95,32 +100,32 @@ const extractPolicyId = (item: ReviewItemRecord): string => {
   return item.name.split(' ')[0] ?? '';
 };
 
-// ── Component ──
-
 export const ReviewItemSidebar = ({
   items,
   selectedItemId,
   onSelectItem,
   loading,
 }: ReviewItemSidebarProps) => {
+  const { t } = useLingui();
+
   if (loading) {
     return (
-      <StyledSidebar aria-label="Review items">
-        <StyledEmpty>Loading...</StyledEmpty>
+      <StyledSidebar aria-label={t`Review items`}>
+        <StyledEmpty>{t`Loading...`}</StyledEmpty>
       </StyledSidebar>
     );
   }
 
   if (items.length === 0) {
     return (
-      <StyledSidebar aria-label="Review items">
-        <StyledEmpty>No items match your filters</StyledEmpty>
+      <StyledSidebar aria-label={t`Review items`}>
+        <StyledEmpty>{t`No items match your filters`}</StyledEmpty>
       </StyledSidebar>
     );
   }
 
   return (
-    <StyledSidebar aria-label="Review items">
+    <StyledSidebar aria-label={t`Review items`}>
       {items.map((item) => {
         const isReviewed = item.decision !== 'PENDING';
         const isActive = item.id === selectedItemId;
@@ -140,17 +145,23 @@ export const ReviewItemSidebar = ({
             </StyledItemRow>
             {(isUnmatched || (item.flags && item.flags.length > 0)) && (
               <StyledTags>
-                {isUnmatched && <Tag color="orange" text="Unmatched" />}
+                {isUnmatched && <Tag color="orange">{t`Unmatched`}</Tag>}
                 {(item.flags ?? []).map((flag) => {
-                  const label = FLAG_LABELS[flag];
-                  if (!label) return null;
+                  const flagLabelDescriptor = FLAG_LABELS[flag];
+
+                  if (!isDefined(flagLabelDescriptor)) {
+                    return null;
+                  }
+
+                  const label = t(flagLabelDescriptor);
                   const reason = item.flagReasons?.[flag];
+
                   return (
                     <span
                       key={flag}
                       title={reason ? `${label}: ${reason}` : label}
                     >
-                      <Tag color="gray" text={label} />
+                      <Tag color="gray">{label}</Tag>
                     </span>
                   );
                 })}

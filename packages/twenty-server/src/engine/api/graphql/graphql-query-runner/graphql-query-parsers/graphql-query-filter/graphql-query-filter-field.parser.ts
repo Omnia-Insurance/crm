@@ -1,13 +1,18 @@
 import { msg } from '@lingui/core/macro';
+import { Brackets, type WhereExpressionBuilder } from 'typeorm';
+import { FIELD_REFERENCE_FILTER_OPERATORS } from 'twenty-shared/constants';
 import {
-  Brackets,
-  type ObjectLiteral,
-  type WhereExpressionBuilder,
-} from 'typeorm';
-import { compositeTypeDefinitions, RelationType } from 'twenty-shared/types';
-import { capitalize, isDefined } from 'twenty-shared/utils';
+  compositeTypeDefinitions,
+  type FieldReferenceFilterOperator,
+  RelationType,
+} from 'twenty-shared/types';
+import {
+  capitalize,
+  isDefined,
+  isFieldReferenceFilterOperator,
+  parseFieldReferenceFilterValue,
+} from 'twenty-shared/utils';
 
-import { STANDARD_ERROR_MESSAGE } from 'src/engine/api/common/common-query-runners/errors/standard-error-message.constant';
 import { MAX_RELATION_FILTER_DEPTH } from 'src/engine/api/common/common-args-processors/filter-arg-processor/constants/max-relation-filter-depth.constant';
 import { type ObjectRecordFilter } from 'src/engine/api/graphql/workspace-query-builder/interfaces/object-record.interface';
 import {
@@ -15,44 +20,57 @@ import {
   GraphqlQueryRunnerExceptionCode,
 } from 'src/engine/api/graphql/graphql-query-runner/errors/graphql-query-runner.exception';
 import { addRelationJoinAliasToQueryBuilder } from 'src/engine/api/graphql/graphql-query-runner/graphql-query-parsers/utils/add-relation-join-alias.util';
-import { computeWhereConditionParts } from 'src/engine/api/graphql/graphql-query-runner/utils/compute-where-condition-parts';
+import { assertFieldIsReadableOrThrow } from 'src/engine/api/graphql/graphql-query-runner/graphql-query-parsers/utils/assert-field-is-readable-or-throw.util';
+import { resolveFilterKeyFieldMetadata } from 'src/engine/record-filter/utils/resolve-filter-key-field-metadata.util';
+import { assertArrayOperatorValueIsNonEmptyArrayOrThrow } from 'src/engine/record-filter/utils/assert-array-operator-value-is-non-empty-array-or-throw.util';
+import { computeWhereConditionParts } from 'src/engine/record-filter/utils/compute-where-condition-parts';
 import { type CompositeFieldMetadataType } from 'src/engine/metadata-modules/field-metadata/types/composite-field-metadata-type.type';
-import { computeMorphOrRelationFieldJoinColumnName } from 'src/engine/metadata-modules/field-metadata/utils/compute-morph-or-relation-field-join-column-name.util';
 import { isCompositeFieldMetadataType } from 'src/engine/metadata-modules/field-metadata/utils/is-composite-field-metadata-type.util';
 import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
 import { findFlatEntityByIdInFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps.util';
-import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
+import { type OrmFlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/orm-flat-field-metadata.type';
 import { buildFieldMapsFromFlatObjectMetadata } from 'src/engine/metadata-modules/flat-field-metadata/utils/build-field-maps-from-flat-object-metadata.util';
+import { findFlatFieldMetadataByName } from 'src/engine/metadata-modules/flat-field-metadata/utils/find-flat-field-metadata-by-name.util';
 import { isMorphOrRelationFlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/utils/is-morph-or-relation-flat-field-metadata.util';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
-import { type WorkspaceSelectQueryBuilder } from 'src/engine/twenty-orm/repository/workspace-select-query-builder';
-import { computeTableName } from 'src/engine/utils/compute-table-name.util';
-import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 
 import { GraphqlQueryFilterConditionParser } from './graphql-query-filter-condition.parser';
+import { type WorkspaceSelectQueryBuilder } from 'src/engine/twenty-orm/query-builder/workspace-select-query-builder';
 
-const ARRAY_OPERATORS = ['in', 'contains', 'notContains'];
+export type ParentFilterScope = {
+  flatObjectMetadata: FlatObjectMetadata;
+  alias: string;
+  relationFieldMetadataId: string;
+};
+
+const SQL_COMPARISON_OPERATORS = {
+  gt: '>',
+  gte: '>=',
+  lt: '<',
+  lte: '<=',
+} as const;
 
 export class GraphqlQueryFilterFieldParser {
-  private flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
+  private flatObjectMetadata: FlatObjectMetadata;
+  private flatFieldMetadataMaps: FlatEntityMaps<OrmFlatFieldMetadata>;
   private flatObjectMetadataMaps?: FlatEntityMaps<FlatObjectMetadata>;
-  private workspaceSchemaName: string;
   private fieldIdByName: Record<string, string>;
   private fieldIdByJoinColumnName: Record<string, string>;
   private depth: number;
+  private parentFilterScope?: ParentFilterScope;
 
   constructor(
     flatObjectMetadata: FlatObjectMetadata,
-    flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>,
+    flatFieldMetadataMaps: FlatEntityMaps<OrmFlatFieldMetadata>,
     flatObjectMetadataMaps?: FlatEntityMaps<FlatObjectMetadata>,
     depth = 0,
+    parentFilterScope?: ParentFilterScope,
   ) {
+    this.flatObjectMetadata = flatObjectMetadata;
     this.flatFieldMetadataMaps = flatFieldMetadataMaps;
     this.flatObjectMetadataMaps = flatObjectMetadataMaps;
     this.depth = depth;
-    this.workspaceSchemaName = getWorkspaceSchemaName(
-      flatObjectMetadata.workspaceId,
-    );
+    this.parentFilterScope = parentFilterScope;
 
     const fieldMaps = buildFieldMapsFromFlatObjectMetadata(
       flatFieldMetadataMaps,
@@ -65,54 +83,47 @@ export class GraphqlQueryFilterFieldParser {
 
   public parse(
     queryBuilder: WhereExpressionBuilder,
-    outerQueryBuilder: WorkspaceSelectQueryBuilder<ObjectLiteral>,
+    outerQueryBuilder: WorkspaceSelectQueryBuilder,
     objectNameSingular: string,
     key: string,
-    // oxlint-disable-next-line typescript/no-explicit-any
-    filterValue: any,
+    filterValue: Partial<ObjectRecordFilter>,
     isFirst = false,
     useDirectTableReference = false,
   ): void {
-    const isFilterKeyARelation = isDefined(this.fieldIdByName[key]);
-    const fieldMetadataId =
-      this.fieldIdByName[`${key}`] || this.fieldIdByJoinColumnName[`${key}`];
-
-    const fieldMetadata = findFlatEntityByIdInFlatEntityMaps({
-      flatEntityId: fieldMetadataId,
-      flatEntityMaps: this.flatFieldMetadataMaps,
-    });
+    const { fieldMetadata, isReferencedByFieldName } =
+      resolveFilterKeyFieldMetadata({
+        filterKey: key,
+        fieldIdByName: this.fieldIdByName,
+        fieldIdByJoinColumnName: this.fieldIdByJoinColumnName,
+        flatFieldMetadataMaps: this.flatFieldMetadataMaps,
+      });
 
     if (!isDefined(fieldMetadata)) {
       throw new Error(`Field metadata not found for field: ${key}`);
     }
 
-    if (
-      isFilterKeyARelation &&
-      isMorphOrRelationFlatFieldMetadata(fieldMetadata) &&
-      fieldMetadata.settings?.relationType === RelationType.ONE_TO_MANY
-    ) {
-      return this.parseOneToManyRelationFilter(
-        queryBuilder,
-        fieldMetadata,
-        objectNameSingular,
-        filterValue,
-        isFirst,
-      );
-    }
+    assertFieldIsReadableOrThrow({
+      recordReadRestrictions: outerQueryBuilder.recordReadRestrictions,
+      flatObjectMetadata: this.flatObjectMetadata,
+      flatFieldMetadata: fieldMetadata,
+    });
 
     if (
-      isFilterKeyARelation &&
+      isReferencedByFieldName &&
       isMorphOrRelationFlatFieldMetadata(fieldMetadata) &&
-      fieldMetadata.settings?.relationType === RelationType.MANY_TO_ONE
+      (fieldMetadata.settings?.relationType === RelationType.MANY_TO_ONE ||
+        fieldMetadata.settings?.relationType === RelationType.ONE_TO_MANY)
     ) {
-      return this.parseRelationSubFilter(
+      return this.parseRelationSubFilter({
         queryBuilder,
         outerQueryBuilder,
-        objectNameSingular,
+        parentAlias: objectNameSingular,
         fieldMetadata,
         filterValue,
         isFirst,
-      );
+        isToManyRelation:
+          fieldMetadata.settings.relationType === RelationType.ONE_TO_MANY,
+      });
     }
 
     if (isCompositeFieldMetadataType(fieldMetadata.type)) {
@@ -127,16 +138,27 @@ export class GraphqlQueryFilterFieldParser {
     }
     const [[operator, value]] = Object.entries(filterValue);
 
-    if (
-      ARRAY_OPERATORS.includes(operator) &&
-      (!Array.isArray(value) || value.length === 0)
-    ) {
-      throw new GraphqlQueryRunnerException(
-        `Invalid filter value for field ${key}. Expected non-empty array`,
-        GraphqlQueryRunnerExceptionCode.INVALID_QUERY_INPUT,
-        { userFriendlyMessage: msg`Invalid filter value: "${String(value)}"` },
-      );
+    if (isFieldReferenceFilterOperator(operator)) {
+      const sql = this.computeFieldReferenceCondition({
+        outerQueryBuilder,
+        objectNameSingular,
+        key,
+        operator,
+        fieldReferenceValue: value,
+        useDirectTableReference,
+      });
+
+      if (isFirst) {
+        queryBuilder.where(sql);
+      } else {
+        queryBuilder.andWhere(sql);
+      }
+
+      return;
     }
+
+    assertArrayOperatorValueIsNonEmptyArrayOrThrow({ operator, value, key });
+
     const { sql, params } = computeWhereConditionParts({
       operator,
       objectNameSingular,
@@ -153,14 +175,23 @@ export class GraphqlQueryFilterFieldParser {
     }
   }
 
-  private parseRelationSubFilter(
-    queryBuilder: WhereExpressionBuilder,
-    outerQueryBuilder: WorkspaceSelectQueryBuilder<ObjectLiteral>,
-    parentAlias: string,
-    fieldMetadata: FlatFieldMetadata,
-    filterValue: Partial<ObjectRecordFilter>,
-    isFirst: boolean,
-  ): void {
+  private parseRelationSubFilter({
+    queryBuilder,
+    outerQueryBuilder,
+    parentAlias,
+    fieldMetadata,
+    filterValue,
+    isFirst,
+    isToManyRelation,
+  }: {
+    queryBuilder: WhereExpressionBuilder;
+    outerQueryBuilder: WorkspaceSelectQueryBuilder;
+    parentAlias: string;
+    fieldMetadata: OrmFlatFieldMetadata;
+    filterValue: Partial<ObjectRecordFilter>;
+    isFirst: boolean;
+    isToManyRelation: boolean;
+  }): void {
     if (this.depth >= MAX_RELATION_FILTER_DEPTH) {
       throw new GraphqlQueryRunnerException(
         `Relation filter nesting deeper than ${MAX_RELATION_FILTER_DEPTH} hop is not supported`,
@@ -201,6 +232,56 @@ export class GraphqlQueryFilterFieldParser {
       );
     }
 
+    const childConditionParser = new GraphqlQueryFilterConditionParser(
+      targetObjectMetadata,
+      this.flatFieldMetadataMaps,
+      this.flatObjectMetadataMaps,
+      this.depth + 1,
+      {
+        flatObjectMetadata: this.flatObjectMetadata,
+        alias: parentAlias,
+        relationFieldMetadataId: fieldMetadata.id,
+      },
+    );
+
+    // A to-many join would duplicate root rows, which the find-many runner rejects, so match through a correlated EXISTS
+    if (isToManyRelation) {
+      // The EXISTS is correlated with the root alias, so through a joined to-one it would match the wrong rows
+      if (parentAlias !== outerQueryBuilder.alias) {
+        throw new GraphqlQueryRunnerException(
+          `To-many relation filter on "${fieldMetadata.name}" must apply to the root object`,
+          GraphqlQueryRunnerExceptionCode.INVALID_QUERY_INPUT,
+          {
+            userFriendlyMessage: msg`Relation filters can only traverse one relation deep`,
+          },
+        );
+      }
+
+      const existsToken = outerQueryBuilder.addRelationExistsFilter({
+        relationFieldName: fieldMetadata.name,
+        applyWhere: (nestedQueryBuilder) => {
+          nestedQueryBuilder.where(
+            new Brackets((subQb) => {
+              childConditionParser.applyFilterEntriesToWhereBrackets(
+                subQb,
+                nestedQueryBuilder,
+                nestedQueryBuilder.alias,
+                filterValue,
+              );
+            }),
+          );
+        },
+      });
+
+      if (isFirst) {
+        queryBuilder.where(existsToken);
+      } else {
+        queryBuilder.andWhere(existsToken);
+      }
+
+      return;
+    }
+
     const joinAlias = fieldMetadata.name;
 
     addRelationJoinAliasToQueryBuilder({
@@ -208,13 +289,6 @@ export class GraphqlQueryFilterFieldParser {
       parentAlias,
       relationName: joinAlias,
     });
-
-    const childConditionParser = new GraphqlQueryFilterConditionParser(
-      targetObjectMetadata,
-      this.flatFieldMetadataMaps,
-      this.flatObjectMetadataMaps,
-      this.depth + 1,
-    );
 
     const subBrackets = new Brackets((subQb) => {
       childConditionParser.applyFilterEntriesToWhereBrackets(
@@ -232,12 +306,107 @@ export class GraphqlQueryFilterFieldParser {
     }
   }
 
+  // Column names come from metadata, so the filter value never reaches the SQL
+  private computeFieldReferenceCondition({
+    outerQueryBuilder,
+    objectNameSingular,
+    key,
+    operator,
+    fieldReferenceValue,
+    useDirectTableReference,
+  }: {
+    outerQueryBuilder: WorkspaceSelectQueryBuilder;
+    objectNameSingular: string;
+    key: string;
+    operator: FieldReferenceFilterOperator;
+    fieldReferenceValue: unknown;
+    useDirectTableReference: boolean;
+  }): string {
+    const fieldReference = parseFieldReferenceFilterValue(fieldReferenceValue);
+    const referencedScope = isDefined(fieldReference?.relationFieldName)
+      ? this.findParentFilterScopeOrThrow({
+          operator,
+          relationFieldName: fieldReference.relationFieldName,
+          useDirectTableReference,
+        })
+      : {
+          flatObjectMetadata: this.flatObjectMetadata,
+          alias: objectNameSingular,
+        };
+
+    const referencedFieldMetadata = isDefined(fieldReference)
+      ? findFlatFieldMetadataByName({
+          fieldName: fieldReference.fieldName,
+          flatObjectMetadata: referencedScope.flatObjectMetadata,
+          flatFieldMetadataMaps: this.flatFieldMetadataMaps,
+        })
+      : undefined;
+
+    if (!isDefined(referencedFieldMetadata)) {
+      throw new GraphqlQueryRunnerException(
+        `Field "${String(fieldReferenceValue)}" to compare "${key}" with was not found`,
+        GraphqlQueryRunnerExceptionCode.INVALID_QUERY_INPUT,
+        {
+          userFriendlyMessage: msg`Invalid filter: the field to compare with was not found`,
+        },
+      );
+    }
+
+    assertFieldIsReadableOrThrow({
+      recordReadRestrictions: outerQueryBuilder.recordReadRestrictions,
+      flatObjectMetadata: referencedScope.flatObjectMetadata,
+      flatFieldMetadata: referencedFieldMetadata,
+    });
+
+    const fieldColumnReference = useDirectTableReference
+      ? `"${key}"`
+      : `"${objectNameSingular}"."${key}"`;
+    const referencedColumnReference = useDirectTableReference
+      ? `"${referencedFieldMetadata.name}"`
+      : `"${referencedScope.alias}"."${referencedFieldMetadata.name}"`;
+
+    return `${fieldColumnReference} ${SQL_COMPARISON_OPERATORS[FIELD_REFERENCE_FILTER_OPERATORS[operator]]} ${referencedColumnReference}`;
+  }
+
+  // Only the parent is supported: its row is already in scope, with no extra join
+  private findParentFilterScopeOrThrow({
+    operator,
+    relationFieldName,
+    useDirectTableReference,
+  }: {
+    operator: FieldReferenceFilterOperator;
+    relationFieldName: string;
+    useDirectTableReference: boolean;
+  }): ParentFilterScope {
+    const relationFieldMetadata = findFlatFieldMetadataByName({
+      fieldName: relationFieldName,
+      flatObjectMetadata: this.flatObjectMetadata,
+      flatFieldMetadataMaps: this.flatFieldMetadataMaps,
+    });
+
+    if (
+      !isDefined(this.parentFilterScope) ||
+      useDirectTableReference ||
+      relationFieldMetadata?.relationTargetFieldMetadataId !==
+        this.parentFilterScope.relationFieldMetadataId
+    ) {
+      throw new GraphqlQueryRunnerException(
+        `Operator "${operator}" can only reference "${relationFieldName}" when it leads back to the record the relation filter starts from`,
+        GraphqlQueryRunnerExceptionCode.INVALID_QUERY_INPUT,
+        {
+          userFriendlyMessage: msg`Invalid filter: "${relationFieldName}" can only reference the record the relation filter starts from`,
+        },
+      );
+    }
+
+    return this.parentFilterScope;
+  }
+
   private parseCompositeFieldForFilter(
     queryBuilder: WhereExpressionBuilder,
-    fieldMetadata: FlatFieldMetadata,
+    fieldMetadata: OrmFlatFieldMetadata,
     objectNameSingular: string,
-    // oxlint-disable-next-line typescript/no-explicit-any
-    fieldValue: any,
+    fieldValue: Partial<ObjectRecordFilter>,
     isFirst = false,
     useDirectTableReference = false,
   ): void {
@@ -264,23 +433,13 @@ export class GraphqlQueryFilterFieldParser {
 
       const fullFieldName = `${fieldMetadata.name}${capitalize(subFieldKey)}`;
 
-      const [[operator, value]] = Object.entries(
-        // oxlint-disable-next-line typescript/no-explicit-any
-        subFieldFilter as Record<string, any>,
-      );
+      const [[operator, value]] = Object.entries(subFieldFilter);
 
-      if (
-        ARRAY_OPERATORS.includes(operator) &&
-        (!Array.isArray(value) || value.length === 0)
-      ) {
-        throw new GraphqlQueryRunnerException(
-          `Invalid filter value for field ${subFieldKey}. Expected non-empty array`,
-          GraphqlQueryRunnerExceptionCode.INVALID_QUERY_INPUT,
-          {
-            userFriendlyMessage: msg`Invalid filter value: "${String(value)}"`,
-          },
-        );
-      }
+      assertArrayOperatorValueIsNonEmptyArrayOrThrow({
+        operator,
+        value,
+        key: subFieldKey,
+      });
 
       const { sql, params } = computeWhereConditionParts({
         operator,
@@ -298,159 +457,5 @@ export class GraphqlQueryFilterFieldParser {
 
       queryBuilder.andWhere(sql, params);
     });
-  }
-
-  private parseOneToManyRelationFilter(
-    queryBuilder: WhereExpressionBuilder,
-    fieldMetadata: FlatFieldMetadata,
-    objectNameSingular: string,
-    filterValue: Partial<ObjectRecordFilter>,
-    isFirst = false,
-  ): void {
-    const entries = Object.entries(filterValue);
-
-    const targetObjectMetadataId = fieldMetadata.relationTargetObjectMetadataId;
-    const inverseFieldMetadataId = fieldMetadata.relationTargetFieldMetadataId;
-
-    if (
-      !isDefined(targetObjectMetadataId) ||
-      !isDefined(inverseFieldMetadataId)
-    ) {
-      throw new Error(
-        `Missing relation metadata for ONE_TO_MANY field: ${fieldMetadata.name}`,
-      );
-    }
-
-    if (!isDefined(this.flatObjectMetadataMaps)) {
-      throw new GraphqlQueryRunnerException(
-        `ONE_TO_MANY relation filter on "${fieldMetadata.name}" requires object metadata maps`,
-        GraphqlQueryRunnerExceptionCode.INVALID_QUERY_INPUT,
-        { userFriendlyMessage: msg`Relation filter is not supported here` },
-      );
-    }
-
-    const targetObjectMetadata = findFlatEntityByIdInFlatEntityMaps({
-      flatEntityId: targetObjectMetadataId,
-      flatEntityMaps: this.flatObjectMetadataMaps,
-    });
-
-    if (!isDefined(targetObjectMetadata)) {
-      throw new Error(
-        `Target object metadata not found for ONE_TO_MANY field: ${fieldMetadata.name}`,
-      );
-    }
-
-    const inverseFieldMetadata = findFlatEntityByIdInFlatEntityMaps({
-      flatEntityId: inverseFieldMetadataId,
-      flatEntityMaps: this.flatFieldMetadataMaps,
-    });
-
-    if (!isDefined(inverseFieldMetadata)) {
-      throw new Error(
-        `Inverse field metadata not found for ONE_TO_MANY field: ${fieldMetadata.name}`,
-      );
-    }
-
-    if (!isMorphOrRelationFlatFieldMetadata(inverseFieldMetadata)) {
-      throw new Error(
-        `Inverse field metadata is not a relation for ONE_TO_MANY field: ${fieldMetadata.name}`,
-      );
-    }
-
-    const foreignKeyColumnName = computeMorphOrRelationFieldJoinColumnName({
-      name: inverseFieldMetadata.name,
-    });
-
-    const targetTableName = computeTableName(
-      targetObjectMetadata.nameSingular,
-      targetObjectMetadata.isCustom ?? false,
-    );
-
-    if (entries.length === 1 && entries[0][0] === 'is') {
-      const value = entries[0][1];
-
-      if (value !== 'NULL' && value !== 'NOT_NULL') {
-        throw new GraphqlQueryRunnerException(
-          `Invalid value for ONE_TO_MANY relation filter. Expected "NULL" or "NOT_NULL"`,
-          GraphqlQueryRunnerExceptionCode.INVALID_QUERY_INPUT,
-          { userFriendlyMessage: STANDARD_ERROR_MESSAGE },
-        );
-      }
-
-      const existsPrefix = value === 'NULL' ? 'NOT EXISTS' : 'EXISTS';
-      const subqueryAlias = `${targetTableName}_exists`;
-      const sql =
-        `${existsPrefix} (SELECT 1 FROM "${this.workspaceSchemaName}"."${targetTableName}" "${subqueryAlias}" ` +
-        `WHERE "${subqueryAlias}"."${foreignKeyColumnName}" = "${objectNameSingular}"."id" ` +
-        `AND "${subqueryAlias}"."deletedAt" IS NULL)`;
-
-      if (isFirst) {
-        queryBuilder.where(sql);
-      } else {
-        queryBuilder.andWhere(sql);
-      }
-
-      return;
-    }
-
-    const subqueryAlias = `${targetTableName}_subfield`;
-    const subFieldConditions: string[] = [];
-    const allParams: Record<string, unknown> = {};
-    const targetFieldMaps = buildFieldMapsFromFlatObjectMetadata(
-      this.flatFieldMetadataMaps,
-      targetObjectMetadata,
-    );
-
-    for (const [fieldName, fieldFilter] of entries) {
-      const targetFieldId = targetFieldMaps.fieldIdByName[fieldName];
-
-      if (!isDefined(targetFieldId)) {
-        throw new GraphqlQueryRunnerException(
-          `Unknown field "${fieldName}" on target object for ONE_TO_MANY filter`,
-          GraphqlQueryRunnerExceptionCode.INVALID_QUERY_INPUT,
-          { userFriendlyMessage: STANDARD_ERROR_MESSAGE },
-        );
-      }
-
-      const targetField = findFlatEntityByIdInFlatEntityMaps({
-        flatEntityId: targetFieldId,
-        flatEntityMaps: this.flatFieldMetadataMaps,
-      });
-
-      if (!isDefined(targetField)) {
-        throw new Error(
-          `Target field metadata not found for field: ${fieldName}`,
-        );
-      }
-
-      const filterEntries = Object.entries(
-        fieldFilter as Record<string, unknown>,
-      );
-
-      for (const [operator, value] of filterEntries) {
-        const { sql, params } = computeWhereConditionParts({
-          operator,
-          objectNameSingular: subqueryAlias,
-          key: fieldName,
-          value,
-          fieldMetadataType: targetField.type,
-        });
-
-        subFieldConditions.push(sql);
-        Object.assign(allParams, params);
-      }
-    }
-
-    const sql =
-      `EXISTS (SELECT 1 FROM "${this.workspaceSchemaName}"."${targetTableName}" "${subqueryAlias}" ` +
-      `WHERE "${subqueryAlias}"."${foreignKeyColumnName}" = "${objectNameSingular}"."id" ` +
-      `AND ${subFieldConditions.join(' AND ')} ` +
-      `AND "${subqueryAlias}"."deletedAt" IS NULL)`;
-
-    if (isFirst) {
-      queryBuilder.where(sql, allParams);
-    } else {
-      queryBuilder.andWhere(sql, allParams);
-    }
   }
 }

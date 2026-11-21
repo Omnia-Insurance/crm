@@ -1,6 +1,11 @@
 import { Field, ObjectType } from '@nestjs/graphql';
 
 import {
+  type ApplicationBilling,
+  type ApplicationCapability,
+} from 'twenty-shared/application';
+import { type IframeMediaPermission } from 'twenty-shared/types';
+import {
   Column,
   CreateDateColumn,
   DeleteDateColumn,
@@ -17,17 +22,21 @@ import {
 
 import { ApplicationRegistrationEntity } from 'src/engine/core-modules/application/application-registration/application-registration.entity';
 import { ApplicationRegistrationSourceType } from 'src/engine/core-modules/application/application-registration/enums/application-registration-source-type.enum';
+import { ApplicationState } from 'src/engine/core-modules/application/enums/application-state.enum';
 import { FileEntity } from 'src/engine/core-modules/file/entities/file.entity';
 import { ApplicationVariableEntity } from 'src/engine/core-modules/application/application-variable/application-variable.entity';
 import { PublicDomainEntity } from 'src/engine/core-modules/public-domain/public-domain.entity';
+import { ADD_HEALTH_CHECK_TO_APPLICATION_UPGRADE_COMMAND_NAME } from 'src/database/commands/upgrade-version-command/2-42/add-health-check-to-application-upgrade-command-name.constant';
+import { ENABLE_USER_HEALTH_CHECK_UPGRADE_COMMAND_NAME } from 'src/database/commands/upgrade-version-command/2-55/enable-user-health-check-upgrade-command-name.constant';
 import { WasIntroducedInUpgrade } from 'src/engine/core-modules/upgrade/decorators/was-introduced-in-upgrade.decorator';
 import { AgentEntity } from 'src/engine/metadata-modules/ai/ai-agent/entities/agent.entity';
 import { CommandMenuItemEntity } from 'src/engine/metadata-modules/command-menu-item/entities/command-menu-item.entity';
+import { SettingsMenuItemEntity } from 'src/engine/metadata-modules/settings-menu-item/entities/settings-menu-item.entity';
 import { FrontComponentEntity } from 'src/engine/metadata-modules/front-component/entities/front-component.entity';
 import { LogicFunctionEntity } from 'src/engine/metadata-modules/logic-function/logic-function.entity';
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { RoleDTO } from 'src/engine/metadata-modules/role/dtos/role.dto';
-import { WorkspaceRelatedEntity } from 'src/engine/workspace-manager/types/workspace-related-entity';
+import { WorkspaceRelatedEntity } from 'src/engine/workspace-manager/types/workspace-related-entity.type';
 
 @Entity({ name: 'application', schema: 'core' })
 @ObjectType('Application')
@@ -60,12 +69,34 @@ export class ApplicationEntity extends WorkspaceRelatedEntity {
   })
   logo: string | null;
 
+  @Column({ nullable: true, type: 'uuid' })
+  @WasIntroducedInUpgrade({
+    upgradeCommandName:
+      '2.19.0_AddLogoFileIdToApplicationFastInstanceCommand_1783062755137',
+  })
+  logoFileId: string | null;
+
+  @OneToOne(() => FileEntity, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'logoFileId' })
+  logoFile: Relation<FileEntity> | null;
+
   // TODO should not be nullable
   @Column({ nullable: true, type: 'text' })
   version: string | null;
 
   @Column({ type: 'text', default: ApplicationRegistrationSourceType.LOCAL })
   sourceType: ApplicationRegistrationSourceType;
+
+  @Column({
+    nullable: false,
+    type: 'text',
+    default: ApplicationState.INSTALLED,
+  })
+  @WasIntroducedInUpgrade({
+    upgradeCommandName:
+      '2.38.0_AddStateToApplicationFastInstanceCommand_1788260646460',
+  })
+  state: ApplicationState;
 
   @Column({ nullable: false, type: 'text' })
   sourcePath: string;
@@ -93,6 +124,27 @@ export class ApplicationEntity extends WorkspaceRelatedEntity {
   @Column({ type: 'jsonb', nullable: false, default: {} })
   availablePackages: Record<string, string>;
 
+  @Column({ type: 'jsonb', nullable: false, default: {} })
+  @WasIntroducedInUpgrade({
+    upgradeCommandName:
+      '2.38.0_AddBillingToApplicationFastInstanceCommand_1788340843000',
+  })
+  billing: ApplicationBilling;
+
+  @Column({ type: 'varchar', array: true, nullable: false, default: '{}' })
+  @WasIntroducedInUpgrade({
+    upgradeCommandName:
+      '2.42.0_AddApplicationGrantedCapabilitiesFastInstanceCommand_1790088525621',
+  })
+  grantedCapabilities: ApplicationCapability[];
+
+  @Column({ type: 'jsonb', nullable: false, default: [] })
+  @WasIntroducedInUpgrade({
+    upgradeCommandName:
+      '2.56.0_AddApplicationGrantedIframeMediaPermissionsFastInstanceCommand_1793700975254',
+  })
+  grantedIframeMediaPermissions: IframeMediaPermission[];
+
   @Column({ nullable: true, type: 'uuid' })
   logicFunctionLayerId: string | null;
 
@@ -102,19 +154,68 @@ export class ApplicationEntity extends WorkspaceRelatedEntity {
   @Field(() => RoleDTO, { nullable: true })
   defaultRole: RoleDTO | null;
 
-  /**
-   * @deprecated Custom settings tabs are no longer supported. The column is
-   * kept (not dropped) so existing installations upgrade cleanly, but the
-   * value is no longer read or synced from manifests.
-   */
   @Column({ nullable: true, type: 'uuid' })
   settingsCustomTabFrontComponentId: string | null;
+
+  @Column({ nullable: true, type: 'uuid' })
+  @WasIntroducedInUpgrade({
+    upgradeCommandName:
+      '2.32.0_AddUninstallLogicFunctionIdToApplicationFastInstanceCommand_1786959731000',
+  })
+  uninstallLogicFunctionId: string | null;
+
+  @Column({ nullable: true, type: 'timestamptz' })
+  @WasIntroducedInUpgrade({
+    upgradeCommandName:
+      '2.33.0_AddUninstallHookCompletedForRequestedAtToApplicationFastInstanceCommand_1787151824000',
+  })
+  uninstallHookCompletedForRequestedAt: Date | null;
+
+  @Column({ nullable: true, type: 'uuid' })
+  @WasIntroducedInUpgrade({
+    upgradeCommandName: ADD_HEALTH_CHECK_TO_APPLICATION_UPGRADE_COMMAND_NAME,
+  })
+  healthCheckLogicFunctionId: string | null;
+
+  @Column({ nullable: false, type: 'boolean', default: false })
+  @WasIntroducedInUpgrade({
+    upgradeCommandName: ENABLE_USER_HEALTH_CHECK_UPGRADE_COMMAND_NAME,
+  })
+  isUserHealthCheckEnabled: boolean;
 
   @Column({ nullable: false, type: 'boolean', default: true })
   canBeUninstalled: boolean;
 
   @Column({ nullable: false, type: 'boolean', default: false })
+  @WasIntroducedInUpgrade({
+    upgradeCommandName:
+      '2.23.0_AddAutoUpgradeToApplicationFastInstanceCommand_1784297307235',
+  })
+  autoUpgrade: boolean;
+
+  @Column({ nullable: false, type: 'boolean', default: false })
   isSdkLayerStale: boolean;
+
+  @Column({ nullable: true, type: 'text' })
+  @WasIntroducedInUpgrade({
+    upgradeCommandName:
+      '2.23.0_AddSdkClientCoreChecksumToApplicationFastInstanceCommand_1784625638000',
+  })
+  sdkClientCoreChecksum: string | null;
+
+  @Column({ nullable: true, type: 'text' })
+  @WasIntroducedInUpgrade({
+    upgradeCommandName:
+      '2.31.0_AddFrontComponentSharedDependenciesToApplicationFastInstanceCommand_1786529082690',
+  })
+  frontComponentSharedDependenciesChecksum: string | null;
+
+  @Column({ nullable: true, type: 'text' })
+  @WasIntroducedInUpgrade({
+    upgradeCommandName:
+      '2.31.0_AddFrontComponentSharedDependenciesToApplicationFastInstanceCommand_1786529082690',
+  })
+  frontComponentSharedDependenciesBuiltPath: string | null;
 
   @Column({ nullable: true, type: 'uuid' })
   applicationRegistrationId: string | null;
@@ -185,6 +286,15 @@ export class ApplicationEntity extends WorkspaceRelatedEntity {
     },
   )
   commandMenuItems: Relation<CommandMenuItemEntity[]>;
+
+  @OneToMany(
+    () => SettingsMenuItemEntity,
+    (settingsMenuItem) => settingsMenuItem.application,
+    {
+      onDelete: 'CASCADE',
+    },
+  )
+  settingsMenuItems: Relation<SettingsMenuItemEntity[]>;
 
   @OneToMany(
     () => ApplicationVariableEntity,

@@ -13,9 +13,13 @@ const jestConfig = {
   displayName: 'twenty-front-component-renderer',
   preset: '../../jest.preset.js',
   testEnvironment: 'jsdom',
-  transformIgnorePatterns: ['../../node_modules/'],
+  setupFiles: ['<rootDir>/jest.setup.mjs'],
+  testPathIgnorePatterns: ['/node_modules/', '\\.browser\\.test\\.ts$'],
+  transformIgnorePatterns: [
+    'node_modules/(?!(@quilted|boolbase|css-select|css-what|dom-serializer|domelementtype|domhandler|domutils|entities|nth-check)/)',
+  ],
   transform: {
-    '^.+\\.[tj]sx?$': [
+    '^.+\\.(mjs|[tj]sx?)$': [
       '@swc/jest',
       {
         jsc: {
@@ -29,8 +33,12 @@ const jestConfig = {
     ...pathsToModuleNameMapper(tsConfig.compilerOptions.paths, {
       prefix: '<rootDir>/',
     }),
+    '^@quilted/threads$':
+      '<rootDir>/../../node_modules/@quilted/threads/build/esm/index.mjs',
+    '^@quilted/events$':
+      '<rootDir>/../../node_modules/@quilted/events/build/esm/index.mjs',
   },
-  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx'],
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'mjs'],
   extensionsToTreatAsEsm: ['.ts', '.tsx'],
   coverageDirectory: './coverage',
 };

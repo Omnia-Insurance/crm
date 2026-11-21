@@ -1,6 +1,8 @@
 import { useCallback } from 'react';
 import { useStore } from 'jotai';
 
+import { activeRecordGroupTabIdComponentSelector } from '@/object-record/record-group/states/selectors/activeRecordGroupTabIdComponentSelector';
+import { isRecordGroupTabsDisplayedComponentSelector } from '@/object-record/record-group/states/selectors/isRecordGroupTabsDisplayedComponentSelector';
 import { recordIndexRecordIdsByGroupComponentFamilyState } from '@/object-record/record-index/states/recordIndexRecordIdsByGroupComponentFamilyState';
 import {
   NO_RECORD_GROUP_FAMILY_KEY,
@@ -10,19 +12,16 @@ import {
 import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
 import { useFocusedRecordTableRow } from '@/object-record/record-table/hooks/useFocusedRecordTableRow';
 import { useUnfocusRecordTableCell } from '@/object-record/record-table/record-table-cell/hooks/useUnfocusRecordTableCell';
-import { hasUserSelectedAllRowsComponentState } from '@/object-record/record-table/record-table-row/states/hasUserSelectedAllRowsFamilyState';
-import { isRowSelectedComponentFamilyState } from '@/object-record/record-table/record-table-row/states/isRowSelectedComponentFamilyState';
-import { isRecordTableInitialLoadingComponentState } from '@/object-record/record-table/states/isRecordTableInitialLoadingComponentState';
+import { hasUserSelectedAllRecordsComponentState } from '@/object-record/record-selection/states/hasUserSelectedAllRecordsComponentState';
+import { isRecordSelectedComponentFamilyState } from '@/object-record/record-selection/states/isRecordSelectedComponentFamilyState';
 import { recordTableHoverPositionComponentState } from '@/object-record/record-table/states/recordTableHoverPositionComponentState';
 
-import { recordIdByRealIndexComponentState } from '@/object-record/record-table/virtualization/states/recordIdByRealIndexComponentState';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
 import { useAtomComponentStateCallbackState } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateCallbackState';
 import { useAtomComponentFamilyStateCallbackState } from '@/ui/utilities/state/jotai/hooks/useAtomComponentFamilyStateCallbackState';
 import { useAtomComponentSelectorCallbackState } from '@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorCallbackState';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
-import { isDefined } from 'twenty-shared/utils';
-import { isDeeplyEqual } from '~/utils/isDeeplyEqual';
+import { fastDeepEqual, isDefined } from 'twenty-shared/utils';
 
 type useSetRecordTableDataProps = {
   recordTableId?: string;
@@ -42,22 +41,22 @@ export const useSetRecordTableData = ({
   );
 
   const isRowSelectedFamilyState = useAtomComponentFamilyStateCallbackState(
-    isRowSelectedComponentFamilyState,
+    isRecordSelectedComponentFamilyState,
     recordTableId,
   );
 
-  const hasUserSelectedAllRows = useAtomComponentStateCallbackState(
-    hasUserSelectedAllRowsComponentState,
+  const hasUserSelectedAllRecords = useAtomComponentStateCallbackState(
+    hasUserSelectedAllRecordsComponentState,
     recordTableId,
   );
 
-  const isRecordTableInitialLoading = useAtomComponentStateCallbackState(
-    isRecordTableInitialLoadingComponentState,
+  const isRecordGroupTabsDisplayed = useAtomComponentSelectorCallbackState(
+    isRecordGroupTabsDisplayedComponentSelector,
     recordTableId,
   );
 
-  const recordIdByRealIndex = useAtomComponentStateCallbackState(
-    recordIdByRealIndexComponentState,
+  const activeRecordGroupTabId = useAtomComponentSelectorCallbackState(
+    activeRecordGroupTabIdComponentSelector,
     recordTableId,
   );
 
@@ -99,11 +98,17 @@ export const useSetRecordTableData = ({
           )
         : store.get(recordIndexAllRecordIdsSelector);
 
-      const isAllRowsSelected = store.get(hasUserSelectedAllRows);
+      const isRecordGroupHiddenByTabs =
+        store.get(isRecordGroupTabsDisplayed) &&
+        isDefined(currentRecordGroupId) &&
+        currentRecordGroupId !== store.get(activeRecordGroupTabId);
+
+      const isAllRowsSelected =
+        store.get(hasUserSelectedAllRecords) && !isRecordGroupHiddenByTabs;
 
       const recordIds = records.map((record) => record.id);
 
-      if (!isDeeplyEqual(currentRowIds, recordIds)) {
+      if (!fastDeepEqual(currentRowIds, recordIds)) {
         unfocusRecordTableCell();
         unfocusRecordTableRow();
         setRecordTableHoverPosition(null);
@@ -125,37 +130,18 @@ export const useSetRecordTableData = ({
             recordIds,
           );
         }
-
-        const isTableInitialLoading = store.get(isRecordTableInitialLoading);
-
-        if (isTableInitialLoading) {
-          const currentMap = store.get(recordIdByRealIndex);
-          const newMap = new Map(currentMap);
-          let mapChanged = false;
-
-          for (const [realIndex, recordId] of recordIds.entries()) {
-            if (recordId !== currentMap.get(realIndex)) {
-              newMap.set(realIndex, recordId);
-              mapChanged = true;
-            }
-          }
-
-          if (mapChanged) {
-            store.set(recordIdByRealIndex, newMap);
-          }
-        }
       }
     },
     [
       recordIndexRecordIdsByGroupFamilyState,
       recordIndexAllRecordIdsSelector,
-      hasUserSelectedAllRows,
+      hasUserSelectedAllRecords,
+      isRecordGroupTabsDisplayed,
+      activeRecordGroupTabId,
       unfocusRecordTableCell,
       unfocusRecordTableRow,
       setRecordTableHoverPosition,
       isRowSelectedFamilyState,
-      recordIdByRealIndex,
-      isRecordTableInitialLoading,
       store,
     ],
   );

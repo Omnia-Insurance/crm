@@ -1,5 +1,5 @@
 import { styled } from '@linaria/react';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 const StyledCardBodyContainer = styled.div<{ padding?: string }>`
   display: flex;
@@ -8,15 +8,6 @@ const StyledCardBodyContainer = styled.div<{ padding?: string }>`
   padding: ${({ padding }) =>
     padding ??
     `0 ${themeCssVariables.spacing[2]} ${themeCssVariables.spacing[2]} 10px`};
-  span {
-    align-items: center;
-    display: flex;
-    flex-direction: row;
-    svg {
-      color: ${themeCssVariables.font.color.tertiary};
-      margin-right: ${themeCssVariables.spacing[2]};
-    }
-  }
 `;
 
 export { StyledCardBodyContainer as RecordCardBodyContainer };

@@ -3,6 +3,10 @@ title: Workflows FAQ
 description: Frequently asked questions about workflows in Twenty.
 ---
 
+import { PageBanner } from "/snippets/page-banner.mdx"
+
+## Common questions
+
 <AccordionGroup>
 
   <Accordion title="Why can't I activate a workflow?">
@@ -30,7 +34,7 @@ description: Frequently asked questions about workflows in Twenty.
     |------|------------------|---------------|
     | **Global** | None | Once, no record input |
     | **Single** | One or more selected | Once per selected record |
-    | **Bulk** | One or more selected | Once, with all records as array |
+    | **Bulk** | One or more selected | Once, with all records as an array |
 
     - **Global**: Use when the workflow doesn't need any record context (e.g., generate a report)
     - **Single**: Use when you want to process each selected record independently (e.g., send individual emails)
@@ -39,20 +43,8 @@ description: Frequently asked questions about workflows in Twenty.
     See [Workflow Triggers](/user-guide/workflows/capabilities/workflow-triggers) for details.
   </Accordion>
 
-  <Accordion title="I don't see an If/Else node. What should I do?">
-    An explicit If/Else node is not yet available but is on our roadmap.
-
-    **Current workaround**: Create multiple branches from your step, each starting with a **Filter** action:
-
-    ```
-    Step 1
-       │
-       ├── Branch A: Filter (condition = true) → Actions...
-       │
-       └── Branch B: Filter (condition = false) → Actions...
-    ```
-
-    Only the branch where the filter condition passes will execute its subsequent actions.
+  <Accordion title="How do I add an If/Else node?">
+    Add an **If/else** action from the **Flow** section of the action picker, the same way you'd add any other action. Configure a condition on the **If** branch, optionally add **Else if** branches with their own conditions, and a final **Else** branch that catches everything else — only the first matching branch runs.
 
     See [How to Use Branches](/user-guide/workflows/capabilities/workflow-branches) for a step-by-step guide.
   </Accordion>
@@ -103,7 +95,7 @@ description: Frequently asked questions about workflows in Twenty.
     - Or type `{{stepName.fieldName}}` directly
 
     **Examples**:
-    - Trigger data: `{{trigger.object.email}}`
+    - Trigger data: `{{trigger.properties.after.name}}` for a record trigger, `{{trigger.payload.name}}` for a manual trigger on a selected record
     - Search results: `{{searchRecords[0].name}}`
     - Code output: `{{code.calculatedValue}}`
 
@@ -155,11 +147,9 @@ description: Frequently asked questions about workflows in Twenty.
   </Accordion>
 
   <Accordion title="Why don't I see my workflow runs?">
-    Workflow runs might be failing immediately due to rate limits.
+    Workflow runs might be failing immediately due to rate limits. Twenty enforces a hard limit of 5,000 runs per hour per workspace.
 
-    **Hard limit: 5,000 runs per hour per workspace.**
-
-    If you exceed this limit, workflows are immediately marked as failed and won't appear in your runs list as expected.
+    If you exceed this limit, workflows are immediately marked as failed and won't appear in your runs list.
 
     **Common scenarios that hit this limit**:
     - Selecting more than 5,000 records with a Single manual trigger
@@ -237,3 +227,4 @@ description: Frequently asked questions about workflows in Twenty.
 
 </AccordionGroup>
 
+<PageBanner illustration="card-page-billing-faq" />

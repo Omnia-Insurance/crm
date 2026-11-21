@@ -32,7 +32,9 @@ export type ReviewItemReconcilePlan = {
 };
 
 const normalizePolicyNumber = (value: unknown): string | null => {
-  if (typeof value !== 'string') return null;
+  if (typeof value !== 'string') {
+    return null;
+  }
 
   const normalized = value.trim().toUpperCase();
 

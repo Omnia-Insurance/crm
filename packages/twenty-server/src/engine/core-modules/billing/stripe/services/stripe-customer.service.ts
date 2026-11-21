@@ -2,6 +2,7 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 
+import { isNonEmptyString } from '@sniptt/guards';
 import { isDefined } from 'twenty-shared/utils';
 import type Stripe from 'stripe';
 
@@ -38,6 +39,46 @@ export class StripeCustomerService {
     });
   }
 
+  async getCustomerPartnerAndEmail(
+    stripeCustomerId: string,
+  ): Promise<{ partner: string | null; email: string | null }> {
+    const customer = await this.stripe.customers.retrieve(stripeCustomerId);
+
+    if ('deleted' in customer && customer.deleted === true) {
+      return { partner: null, email: null };
+    }
+
+    const partner = customer.metadata.partner;
+
+    return {
+      partner: isNonEmptyString(partner) ? partner : null,
+      email: customer.email,
+    };
+  }
+
+  async isPreviousCustomer({
+    email,
+    currentStripeCustomerId,
+  }: {
+    email: string;
+    currentStripeCustomerId?: string;
+  }): Promise<boolean> {
+    const { data: customers } = await this.stripe.customers.list({
+      email,
+      limit: 2,
+    });
+
+    return customers.some(
+      (customer) => customer.id !== currentStripeCustomerId,
+    );
+  }
+
+  async updateCustomerPartner(stripeCustomerId: string, partner: string) {
+    await this.stripe.customers.update(stripeCustomerId, {
+      metadata: { partner },
+    });
+  }
+
   async hasPaymentMethod(stripeCustomerId: string) {
     const { data: paymentMethods } =
       await this.stripe.customers.listPaymentMethods(stripeCustomerId);
@@ -45,13 +86,18 @@ export class StripeCustomerService {
     return paymentMethods.length > 0;
   }
 
-  async createSetupIntent(
-    stripeCustomerId: string,
-  ): Promise<Stripe.SetupIntent> {
+  async createSetupIntent({
+    stripeCustomerId,
+    workspaceId,
+  }: {
+    stripeCustomerId: string;
+    workspaceId: string;
+  }): Promise<Stripe.SetupIntent> {
     return await this.stripe.setupIntents.create({
       customer: stripeCustomerId,
       usage: 'off_session',
       automatic_payment_methods: { enabled: true },
+      metadata: { workspaceId },
     });
   }
 
@@ -81,20 +127,41 @@ export class StripeCustomerService {
     });
   }
 
-  async createStripeCustomer(
-    userEmail: string,
-    workspaceId: string,
-    customerName: string | undefined,
-  ) {
+  async setDefaultPaymentMethod({
+    stripeCustomerId,
+    stripePaymentMethodId,
+  }: {
+    stripeCustomerId: string;
+    stripePaymentMethodId: string;
+  }): Promise<void> {
+    await this.stripe.customers.update(stripeCustomerId, {
+      invoice_settings: { default_payment_method: stripePaymentMethodId },
+    });
+  }
+
+  async createStripeCustomer({
+    userEmail,
+    workspaceId,
+    customerName,
+    affiliatePartnerName,
+  }: {
+    userEmail: string;
+    workspaceId: string;
+    customerName: string | undefined;
+    affiliatePartnerName?: string;
+  }) {
     const customer = await this.stripe.customers.create({
       name: customerName,
       email: userEmail,
       metadata: {
         workspaceId,
+        ...(isNonEmptyString(affiliatePartnerName)
+          ? { partner: affiliatePartnerName }
+          : {}),
       },
     });
 
-    await this.billingCustomerRepository.save(workspaceId, {
+    await this.billingCustomerRepository.insert(workspaceId, {
       stripeCustomerId: customer.id,
       hasPaymentMethod: false,
     });

@@ -1,39 +1,40 @@
-import { type I18n } from '@lingui/core';
 import { isNonEmptyString } from '@sniptt/guards';
-import { isDefined } from 'twenty-shared/utils';
 
-import { generateMessageId } from 'src/engine/core-modules/i18n/utils/generateMessageId';
+import {
+  generateMessageId,
+  METADATA_LABEL_PLACEHOLDER_PASS_THROUGH,
+} from 'twenty-shared/i18n';
+
+import { type MessageIdTranslator } from 'src/engine/metadata-modules/overrides/types/message-id-translator.type';
 
 export const translateStandardLabel = ({
   sourceValue,
-  isStandardApp,
+  context,
   applicationCatalog,
   i18nInstance,
 }: {
   sourceValue: string;
-  isStandardApp: boolean;
+  context?: string;
   applicationCatalog: Record<string, string> | undefined;
-  i18nInstance: I18n;
+  i18nInstance: MessageIdTranslator;
 }): string => {
   if (!isNonEmptyString(sourceValue)) {
     return sourceValue ?? '';
   }
 
-  if (!isDefined(applicationCatalog) && !isStandardApp) {
-    return sourceValue;
+  const messageId = generateMessageId(sourceValue, context);
+  const catalogTranslation = applicationCatalog?.[messageId];
+
+  if (isNonEmptyString(catalogTranslation)) {
+    return catalogTranslation;
   }
 
-  const messageId = generateMessageId(sourceValue);
+  const translatedMessage = i18nInstance._(
+    messageId,
+    METADATA_LABEL_PLACEHOLDER_PASS_THROUGH,
+  );
 
-  if (isDefined(applicationCatalog)) {
-    return applicationCatalog[messageId] ?? sourceValue;
-  }
-
-  if (isStandardApp) {
-    const translatedMessage = i18nInstance._(messageId);
-
-    return translatedMessage === messageId ? sourceValue : translatedMessage;
-  }
-
-  return sourceValue;
+  return isNonEmptyString(translatedMessage) && translatedMessage !== messageId
+    ? translatedMessage
+    : sourceValue;
 };

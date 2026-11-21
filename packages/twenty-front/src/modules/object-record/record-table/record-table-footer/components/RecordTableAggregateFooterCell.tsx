@@ -1,12 +1,10 @@
 import { styled } from '@linaria/react';
 import { useContext } from 'react';
-import { MOBILE_VIEWPORT, themeCssVariables } from 'twenty-ui/theme-constants';
+import { MOBILE_VIEWPORT, themeCssVariables } from 'twenty-ui/theme';
 
-import {
-  RECORD_TABLE_CHECKBOX_WIDTH_CSS_VAR,
-  RECORD_TABLE_DRAG_DROP_WIDTH_CSS_VAR,
-} from '@/object-record/record-table/components/RecordTableStyleWrapper';
-import { RECORD_TABLE_LABEL_IDENTIFIER_COLUMN_WIDTH_ON_MOBILE } from '@/object-record/record-table/constants/RecordTableLabelIdentifierColumnWidthOnMobile';
+import { RECORD_TABLE_FIRST_COLUMN_LEFT_CSS_VAR } from '@/object-record/record-table/components/RecordTableStyleWrapper';
+import { RECORD_TABLE_CELL_CONTENT_CLASS_NAME } from '@/object-record/record-table/constants/RecordTableCellContentClassName';
+import { getRecordTableColumnFieldWidthCSSVariableName } from '@/object-record/record-table/utils/getRecordTableColumnFieldWidthCSSVariableName';
 import { RECORD_TABLE_ROW_HEIGHT } from '@/object-record/record-table/constants/RecordTableRowHeight';
 import { TABLE_Z_INDEX } from '@/object-record/record-table/constants/TableZIndex';
 import { useRecordTableContextOrThrow } from '@/object-record/record-table/contexts/RecordTableContext';
@@ -15,11 +13,14 @@ import { RecordTableColumnAggregateFooterValue } from '@/object-record/record-ta
 import { RecordTableColumnFooterWithDropdown } from '@/object-record/record-table/record-table-footer/components/RecordTableColumnAggregateFooterWithDropdown';
 import { hasAggregateOperationForViewFieldFamilySelector } from '@/object-record/record-table/record-table-footer/states/hasAggregateOperationForViewFieldFamilySelector';
 import { isRecordTableColumnResizableComponentState } from '@/object-record/record-table/states/isRecordTableColumnResizableComponentState';
+import { useIsRecordTableWidgetAggregateNonInteractive } from '@/object-record/record-table-widget/hooks/useIsRecordTableWidgetAggregateNonInteractive';
 import { getRecordTableColumnFieldWidthClassName } from '@/object-record/record-table/utils/getRecordTableColumnFieldWidthClassName';
 import { useAtomFamilySelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilySelectorValue';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { cx } from '@linaria/core';
-import { findByProperty, isDefined } from 'twenty-shared/utils';
+import { findById, isDefined } from 'twenty-shared/utils';
+
+const FIRST_COLUMN_WIDTH_CSS_VAR = `var(${getRecordTableColumnFieldWidthCSSVariableName(0)})`;
 
 const StyledColumnFooterCell = styled.div<{
   columnWidth: number;
@@ -36,16 +37,16 @@ const StyledColumnFooterCell = styled.div<{
   cursor: ${({ isReadOnly }) => (isReadOnly ? 'default' : 'pointer')};
   height: ${RECORD_TABLE_ROW_HEIGHT}px;
 
-  left: ${({ isFirstCell }) =>
-    isFirstCell
-      ? `calc(var(${RECORD_TABLE_DRAG_DROP_WIDTH_CSS_VAR}) + var(${RECORD_TABLE_CHECKBOX_WIDTH_CSS_VAR}))`
-      : 'auto'};
+  inset-inline-start: ${({ isFirstCell }) =>
+    isFirstCell ? `var(${RECORD_TABLE_FIRST_COLUMN_LEFT_CSS_VAR})` : 'auto'};
 
-  &:hover {
-    background: ${({ isReadOnly }) =>
-      isReadOnly
-        ? themeCssVariables.background.primary
-        : themeCssVariables.background.secondary};
+  @media (hover: hover) {
+    &:hover {
+      background: ${({ isReadOnly }) =>
+        isReadOnly
+          ? themeCssVariables.background.primary
+          : themeCssVariables.background.secondary};
+    }
   }
 
   min-width: ${({ columnWidth }) => columnWidth}px;
@@ -66,17 +67,11 @@ const StyledColumnFooterCell = styled.div<{
 
   @media (max-width: ${MOBILE_VIEWPORT}px) {
     max-width: ${({ isFirstCell }) =>
-      isFirstCell
-        ? `${RECORD_TABLE_LABEL_IDENTIFIER_COLUMN_WIDTH_ON_MOBILE}px`
-        : 'none'};
+      isFirstCell ? FIRST_COLUMN_WIDTH_CSS_VAR : 'none'};
     min-width: ${({ isFirstCell }) =>
-      isFirstCell
-        ? `${RECORD_TABLE_LABEL_IDENTIFIER_COLUMN_WIDTH_ON_MOBILE}px`
-        : '0'};
+      isFirstCell ? FIRST_COLUMN_WIDTH_CSS_VAR : '0'};
     width: ${({ isFirstCell }) =>
-      isFirstCell
-        ? `${RECORD_TABLE_LABEL_IDENTIFIER_COLUMN_WIDTH_ON_MOBILE}px`
-        : 'auto'};
+      isFirstCell ? FIRST_COLUMN_WIDTH_CSS_VAR : 'auto'};
   }
 `;
 
@@ -108,11 +103,12 @@ export const RecordTableAggregateFooterCell = ({
     isRecordTableColumnResizableComponentState,
   );
 
-  const isFooterReadOnly = !isRecordTableColumnResizable;
+  const isFooterReadOnly =
+    useIsRecordTableWidgetAggregateNonInteractive() ??
+    !isRecordTableColumnResizable;
 
-  const recordField = visibleRecordFields.find(
-    findByProperty('fieldMetadataItemId', fieldMetadataId),
-  );
+  // OMNIA-CUSTOM: by view field id; a relation sub-field column shares fieldMetadataId with its relation
+  const recordField = visibleRecordFields.find(findById(viewFieldId));
 
   const isFirstCell = columnIndex === 0;
 
@@ -130,12 +126,15 @@ export const RecordTableAggregateFooterCell = ({
         getRecordTableColumnFieldWidthClassName(columnIndex),
       )}
     >
-      <StyledColumnFootContainer>
+      <StyledColumnFootContainer
+        className={RECORD_TABLE_CELL_CONTENT_CLASS_NAME}
+      >
         {isFooterReadOnly ? (
           hasAggregateOperationForViewField ? (
             <RecordTableColumnAggregateFooterValue
               fieldMetadataId={fieldMetadataId}
-              dropdownId={`${fieldMetadataId}-footer-readonly`}
+              // OMNIA-CUSTOM: per column; a relation sub-field column shares fieldMetadataId with its relation
+              dropdownId={`${viewFieldId}-footer-readonly`}
             />
           ) : null
         ) : (

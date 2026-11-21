@@ -1,18 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 
-import {
-  type LanguageModelUsage,
-  type StepResult,
-  type ToolSet,
-  generateText,
-} from 'ai';
+import { type LanguageModelUsage, generateText } from 'ai';
 
-import { BillingUsageService } from 'src/engine/core-modules/billing/services/billing-usage.service';
 import { UsageOperationType } from 'src/engine/core-modules/usage/enums/usage-operation-type.enum';
 import { AiBillingService } from 'src/engine/metadata-modules/ai/ai-billing/services/ai-billing.service';
-import { extractCacheCreationTokensFromSteps } from 'src/engine/metadata-modules/ai/ai-billing/utils/extract-cache-creation-tokens.util';
-import { AI_TELEMETRY_CONFIG } from 'src/engine/metadata-modules/ai/ai-models/constants/ai-telemetry.const';
+import { buildAiTelemetry } from 'src/engine/metadata-modules/ai/ai-models/utils/build-ai-telemetry.util';
 import { AiModelRegistryService } from 'src/engine/metadata-modules/ai/ai-models/services/ai-model-registry.service';
+import { WorkspaceAiDataPolicyService } from 'src/engine/metadata-modules/ai/ai-models/services/workspace-ai-data-policy.service';
+import { buildReasoningProviderOptions } from 'src/engine/metadata-modules/ai/ai-models/utils/build-reasoning-provider-options.util';
 
 @Injectable()
 export class AgentTitleGenerationService {
@@ -21,7 +16,7 @@ export class AgentTitleGenerationService {
   constructor(
     private readonly aiModelRegistryService: AiModelRegistryService,
     private readonly aiBillingService: AiBillingService,
-    private readonly billingUsageService: BillingUsageService,
+    private readonly workspaceAiDataPolicyService: WorkspaceAiDataPolicyService,
   ) {}
 
   async generateThreadTitle(
@@ -29,9 +24,26 @@ export class AgentTitleGenerationService {
     workspaceId: string,
     userWorkspaceId: string | null,
   ): Promise<string> {
-    await this.billingUsageService.hasAvailableCreditsOrThrow(workspaceId);
+    await this.aiBillingService.assertAiExecutionAllowed({
+      workspaceId,
+      operationType: UsageOperationType.AI_CHAT_TOKEN,
+      spenders: { userWorkspaceId },
+    });
 
-    const defaultModel = this.aiModelRegistryService.getDefaultSpeedModel();
+    const aiDataPolicy =
+      await this.workspaceAiDataPolicyService.getAiDataPolicyOrThrow(
+        workspaceId,
+      );
+
+    const isContentRecordingAllowed =
+      await this.workspaceAiDataPolicyService.isContentRecordingAllowedOrThrow(
+        workspaceId,
+      );
+
+    const defaultModel = this.aiModelRegistryService.findDefaultModelForTier({
+      tier: 'fast',
+      aiDataPolicy,
+    });
 
     if (!defaultModel) {
       this.logger.warn('No default AI model available for title generation');
@@ -40,17 +52,21 @@ export class AgentTitleGenerationService {
     }
 
     let usage: LanguageModelUsage | undefined;
-    let steps: StepResult<ToolSet>[] | undefined;
 
     try {
       const result = await generateText({
         model: defaultModel.model,
+        providerOptions: buildReasoningProviderOptions(defaultModel),
         prompt: `Generate a concise, descriptive title (maximum 60 characters) for a chat thread based on the following message. The title should capture the main topic or purpose of the conversation. Return only the title, nothing else. Message: "${messageContent}"`,
-        experimental_telemetry: AI_TELEMETRY_CONFIG,
+        ...buildAiTelemetry({
+          functionId: 'agent-title-generation',
+          isContentRecordingAllowed,
+          workspaceId,
+          userWorkspaceId,
+        }),
       });
 
       usage = result.usage;
-      steps = result.steps;
 
       return this.cleanTitle(result.text);
     } catch (error) {
@@ -59,18 +75,13 @@ export class AgentTitleGenerationService {
       return this.generateFallbackTitle(messageContent);
     } finally {
       if (usage) {
-        const cacheCreationTokens = steps
-          ? extractCacheCreationTokensFromSteps(steps)
-          : 0;
-
-        void this.aiBillingService.calculateAndBillUsage(
-          defaultModel.modelId,
-          { usage, cacheCreationTokens },
+        void this.aiBillingService.calculateAndBillUsage({
+          modelId: defaultModel.modelId,
+          billingInput: { usage },
           workspaceId,
-          UsageOperationType.AI_CHAT_TOKEN,
-          null,
-          userWorkspaceId,
-        );
+          operationType: UsageOperationType.AI_CHAT_TOKEN,
+          spenders: { userWorkspaceId },
+        });
       }
     }
   }

@@ -5,6 +5,7 @@ import { useMyMessageChannels } from '@/settings/accounts/hooks/useMyMessageChan
 import { useApolloClient, useQuery } from '@apollo/client/react';
 import { useMemo } from 'react';
 import { ConnectedAccountProvider } from 'twenty-shared/types';
+import { isDefined } from 'twenty-shared/utils';
 
 type CoreConnectedAccount = Omit<
   ConnectedAccount,
@@ -22,19 +23,34 @@ const EMAIL_AND_CALENDAR_PROVIDERS: ReadonlySet<ConnectedAccountProvider> =
 // providers (OIDC, SAML) and app-managed OAuth (APP) also live in
 // connectedAccount, but they're surfaced elsewhere — keep them off this
 // page by filtering to the email/calendar provider set.
-export const useMyConnectedAccounts = () => {
+export const useMyConnectedAccounts = ({
+  providers = EMAIL_AND_CALENDAR_PROVIDERS,
+}: {
+  providers?: ReadonlySet<ConnectedAccountProvider>;
+} = {}) => {
   const apolloClient = useApolloClient();
 
-  const { data, loading: accountsLoading } = useQuery<{
+  const {
+    data,
+    loading: accountsLoading,
+    error,
+    refetch,
+  } = useQuery<{
     myConnectedAccounts: CoreConnectedAccount[];
   }>(GET_MY_CONNECTED_ACCOUNTS, {
     client: apolloClient,
   });
 
-  const { channels: messageChannels, loading: messageChannelsLoading } =
-    useMyMessageChannels();
-  const { channels: calendarChannels, loading: calendarChannelsLoading } =
-    useMyCalendarChannels();
+  const {
+    channels: messageChannels,
+    loading: messageChannelsLoading,
+    hasLoaded: hasLoadedMessageChannels,
+  } = useMyMessageChannels();
+  const {
+    channels: calendarChannels,
+    loading: calendarChannelsLoading,
+    hasLoaded: hasLoadedCalendarChannels,
+  } = useMyCalendarChannels();
 
   const accounts = useMemo<ConnectedAccount[]>(() => {
     if (!data?.myConnectedAccounts) {
@@ -42,7 +58,7 @@ export const useMyConnectedAccounts = () => {
     }
 
     return data.myConnectedAccounts
-      .filter((account) => EMAIL_AND_CALENDAR_PROVIDERS.has(account.provider))
+      .filter((account) => providers.has(account.provider))
       .map((account) => ({
         ...account,
         messageChannels: messageChannels.filter(
@@ -52,11 +68,15 @@ export const useMyConnectedAccounts = () => {
           (channel) => channel.connectedAccountId === account.id,
         ),
       }));
-  }, [data, messageChannels, calendarChannels]);
+  }, [data, messageChannels, calendarChannels, providers]);
 
   return {
     accounts,
     loading:
       accountsLoading || messageChannelsLoading || calendarChannelsLoading,
+    hasLoaded:
+      isDefined(data) && hasLoadedMessageChannels && hasLoadedCalendarChannels,
+    error,
+    refetch,
   };
 };

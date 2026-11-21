@@ -1,24 +1,25 @@
 import { useSwitchToNewAiChat } from '@/ai/hooks/useSwitchToNewAiChat';
 import { SidePanelObjectFilterDropdown } from '@/side-panel/components/SidePanelObjectFilterDropdown';
-import { sidePanelPageState } from '@/side-panel/states/sidePanelPageState';
+import { sidePanelPageInfoSelector } from '@/side-panel/states/sidePanelPageInfoSelector';
 import { sidePanelSearchObjectFilterState } from '@/side-panel/states/sidePanelSearchObjectFilterState';
 import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
 import { SidePanelPages } from 'twenty-shared/types';
 import { IconEdit } from 'twenty-ui/icon';
-import { IconButton } from 'twenty-ui/input';
+import { IconButton } from 'twenty-ui/components/input';
 import { useIsMobile } from 'twenty-ui/utilities';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledIconButtonContainer = styled.div`
   color: ${themeCssVariables.font.color.secondary};
 `;
 
 export const SidePanelTopBarRightCornerIcon = () => {
+  const { t } = useLingui();
   const isMobile = useIsMobile();
-  const sidePanelPage = useAtomStateValue(sidePanelPageState);
+  const sidePanelPage = useAtomStateValue(sidePanelPageInfoSelector).page;
   const { switchToNewChat } = useSwitchToNewAiChat();
   const [sidePanelSearchObjectFilter, setSidePanelSearchObjectFilter] =
     useAtomState(sidePanelSearchObjectFilterState);
@@ -34,10 +35,7 @@ export const SidePanelTopBarRightCornerIcon = () => {
     );
   }
 
-  const isOnAskAiPage = [
-    SidePanelPages.AskAI,
-    SidePanelPages.ViewPreviousAiChats,
-  ].includes(sidePanelPage);
+  const isOnAskAiPage = sidePanelPage === SidePanelPages.AskAI;
 
   if (isMobile || !isOnAskAiPage) {
     return null;
@@ -46,12 +44,13 @@ export const SidePanelTopBarRightCornerIcon = () => {
   return (
     <StyledIconButtonContainer>
       <IconButton
-        Icon={IconEdit}
-        size="small"
-        variant="tertiary"
+        size="sm"
+        variant="ghost"
         onClick={() => switchToNewChat()}
-        ariaLabel={t`New conversation`}
-      />
+        aria-label={t`New conversation`}
+      >
+        <IconEdit />
+      </IconButton>
     </StyledIconButtonContainer>
   );
 };

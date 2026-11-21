@@ -1,48 +1,180 @@
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
-import { useMutation } from '@apollo/client/react';
-import { t } from '@lingui/core/macro';
-import { useState } from 'react';
+import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
+import { useTrackedQueueJob } from '@/queue-job/hooks/useTrackedQueueJob';
+import { type TrackedJobStatus } from '@/queue-job/types/TrackedJobStatus';
+import { isTerminalJobState } from '@/queue-job/utils/isTerminalJobState';
+import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
+import { useLazyQuery, useMutation, useQuery } from '@apollo/client/react';
+import { isNonEmptyString } from '@sniptt/guards';
+import { useCallback } from 'react';
 import { isDefined } from 'twenty-shared/utils';
+import { useToast } from 'twenty-ui/components/feedback';
 import {
-  InstallApplicationDocument,
-  type InstallApplicationMutation,
+  FindInstallApplicationJobStatusDocument,
+  FindOneApplicationByUniversalIdentifierDocument,
+  type FindOneApplicationByUniversalIdentifierQuery,
+  JobState,
+  TriggerInstallApplicationDocument,
 } from '~/generated-metadata/graphql';
+import { useLingui } from '@lingui/react/macro';
 
-export const useInstallMarketplaceApp = () => {
-  const { enqueueErrorSnackBar, enqueueSuccessSnackBar } = useSnackBar();
-  const [isInstalling, setIsInstalling] = useState(false);
-  const [installApplicationMutation] = useMutation(InstallApplicationDocument);
+type UseInstallMarketplaceAppArgs = {
+  universalIdentifier?: string;
+  onCompleted?: (
+    application: FindOneApplicationByUniversalIdentifierQuery['findOneApplication'],
+  ) => void;
+};
 
-  const install = async (variables: {
-    universalIdentifier: string;
-    version?: string;
-  }): Promise<InstallApplicationMutation | null> => {
-    setIsInstalling(true);
+export const useInstallMarketplaceApp = ({
+  universalIdentifier,
+  onCompleted,
+}: UseInstallMarketplaceAppArgs = {}) => {
+  const { t } = useLingui();
+  const { enqueueToast } = useToast();
+  const [triggerInstallApplication, { loading: isTriggeringInstall }] =
+    useMutation(TriggerInstallApplicationDocument);
+  const [findInstalledApplication] = useLazyQuery(
+    FindOneApplicationByUniversalIdentifierDocument,
+    { fetchPolicy: 'network-only' },
+  );
+  const [findInstallApplicationJobStatus] = useLazyQuery(
+    FindInstallApplicationJobStatusDocument,
+    { fetchPolicy: 'network-only' },
+  );
+  const setCurrentWorkspace = useSetAtomState(currentWorkspaceState);
 
-    try {
-      const result = await installApplicationMutation({ variables });
+  const { data: jobStatusData } = useQuery(
+    FindInstallApplicationJobStatusDocument,
+    {
+      variables: { universalIdentifier: universalIdentifier ?? '' },
+      skip: !isDefined(universalIdentifier),
+      fetchPolicy: 'network-only',
+    },
+  );
 
-      if (isDefined(result.data)) {
-        enqueueSuccessSnackBar({
-          message: t`Application installed successfully.`,
+  const runningJobStatus = jobStatusData?.findInstallApplicationJobStatus;
+  const runningJob =
+    isDefined(runningJobStatus) &&
+    !isTerminalJobState(runningJobStatus.state) &&
+    isDefined(universalIdentifier)
+      ? {
+          jobId: runningJobStatus.jobId,
+          context: universalIdentifier,
+          progress: runningJobStatus.progress ?? undefined,
+        }
+      : undefined;
+
+  const handleInstallJobSettled = useCallback(
+    async (jobStatus: TrackedJobStatus, trackedUniversalIdentifier: string) => {
+      if (jobStatus.state === JobState.FAILED) {
+        enqueueToast({
+          status: 'error',
+          children: isNonEmptyString(jobStatus.failedReason)
+            ? jobStatus.failedReason
+            : t`Failed to install the application.`,
         });
-
-        return result.data;
+        return;
       }
 
-      return null;
+      let installedApplication:
+        | FindOneApplicationByUniversalIdentifierQuery['findOneApplication']
+        | undefined;
+
+      try {
+        const result = await findInstalledApplication({
+          variables: { universalIdentifier: trackedUniversalIdentifier },
+        });
+
+        installedApplication = result.data?.findOneApplication;
+      } catch {
+        enqueueToast({
+          status: 'error',
+          children: t`Failed to load the application.`,
+        });
+        return;
+      }
+
+      if (!isDefined(installedApplication)) {
+        enqueueToast({
+          status: 'error',
+          children: t`Failed to load the application.`,
+        });
+        return;
+      }
+
+      setCurrentWorkspace((currentWorkspace) =>
+        isDefined(currentWorkspace)
+          ? {
+              ...currentWorkspace,
+              installedApplications: [
+                ...currentWorkspace.installedApplications.filter(
+                  (application) => application.id !== installedApplication.id,
+                ),
+                installedApplication,
+              ],
+            }
+          : currentWorkspace,
+      );
+
+      enqueueToast({
+        status: 'success',
+        children: t`Application installed successfully.`,
+      });
+      onCompleted?.(installedApplication);
+    },
+    [
+      enqueueToast,
+      findInstalledApplication,
+      onCompleted,
+      setCurrentWorkspace,
+      t,
+    ],
+  );
+
+  const fetchInstallJobStatus = useCallback(
+    async (jobId: string, trackedUniversalIdentifier: string) => {
+      const { data } = await findInstallApplicationJobStatus({
+        variables: { universalIdentifier: trackedUniversalIdentifier, jobId },
+      });
+
+      return data?.findInstallApplicationJobStatus;
+    },
+    [findInstallApplicationJobStatus],
+  );
+
+  const { activeJobId, activeJobProgress, trackJob } = useTrackedQueueJob({
+    runningJob,
+    onQueueJobSettled: handleInstallJobSettled,
+    fetchJobStatus: fetchInstallJobStatus,
+  });
+
+  const install = async (): Promise<void> => {
+    if (!isDefined(universalIdentifier)) {
+      return;
+    }
+
+    try {
+      const { data } = await triggerInstallApplication({
+        variables: { input: { universalIdentifier } },
+      });
+
+      const jobId = data?.triggerInstallApplication.jobId;
+
+      if (isDefined(jobId)) {
+        trackJob({ jobId, context: universalIdentifier });
+      }
     } catch (error) {
       const graphqlMessage = error instanceof Error ? error.message : undefined;
 
-      enqueueErrorSnackBar({
-        message: graphqlMessage ?? t`Failed to install the application.`,
+      enqueueToast({
+        status: 'error',
+        children: graphqlMessage ?? t`Failed to install the application.`,
       });
-
-      return null;
-    } finally {
-      setIsInstalling(false);
     }
   };
 
-  return { install, isInstalling };
+  return {
+    install,
+    isInstalling: isTriggeringInstall || isDefined(activeJobId),
+    installProgress: activeJobProgress,
+  };
 };

@@ -1,0 +1,272 @@
+---
+title: Trabajos en segundo plano
+description: Puede delegar el trabajo prolongado o sujeto a limitaciones de tasa a los workers de Twenty encolando otra ejecución de una función lógica en lugar de hacerlo todo en el mismo flujo.
+---
+
+import { PageBanner } from "/snippets/page-banner.mdx"
+
+## Resumen
+
+La ejecución de una función lógica está limitada por su `timeoutSeconds` (900 segundos como máximo). Cualquier cosa que no pueda terminar en esa ventana — una resincronización completa, una distribución por registro, una API de terceros que impone límites de tasa — debe dividirse en ejecuciones más pequeñas.
+
+`enqueueJobs` hace exactamente eso: solicita a los workers de Twenty que ejecuten más tarde una de las funciones lógicas de tu aplicación, una vez por carga útil, cada ejecución en su propio proceso con su propio presupuesto de tiempo de espera. La llamada devuelve de inmediato.
+
+```text
+  ┌─────────────────┐  enqueueJobs(...)  ┌──────────────┐   ┌────────────────────┐
+  │ Logic function  │ ─────────────────▶ │ Job queue    │──▶│ Logic function     │
+  │ (returns now)   │                    │ (workers)    │   │ (fresh run/timeout)│
+  └─────────────────┘                    └──────────────┘   └────────────────────┘
+```
+
+## Poner en cola ejecuciones
+
+Importa `enqueueJobs` desde `twenty-sdk/logic-function`, apúntalo al `universalIdentifier` de la función lógica que se ejecutará y pasa una carga útil por ejecución para poner en cola.
+
+```ts src/logic-functions/sync-all-contacts.ts
+import { enqueueJobs } from 'twenty-sdk/logic-function';
+
+await enqueueJobs({
+  logicFunctionUniversalIdentifier: '9f1c3d7e-51b8-4a29-8f0d-7c4e2a6b1d33',
+  jobs: [{ payload: { page: 1 } }],
+});
+```
+
+Cada ejecución recibe su carga útil como argumento del manejador, exactamente igual que cualquier otro disparador. El destino debe pertenecer a la **misma aplicación** que quien realiza la llamada; poner en cola la función de otra aplicación se rechaza con `Logic function not found` y no se pone nada en cola. Una sola llamada acepta hasta `200` trabajos.
+
+<Note>
+`enqueueJobs` devuelve tan pronto como se aceptan los trabajos, no cuando se han ejecutado. No devuelve los resultados de los destinos: haz que cada destino escriba lo que produce en el [almacenamiento de pares clave-valor](/es/developers/extend/apps/logic/key-value-store) o en un registro del espacio de trabajo si necesitas leerlo después. Para saber si una ejecución terminó, consulta su [estado de trabajo](#poll-jobs).
+</Note>
+
+<Note>
+El auxiliar `enqueueJob` más antiguo, que pone en cola un único trabajo por llamada, ha quedado obsoleto. Usa `enqueueJobs` con una lista de `jobs` de un solo elemento en su lugar. El argumento `payloads` también está obsoleto: pasa `jobs` en su lugar, que toma la misma carga útil por ejecución y te permite asignar un nombre a cada uno.
+</Note>
+
+## Consultar trabajos
+
+`enqueueJobs` devuelve un `jobId` por cada ejecución encolada, en el mismo orden que los trabajos que pasaste. `getJobs` consulta hasta dónde han llegado esas ejecuciones en una sola llamada.
+
+```ts
+import { enqueueJobs, getJobs } from 'twenty-sdk/logic-function';
+
+const { jobIds } = await enqueueJobs({
+  logicFunctionUniversalIdentifier: ENRICH_COMPANY,
+  jobs: [{ payload: { companyId: 'abc' } }],
+});
+
+const statuses = await getJobs(jobIds);
+```
+
+Una sola llamada a `getJobs` lee como máximo `200` identificadores, el mismo límite que `enqueueJobs` aplica a un lote.
+
+Cada entrada contiene el identificador que solicitaste:
+
+| Campo          | Qué contiene                                                                               |
+| -------------- | ------------------------------------------------------------------------------------------ |
+| `jobId`        | El identificador con el que consultaste.                                                   |
+| `state`        | `WAITING`, `PRIORITIZED`, `DELAYED`, `ACTIVE`, `WAITING_CHILDREN`, `COMPLETED` o `FAILED`. |
+| `attemptsMade` | Intentos de la cola realizados hasta ahora, incluido el actual.                            |
+| `failedReason` | El mensaje de error del último intento fallido; de lo contrario, `null`.                   |
+| `enqueuedAt`   | Cuándo se aceptó el trabajo, en milisegundos de época.                                     |
+| `startedAt`    | Cuándo lo tomó un trabajador; `null` mientras aún está esperando.                          |
+| `finishedAt`   | Cuándo se completó o falló; `null` mientras aún se está ejecutando.                        |
+
+Un trabajo que aún no ha sido tomado normalmente aparece como `PRIORITIZED` en lugar de `WAITING`, porque los trabajos de la aplicación se encolan con una prioridad baja fija. `COMPLETED` y `FAILED` son los estados finales. Un bucle de sondeo también debería detenerse por sí solo después de un número limitado de intentos en lugar de esperar indefinidamente, ya que una ejecución solo puede leerse mientras la cola la conserve: 4 horas después de completarse, 7 días después de fallar y, en ambos casos, solo los 1000 trabajos más recientes en ese estado.
+
+`getJobs` devuelve solo los trabajos que aún conserva, por lo que un identificador que se ha eliminado —o que nunca existió— simplemente no aparece en el resultado en lugar de provocar un error en todo el lote. Compara lo que recibes con lo que solicitaste para detectar esos casos y considera un identificador ausente como "ya no se conoce", lo que no es la misma respuesta que "nunca se ejecutó".
+
+Los estados se limitan al espacio de trabajo desde el que se realiza la llamada, por lo que un espacio de trabajo nunca puede leer el trabajo de otro espacio de trabajo.
+
+## Elige tu propio identificador de trabajo
+
+Pasa `jobs` en lugar de `payloads` para asignar tú mismo un nombre a cada ejecución. El identificador que pasas es el que acepta `getJobs`, por lo que quien realiza la llamada puede sondear un trabajo sin tener que almacenar lo que devolvió `enqueueJobs`.
+
+```ts
+await enqueueJobs({
+  logicFunctionUniversalIdentifier: ENRICH_COMPANY,
+  jobs: [{ payload: { companyId: 'abc' }, jobId: 'enrich-abc' }],
+});
+```
+
+Un identificador tiene como máximo 128 caracteres entre letras, dígitos, `_`, `.` o `-`, y no puede haber dos trabajos en una llamada que compartan uno. Pasa `payloads` o `jobs`, pero nunca ambos. Cuando omites `jobId`, Twenty genera uno.
+
+Un `jobId` también es una clave de idempotencia: encolar un identificador que la cola aún conserva se acepta, pero **no** inicia una segunda ejecución, y `getJobs` sigue informando de la primera. Esto hace que reintentar el encolado sea seguro. Dos advertencias: la garantía solo dura mientras se conserve el trabajo, por lo que el mismo identificador puede iniciar una nueva ejecución una vez que se haya eliminado el original; además, los identificadores se comparten entre todas las aplicaciones de un espacio de trabajo, así que añade un prefijo a los tuyos si una colisión fuera importante.
+
+## Opciones del trabajo
+
+Las opciones se aplican a todas las ejecuciones del lote.
+
+| Opción       | Predeterminado | Rango                    | Qué hace                                                                                                                                                                                                     |
+| ------------ | -------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `retryLimit` | `0`            | `0`–`10`                 | Intentos adicionales totales en la cola. Los reintentos solicitados por la aplicación tienen un límite de `3`. Solo incrementa este valor para manejadores que se puedan ejecutar dos veces de forma segura. |
+| `delayMs`    | `0`            | `0`–`604800000` (7 días) | Espera este tiempo antes de que las ejecuciones sean elegibles.                                                                                                                                              |
+
+```ts
+await enqueueJobs({
+  logicFunctionUniversalIdentifier: '9f1c3d7e-51b8-4a29-8f0d-7c4e2a6b1d33',
+  jobs: [{ payload: { page: 1 } }],
+  retryLimit: 3,
+  delayMs: 60_000,
+});
+```
+
+<Note>
+**La prioridad todavía no es configurable.** Los trabajos encolados siempre se ejecutan con la prioridad más baja, para que el trabajo de la plataforma nunca se retrase por detrás de los trabajos de las aplicaciones. El control sobre la prioridad llegará pronto.
+</Note>
+
+La ejecución encolada hereda el usuario activo de la función que la puso en cola, por lo que actúa con los mismos permisos.
+
+## Memoria de la cola
+
+Los trabajos en cola residen en la memoria hasta que terminan, por lo que cada espacio de trabajo y cada aplicación solo pueden ocupar una parte de la memoria de la cola que otros dejan libre. Un solo trabajo también está limitado a 5 MB de carga útil serializada. Estos límites solo se aplican en servidores que los habilitan (`IS_REDIS_MEMORY_FAIRNESS_ENABLED`).
+
+`enqueueJobs` informa de lo que usó cada llamada. Estos campos requieren Twenty 2.57.0 o una versión posterior, que también es la versión mínima del servidor del SDK:
+
+| Campo            | Qué contiene                                                                                                                                                                                          |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `empleos`        | El `jobId` y el `sizeBytes` de cada tarea puesta en cola.                                                                                                                                             |
+| `availableBytes` | Memoria que tu aplicación y espacio de trabajo aún pueden poner en cola en el momento de esta llamada. `null` cuando el servidor no limita la memoria de la cola. Es una instantánea, no una reserva. |
+
+Cuando se alcanza un límite, se rechaza toda la llamada y no se pone nada en cola:
+
+| `subCode` del error              | Cuándo                                                      | Detalles                                               |
+| -------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------ |
+| `JOB_TOO_LARGE`                  | Una tarea supera el límite de tamaño.                       | `index`, `sizeBytes`, `maxBytes`                       |
+| `JOB_QUEUE_MEMORY_LIMIT_REACHED` | El lote no cabe en tu cuota. Vuelve a intentarlo más tarde. | `requestedBytes`, `availableBytes`, `refusedGroupKeys` |
+
+Mantén las cargas útiles pequeñas: pasa los identificadores de los registros y recupera los registros dentro de la ejecución en lugar de incrustarlos. Si `availableBytes` se está agotando, pon menos tareas en cola a la vez o encadénalas con `delayMs`.
+
+## Reintentar un fallo transitorio
+
+Twenty no vuelve a intentar todas las excepciones del código de la aplicación. Un error ordinario lanzado se trata como un fallo permanente. Para un fallo transitorio, una función lógica en cola puede solicitar hasta tres reintentos lanzando `RetryableLogicFunctionError`.
+
+```ts
+import {
+  type LogicFunctionExecutionContext,
+  RetryableLogicFunctionError,
+} from 'twenty-sdk/logic-function';
+
+export const handler = async (
+  _payload: unknown,
+  { retryCount, maxRetries }: LogicFunctionExecutionContext,
+) => {
+  const response = await fetch('https://api.example.com/contacts');
+
+  if (response.status === 429 || response.status >= 500) {
+    throw new RetryableLogicFunctionError(
+      `The contacts API is temporarily unavailable (${response.status}); retry ${retryCount} of ${maxRetries}`,
+    );
+  }
+};
+```
+
+Lanza `RetryableLogicFunctionError` directamente cuando sea posible. Si lo extiendes, no sustituyas su `name`: Twenty reconoce el nombre serializado `RetryableLogicFunctionError` en todos los entornos de ejecución.
+
+`retryCount` es `0` para la ejecución inicial y aumenta solo cuando el código de la aplicación solicita un reintento. `maxRetries` es como máximo `3` y puede ser menor cuando el trabajo en cola tiene un límite general de reintentos más bajo. Los fallos de la plataforma no aumentan `retryCount`, aunque siguen consumiendo el presupuesto general de seguridad de la cola.
+
+La cola retrasa los intentos de reintento con una espera exponencial y fluctuación. El retraso exacto no se garantiza intencionadamente, por lo que el código de la aplicación no debe depender de que un reintento ocurra en un momento preciso. Una vez que se alcanza `maxRetries`, otro `RetryableLogicFunctionError` se registra como el fallo final de la aplicación sin otra ejecución.
+
+<Warning>
+Los reintentos vuelven a ejecutar todo el controlador y pueden ocurrir después de que algunos efectos secundarios se hayan realizado correctamente. Haz que el controlador sea idempotente antes de solicitar reintentos.
+</Warning>
+
+## Úsalo: recorre por páginas una sincronización larga
+
+La forma clásica es una función que se pone en cola *a sí misma* con el cursor siguiente. Cada ejecución hace una página de trabajo bien dentro de su propio tiempo de espera, y la cadena se detiene cuando no queda nada.
+
+```ts src/logic-functions/sync-contacts-page.ts
+import { defineLogicFunction } from 'twenty-sdk/define';
+import { enqueueJobs } from 'twenty-sdk/logic-function';
+
+const SYNC_CONTACTS_PAGE = '9f1c3d7e-51b8-4a29-8f0d-7c4e2a6b1d33';
+
+const handler = async (params: { cursor?: string }) => {
+  const { contacts, nextCursor } = await fetchContactsPage(params.cursor);
+
+  await importContacts(contacts);
+
+  if (nextCursor) {
+    await enqueueJobs({
+      logicFunctionUniversalIdentifier: SYNC_CONTACTS_PAGE,
+      jobs: [{ payload: { cursor: nextCursor } }],
+      delayMs: 2_000,
+    });
+  }
+
+  return { imported: contacts.length, done: !nextCursor };
+};
+
+export default defineLogicFunction({
+  universalIdentifier: SYNC_CONTACTS_PAGE,
+  name: 'sync-contacts-page',
+  timeoutSeconds: 120,
+  handler,
+});
+```
+
+## Dividir por registro
+
+Cuando el trabajo es de forma natural por elemento, pon en cola un trabajo por elemento en una sola llamada y deja que los workers los procesen en paralelo en lugar de iterar en línea.
+
+```ts
+const companies = await listCompaniesToEnrich();
+
+await enqueueJobs({
+  logicFunctionUniversalIdentifier: ENRICH_COMPANY,
+  jobs: companies.map((company) => ({ payload: { companyId: company.id } })),
+  retryLimit: 2,
+});
+```
+
+## Buenas prácticas para trabajos de larga duración
+
+Dos reglas cubren casi cualquier trabajo largo: **usa recursión en lugar de bucles** y **procesa un bloque acotado por ejecución**.
+
+Una ejecución que intenta hacerlo todo es la forma en que falla: alcanza el tiempo de espera y, con un reintento, vuelve a empezar todo desde cero. En su lugar, dimensiona un bloque para que termine con holgura dentro de `timeoutSeconds`, guarda tu posición y pon en cola la siguiente ejecución.
+
+```ts src/logic-functions/enrich-companies-batch.ts
+import { defineLogicFunction } from 'twenty-sdk/define';
+import { enqueueJobs, kv } from 'twenty-sdk/logic-function';
+
+const ENRICH_COMPANIES_BATCH = '3f9d1c02-8a44-4f0e-b1d7-9c2e5a7b4f10';
+const CHUNK_SIZE = 50;
+
+const handler = async (params: { offset?: number }) => {
+  const offset = params.offset ?? 0;
+  const companies = await listCompaniesToEnrich({
+    offset,
+    limit: CHUNK_SIZE,
+  });
+
+  for (const company of companies) {
+    await enrichCompany(company);
+  }
+
+  await kv.set('enrich:progress', { offset: offset + companies.length });
+
+  if (companies.length === CHUNK_SIZE) {
+    await enqueueJobs({
+      logicFunctionUniversalIdentifier: ENRICH_COMPANIES_BATCH,
+      jobs: [{ payload: { offset: offset + CHUNK_SIZE } }],
+    });
+  }
+
+  return { processed: companies.length, done: companies.length < CHUNK_SIZE };
+};
+
+export default defineLogicFunction({
+  universalIdentifier: ENRICH_COMPANIES_BATCH,
+  name: 'enrich-companies-batch',
+  timeoutSeconds: 300,
+  handler,
+});
+```
+
+Por qué esto se mantiene bien:
+
+* **Dimensiona el bloque a partir del elemento más lento, no del promedio.** `CHUNK_SIZE × worst-case item time` tiene que caber en `timeoutSeconds` con margen de sobra, o la parte final de un bloque se pierde cuando se corta la ejecución.
+* **Haz que la condición de terminación sea explícita.** Haz recursión solo mientras haya vuelto un bloque completo. Una cadena que se detiene solo con "sin resultados" seguirá ejecutándose para siempre si la fuente alguna vez devuelve una página corta a mitad de camino.
+* **Guarda el progreso antes de poner en cola la siguiente ejecución**, de modo que un eslabón fallido se reinicie desde el último bloque completado en lugar de desde el principio.
+* **Mantén cada bloque idempotente.** Volver a procesar un bloque después de un reintento no debe escribir dos veces — indexa las escrituras por el registro o el id externo que estés procesando.
+* **Prefiere una cadena por bloques en lugar de una expansión masiva** cuando el trabajo interactúa con un tercero con limitación de tasa: una cadena con `delayMs` se autorregula, mientras que miles de trabajos encolados a la vez se vuelven elegibles de inmediato.
+
+<PageBanner illustration="card-page-background-jobs" />

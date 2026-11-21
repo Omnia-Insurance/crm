@@ -1,23 +1,26 @@
 import { useMemo } from 'react';
 
-import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
-import { type ObjectRecordFilterInput } from '~/generated/graphql';
+import { useFindAllRecordPages } from '@/object-record/record-picker/hooks/useFindAllRecordPages';
+import {
+  type RecordGqlFields,
+  type RecordGqlOperationFilter,
+} from 'twenty-shared/types';
+import { computeRelationGqlFieldJoinColumnName } from 'twenty-shared/utils';
 
+// The search API rejects an empty `in`, so "no eligible record" matches a nil id
 const EMPTY_RECORD_PICKER_RESULT_SENTINEL_ID =
   '00000000-0000-0000-0000-000000000000';
 
-const POLICY_RECORD_PICKER_ELIGIBLE_RECORDS_LIMIT = 20000;
+const ELIGIBLE_RECORD_GQL_FIELDS: RecordGqlFields = { id: true };
 
 export const buildIdAllowlistFilter = (
   eligibleRecordIds: string[],
-): ObjectRecordFilterInput => {
+): RecordGqlOperationFilter => {
   if (eligibleRecordIds.length === 0) {
-    return {
-      id: { eq: EMPTY_RECORD_PICKER_RESULT_SENTINEL_ID },
-    } as ObjectRecordFilterInput;
+    return { id: { eq: EMPTY_RECORD_PICKER_RESULT_SENTINEL_ID } };
   }
 
-  return { id: { in: eligibleRecordIds } } as ObjectRecordFilterInput;
+  return { id: { in: eligibleRecordIds } };
 };
 
 export const buildRelationPickerEligibleRecordsFilter = ({
@@ -26,15 +29,22 @@ export const buildRelationPickerEligibleRecordsFilter = ({
 }: {
   inverseFieldName: string;
   recordId: string;
-}) => {
+}): RecordGqlOperationFilter => {
+  const joinColumnName = computeRelationGqlFieldJoinColumnName({
+    name: inverseFieldName,
+  });
+
   return {
     or: [
-      { [`${inverseFieldName}Id`]: { is: 'NULL' } },
-      { [`${inverseFieldName}Id`]: { eq: recordId } },
+      { [joinColumnName]: { is: 'NULL' } },
+      { [joinColumnName]: { eq: recordId } },
     ],
   };
 };
 
+// A policy is never re-pointed from another lead: the picker only offers
+// policies without a lead or already on this one. The search API cannot filter
+// on leadId, so the eligible ids are fetched up front and sent as an allowlist.
 export const useLeadPolicyRecordPickerAdditionalFilter = ({
   recordId,
   inverseFieldName,
@@ -48,16 +58,19 @@ export const useLeadPolicyRecordPickerAdditionalFilter = ({
     relationObjectMetadataNameSingular === 'policy' &&
     inverseFieldName === 'lead';
 
-  const { records: eligiblePolicyRecords, loading } = useFindManyRecords({
+  const eligibleRecordsFilter = useMemo(
+    () =>
+      buildRelationPickerEligibleRecordsFilter({ inverseFieldName, recordId }),
+    [inverseFieldName, recordId],
+  );
+
+  // Every page, so this lead's own policies never drop out of the picked
+  // search; past the page cap the list is cut, never widened
+  const { records: eligiblePolicyRecords, loading } = useFindAllRecordPages({
     objectNameSingular: relationObjectMetadataNameSingular,
-    filter: buildRelationPickerEligibleRecordsFilter({
-      inverseFieldName,
-      recordId,
-    }),
-    recordGqlFields: { id: true },
+    filter: eligibleRecordsFilter,
+    recordGqlFields: ELIGIBLE_RECORD_GQL_FIELDS,
     skip: !isLeadPolicyRelation,
-    // OMNIA-CUSTOM: only IDs are fetched here so the higher limit is safe.
-    limit: POLICY_RECORD_PICKER_ELIGIBLE_RECORDS_LIMIT,
   });
 
   const additionalFilter = useMemo(() => {

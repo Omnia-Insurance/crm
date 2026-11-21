@@ -1,7 +1,7 @@
 import { styled } from '@linaria/react';
 import { isDefined } from 'twenty-shared/utils';
-import { Label } from 'twenty-ui/typography';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { Text } from 'twenty-ui/primitives/typography';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 const StyledContainer = styled.div`
   align-items: center;
@@ -33,7 +33,9 @@ export const WorkflowDiagramEdgeLabel = ({
   return (
     <StyledContainer>
       {isDefined(elseIfIndex) && <StyledNumber>{elseIfIndex}</StyledNumber>}
-      <Label>{label}</Label>
+      <Text size="xs" weight="semibold" color="light">
+        {label}
+      </Text>
     </StyledContainer>
   );
 };

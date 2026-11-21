@@ -67,6 +67,8 @@ describe('Field metadata create/delete - search vector ISO surface', () => {
         type: FieldMetadataType.TEXT,
         objectMetadataId: testObjectMetadataId,
         isLabelSyncedWithName: false,
+        // OMNIA-CUSTOM: custom fields join search by default (Q14), so this field opts out
+        isSearchable: false,
       },
       gqlFields: `id name type`,
     });

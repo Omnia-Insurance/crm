@@ -1,41 +1,40 @@
-import { t } from '@lingui/core/macro';
-
 import { AppChip } from '@/applications/components/AppChip';
-import { Avatar, Chip, ChipAccent, ChipVariant } from 'twenty-ui/data-display';
+import { Avatar, Chip } from 'twenty-ui/primitives/data-display';
 import { isDefined } from 'twenty-shared/utils';
+import { useLingui } from '@lingui/react/macro';
 
 type SettingsItemTypeTagProps = {
   item: {
     isRemote?: boolean;
     applicationId?: string | null;
   };
-  className?: string;
 };
 
 export const SettingsItemTypeTag = ({
-  className,
   item: { isRemote, applicationId },
 }: SettingsItemTypeTagProps) => {
+  const { t } = useLingui();
   if (isDefined(applicationId)) {
-    return <AppChip applicationId={applicationId} className={className} />;
-  } else if (isRemote === true) {
-    return (
-      <Chip
-        className={className}
-        label={t`Remote`}
-        variant={ChipVariant.Transparent}
-        accent={ChipAccent.TextPrimary}
-        leftComponent={
-          <Avatar
-            type="app"
-            size="sm"
-            placeholder="Remote"
-            placeholderColorSeed="Remote"
-          />
-        }
-      />
-    );
-  } else {
+    return <AppChip applicationId={applicationId} />;
+  }
+
+  if (!isRemote) {
     return null;
   }
+
+  return (
+    <Chip
+      variant="plain"
+      color="primary"
+      startElement={
+        <Avatar
+          shape="square"
+          variant="outline"
+          size="sm"
+          name={t`Remote`}
+          colorSeed="Remote"
+        />
+      }
+    >{t`Remote`}</Chip>
+  );
 };

@@ -1,9 +1,9 @@
+import { COMMON_CHART_CONSTANTS } from '@/page-layout/widgets/graph/constants/CommonChartConstants';
 import { type GraphLabelData } from '@/page-layout/widgets/graph/types/GraphLabelData';
 import { calculateGraphLabelStyles } from '@/page-layout/widgets/graph/utils/calculateGraphLabelStyles';
 import { animated } from '@react-spring/web';
-import { useContext } from 'react';
 import { isDefined } from 'twenty-shared/utils';
-import { ThemeContext } from 'twenty-ui/theme-constants';
+import { useTheme } from 'twenty-ui/theme';
 
 type GraphDataLabelProps = {
   label: GraphLabelData;
@@ -18,7 +18,7 @@ export const GraphDataLabel = ({
   offset,
   isVerticalLayout,
 }: GraphDataLabelProps) => {
-  const { theme } = useContext(ThemeContext);
+  const theme = useTheme();
 
   const styles = calculateGraphLabelStyles(label, offset, isVerticalLayout);
 
@@ -31,7 +31,7 @@ export const GraphDataLabel = ({
       dominantBaseline={styles.dominantBaseline}
       style={{
         fill: theme.font.color.light,
-        fontSize: 11,
+        fontSize: COMMON_CHART_CONSTANTS.DATA_LABEL_FONT_SIZE,
         fontWeight: theme.font.weight.medium,
         transform: styles.transformOffset,
       }}

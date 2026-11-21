@@ -1,25 +1,31 @@
 import { NextResponse } from 'next/server';
+import { isDefined } from 'twenty-shared/utils';
 
 import {
+  getEnterpriseConfigError,
   getStripeClient,
   getSubscriptionCurrentPeriodEnd,
   verifyEnterpriseKey,
 } from '@/platform/enterprise';
+import { forwardToTwentyConnect } from '@/platform/enterprise/forward-to-twenty-connect';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
-  if (
-    !process.env.STRIPE_SECRET_KEY ||
-    !process.env.ENTERPRISE_JWT_PUBLIC_KEY
-  ) {
-    console.error(
-      '[enterprise-status] 503 — STRIPE_SECRET_KEY and/or ENTERPRISE_JWT_PUBLIC_KEY are not configured',
-    );
-    return NextResponse.json(
-      { error: 'Enterprise status is not configured.' },
-      { status: 503 },
-    );
+  const forwardedResponse = await forwardToTwentyConnect(request);
+
+  if (isDefined(forwardedResponse)) {
+    return forwardedResponse;
+  }
+
+  const configError = getEnterpriseConfigError({
+    route: 'enterprise-status',
+    feature: 'Enterprise status',
+    requiredEnvVars: ['STRIPE_SECRET_KEY', 'ENTERPRISE_JWT_PUBLIC_KEY'],
+  });
+
+  if (configError) {
+    return configError;
   }
 
   try {
@@ -37,7 +43,7 @@ export async function POST(request: Request) {
 
     if (!payload) {
       return NextResponse.json(
-        { error: 'Invalid enterprise key' },
+        { error: 'Invalid Organization key' },
         { status: 403 },
       );
     }

@@ -1,48 +1,59 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback } from 'react';
 import { useAtom, useStore } from 'jotai';
 
-import { BLOCK_SCHEMA } from '@/blocknote-editor/blocks/Schema';
-import { BlockEditor } from '@/blocknote-editor/components/BlockEditor';
-import { BLOCK_EDITOR_GLOBAL_HOTKEYS_CONFIG } from '@/blocknote-editor/constants/BlockEditorGlobalHotkeysConfig';
-import { useAttachmentSync } from '@/blocknote-editor/hooks/useAttachmentSync';
-import { useReplaceBlockEditorContent } from '@/blocknote-editor/hooks/useReplaceBlockEditorContent';
-import { parseInitialBlocknote } from '@/blocknote-editor/utils/parseInitialBlocknote';
-import { prepareBodyWithSignedUrls } from '@/blocknote-editor/utils/prepareBodyWithSignedUrls';
 import { type Attachment } from '@/activities/files/types/Attachment';
+import { useAttachmentSync } from '@/activities/files/hooks/useAttachmentSync';
 import { useUploadAttachmentFile } from '@/activities/files/hooks/useUploadAttachmentFile';
 import { getActivityTargetObjectFieldIdName } from '@/activities/utils/getActivityTargetObjectFieldIdName';
+import { AdvancedTextEditor } from '@/advanced-text-editor/components/AdvancedTextEditor';
+import { AdvancedTextEditorBlockHandle } from '@/advanced-text-editor/components/AdvancedTextEditorBlockHandle';
+import { useAdvancedTextEditor } from '@/advanced-text-editor/hooks/useAdvancedTextEditor';
+import { type UploadErrorHandler } from '@/advanced-text-editor/types/UploadErrorHandler';
+import { getStorableEditorDocument } from '@/advanced-text-editor/utils/getStorableEditorDocument';
+import { serializeJsonContentAsAdvancedTextEditorDocument } from '@/advanced-text-editor/utils/serializeJsonContentAsAdvancedTextEditorDocument';
+import { useMentionSearch } from '@/mention/hooks/useMentionSearch';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
-import { CoreObjectNameSingular } from 'twenty-shared/types';
+import { StandardObjectNameSingular } from 'twenty-shared/types';
 import { modifyRecordFromCache } from '@/object-record/cache/utils/modifyRecordFromCache';
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
 import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
-import { draftRecordIdsState } from '@/object-record/record-side-panel/states/draftRecordIdsState';
+import { RICH_TEXT_FIELD_EDITOR_GLOBAL_HOTKEYS_CONFIG } from '@/object-record/record-field/ui/meta-types/input/constants/RichTextFieldEditorGlobalHotkeysConfig';
+import { RICH_TEXT_FIELD_EDITOR_PROFILE } from '@/object-record/record-field/ui/meta-types/input/constants/RichTextFieldEditorProfile';
+import { type FieldRichTextValue } from '@/object-record/record-field/ui/types/FieldMetadata';
+import { getRichTextFieldSerializedContent } from '@/object-record/record-field/ui/utils/getRichTextFieldSerializedContent';
+import { stripRichTextFileUrlTokens } from '@/object-record/record-field/ui/utils/stripRichTextFileUrlTokens';
+import { useRecordSeededDraft } from '@/object-record/record-seeded-draft/hooks/useRecordSeededDraft';
 import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
 import { useIsRecordFieldReadOnly } from '@/object-record/read-only/hooks/useIsRecordFieldReadOnly';
 import { usePushFocusItemToFocusStack } from '@/ui/utilities/focus/hooks/usePushFocusItemToFocusStack';
 import { useRemoveFocusItemFromFocusStackById } from '@/ui/utilities/focus/hooks/useRemoveFocusItemFromFocusStackById';
 import { FocusComponentType } from '@/ui/utilities/focus/types/FocusComponentType';
 import { useHotkeysOnFocusedElement } from '@/ui/utilities/hotkey/hooks/useHotkeysOnFocusedElement';
-import { t } from '@lingui/core/macro';
-import '@blocknote/core/fonts/inter.css';
-import '@blocknote/mantine/style.css';
-import { useCreateBlockNote } from '@blocknote/react';
-import '@blocknote/react/style.css';
+import { styled } from '@linaria/react';
+import { type Editor } from '@tiptap/core';
 import { Key } from 'ts-key-enum';
 import { isDefined } from 'twenty-shared/utils';
+import { useToast } from 'twenty-ui/components/feedback';
 import { useDebouncedCallback } from 'use-debounce';
+import { useLingui } from '@lingui/react/macro';
+
+const StyledEditorContainer = styled.div`
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+  position: relative;
+  width: 100%;
+`;
 
 type RichTextFieldEditorProps = {
   recordId: string;
   objectNameSingular: string;
   fieldName: string;
-  onPersistBody?: (blocknote: string) => void;
+  onPersistBody?: (tiptap: string) => void;
   onFocus?: () => void;
   onBlur?: () => void;
-  editorRef?: React.MutableRefObject<
-    typeof BLOCK_SCHEMA.BlockNoteEditor | null
-  >;
+  editorRef?: React.MutableRefObject<Editor | null>;
 };
 
 export const RichTextFieldEditor = ({
@@ -54,6 +65,7 @@ export const RichTextFieldEditor = ({
   onBlur: onBlurOverride,
   editorRef,
 }: RichTextFieldEditorProps) => {
+  const { t } = useLingui();
   const store = useStore();
   const [recordInStore] = useAtom(recordStoreFamilyState.atomFamily(recordId));
 
@@ -86,7 +98,7 @@ export const RichTextFieldEditor = ({
   });
 
   const { records: attachments } = useFindManyRecords<Attachment>({
-    objectNameSingular: CoreObjectNameSingular.Attachment,
+    objectNameSingular: StandardObjectNameSingular.Attachment,
     filter: {
       [attachmentTargetFieldIdName]: {
         eq: recordId,
@@ -98,161 +110,113 @@ export const RichTextFieldEditor = ({
 
   const { uploadAttachmentFile } = useUploadAttachmentFile();
 
-  const handleUploadAttachment = async (file: File) => {
-    return await uploadAttachmentFile(file, {
+  const { searchMentionRecords } = useMentionSearch();
+
+  const { enqueueToast } = useToast();
+
+  const handleUploadFile = async (file: File) => {
+    const { attachmentAbsoluteURL } = await uploadAttachmentFile(file, {
       id: recordId,
       targetObjectNameSingular: objectNameSingular,
     });
+
+    return { url: attachmentAbsoluteURL };
   };
 
-  const handleEditorBuiltInUploadFile = async (file: File) => {
-    const { attachmentAbsoluteURL } = await handleUploadAttachment(file);
-
-    return attachmentAbsoluteURL;
+  const handleUploadFileError: UploadErrorHandler = ({ file }) => {
+    enqueueToast({
+      status: 'error',
+      children: t`Failed to upload "${file.name}"`,
+    });
   };
 
-  const persistBodyDebounced = useDebouncedCallback((blocknote: string) => {
-    if (isRecordFieldReadOnly === true) return;
+  const fieldValue: FieldRichTextValue | undefined = recordInStore?.[fieldName];
 
-    if (onPersistBody) {
-      onPersistBody(blocknote);
-      return;
-    }
+  const { updateDraft, markDirty, flush, draftResyncKey } =
+    useRecordSeededDraft({
+      upstreamDraft: {
+        tiptap: stripRichTextFileUrlTokens(
+          getRichTextFieldSerializedContent(fieldValue) ?? '',
+        ),
+      },
+      persistDebounceMs: 300,
+      resetKey: recordId,
+      onPersist: ({ tiptap }) => {
+        if (isRecordFieldReadOnly === true) {
+          return;
+        }
 
-    // OMNIA-CUSTOM: Draft guard. Mirrors usePersistField's draft handling —
-    // the record doesn't exist on the server yet, so updateOneRecord throws
-    // "record does not exist or has been deleted". The store write in
-    // handleBodyChange already keeps the body in memory, and
-    // RecordShowSidePanelCreateRecordButton picks it up on Create.
-    if (store.get(draftRecordIdsState.atom).has(recordId)) {
-      return;
-    }
+        if (onPersistBody) {
+          onPersistBody(tiptap);
+          return;
+        }
 
-    updateOneRecord({
-      idToUpdate: recordId,
-      objectNameSingular,
-      updateOneRecordInput: {
-        [fieldName]: {
-          blocknote,
-          markdown: null,
-        },
+        updateOneRecord({
+          idToUpdate: recordId,
+          objectNameSingular,
+          updateOneRecordInput: {
+            [fieldName]: {
+              blocknote: null,
+              markdown: null,
+              tiptap,
+            },
+          },
+        });
       },
     });
-  }, 300);
 
-  const handleBodyChange = useCallback(
-    async (newStringifiedBody: string) => {
-      const oldRecord = store.get(recordStoreFamilyState.atomFamily(recordId));
+  const handleBodyChange = async (newSerializedDocument: string) => {
+    const oldRecord = store.get(recordStoreFamilyState.atomFamily(recordId));
+    const oldFieldValue: FieldRichTextValue | undefined =
+      oldRecord?.[fieldName];
+    const newFieldValue: FieldRichTextValue = {
+      blocknote: null,
+      markdown: null,
+      tiptap: newSerializedDocument,
+    };
 
-      store.set(
-        recordStoreFamilyState.atomFamily(recordId),
-        (prev: typeof oldRecord) => ({
-          ...prev,
-          id: recordId,
-          [fieldName]: {
-            blocknote: newStringifiedBody,
-            markdown: null,
-          },
-          __typename: prev?.__typename ?? objectNameSingular,
-        }),
-      );
+    store.set(
+      recordStoreFamilyState.atomFamily(recordId),
+      (prev: typeof oldRecord) => ({
+        ...prev,
+        id: recordId,
+        [fieldName]: newFieldValue,
+        __typename: prev?.__typename ?? objectNameSingular,
+      }),
+    );
 
-      modifyRecordFromCache({
-        recordId,
-        fieldModifiers: {
-          [fieldName]: () => ({
-            blocknote: newStringifiedBody,
-            markdown: null,
-          }),
-        },
-        cache,
-        objectMetadataItem,
-      });
-
-      persistBodyDebounced(prepareBodyWithSignedUrls(newStringifiedBody));
-
-      const oldFieldValue = oldRecord?.[fieldName] as
-        | { blocknote?: string | null }
-        | undefined;
-
-      await syncAttachments(newStringifiedBody, oldFieldValue?.blocknote);
-    },
-    [
-      store,
+    modifyRecordFromCache({
       recordId,
-      fieldName,
-      objectNameSingular,
+      fieldModifiers: {
+        [fieldName]: () => newFieldValue,
+      },
       cache,
       objectMetadataItem,
-      persistBodyDebounced,
-      syncAttachments,
-    ],
-  );
+    });
+
+    // Only after capturing the pre-edit body: persisting rewrites the record, so the diff would miss removed attachments.
+    updateDraft({ tiptap: stripRichTextFileUrlTokens(newSerializedDocument) });
+
+    await syncAttachments(
+      newSerializedDocument,
+      getRichTextFieldSerializedContent(oldFieldValue),
+    );
+  };
 
   const handleBodyChangeDebounced = useDebouncedCallback(handleBodyChange, 500);
 
-  const handleEditorChange = () => {
-    const newStringifiedBody = JSON.stringify(editor.document) ?? '';
+  const handleEditorUpdate = (currentEditor: Editor) => {
+    // Serialization is debounced, so mark dirty now or a remote adoption could replace in-progress typing.
+    markDirty();
 
-    handleBodyChangeDebounced(newStringifiedBody);
+    handleBodyChangeDebounced(
+      serializeJsonContentAsAdvancedTextEditorDocument(
+        getStorableEditorDocument(currentEditor),
+      ),
+    );
   };
 
-  const fieldValue = isDefined(recordInStore)
-    ? (recordInStore as Record<string, { blocknote?: string | null }>)?.[
-        fieldName
-      ]
-    : null;
-
-  const initialBody = useMemo(() => {
-    if (!isDefined(fieldValue)) {
-      return undefined;
-    }
-
-    return parseInitialBlocknote(
-      fieldValue?.blocknote,
-      `Failed to parse body for field ${fieldName} on record ${recordId}`,
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fieldName, recordId]);
-
-  const editor = useCreateBlockNote({
-    initialContent: initialBody,
-    domAttributes: { editor: { class: 'editor' } },
-    schema: BLOCK_SCHEMA,
-    uploadFile: handleEditorBuiltInUploadFile,
-    placeholders: {
-      default: t`Type '/' for commands, '@' for mentions`,
-    },
-  });
-
-  if (editorRef) {
-    editorRef.current = editor;
-  }
-
-  const { replaceBlockEditorContent } = useReplaceBlockEditorContent(
-    editor,
-    fieldName,
-  );
-
-  const [currentRecordId, setCurrentRecordId] = useState(recordId);
-
-  useEffect(() => {
-    if (currentRecordId !== recordId) {
-      replaceBlockEditorContent(recordId);
-      setCurrentRecordId(recordId);
-    }
-  }, [recordId, currentRecordId, replaceBlockEditorContent]);
-
-  useHotkeysOnFocusedElement({
-    keys: Key.Escape,
-    callback: () => {
-      editor.domElement?.blur();
-    },
-    focusId,
-    dependencies: [editor],
-  });
-
-  const handleBlockEditorFocus = useCallback(() => {
+  const handleEditorFocus = useCallback(() => {
     if (onFocusOverride) {
       onFocusOverride();
       return;
@@ -264,26 +228,72 @@ export const RichTextFieldEditor = ({
         type: FocusComponentType.ACTIVITY_RICH_TEXT_EDITOR,
       },
       focusId,
-      globalHotkeysConfig: BLOCK_EDITOR_GLOBAL_HOTKEYS_CONFIG,
+      globalHotkeysConfig: RICH_TEXT_FIELD_EDITOR_GLOBAL_HOTKEYS_CONFIG,
     });
   }, [focusId, pushFocusItemToFocusStack, onFocusOverride]);
 
-  const handleBlockEditorBlur = useCallback(() => {
+  const handleEditorBlur = () => {
+    handleBodyChangeDebounced.flush();
+    flush();
+
     if (onBlurOverride) {
       onBlurOverride();
       return;
     }
 
     removeFocusItemFromFocusStackById({ focusId });
-  }, [focusId, removeFocusItemFromFocusStackById, onBlurOverride]);
+  };
+
+  const editor = useAdvancedTextEditor(
+    {
+      profile: RICH_TEXT_FIELD_EDITOR_PROFILE,
+      placeholder: t`Type '/' for commands, '@' for mentions`,
+      readonly: isRecordFieldReadOnly,
+      defaultValue: getRichTextFieldSerializedContent(fieldValue),
+      onUpdate: handleEditorUpdate,
+      onFocus: handleEditorFocus,
+      onBlur: handleEditorBlur,
+      onImageUpload: handleUploadFile,
+      onImageUploadError: handleUploadFileError,
+      onFileUpload: handleUploadFile,
+      onFileUploadError: handleUploadFileError,
+    },
+    [recordId, isRecordFieldReadOnly, draftResyncKey],
+  );
+
+  if (isDefined(editorRef)) {
+    editorRef.current = editor;
+  }
+
+  if (isDefined(editor)) {
+    editor.extensionStorage['mention-suggestion'].searchMentionRecords =
+      searchMentionRecords;
+  }
+
+  useHotkeysOnFocusedElement({
+    keys: Key.Escape,
+    callback: () => {
+      editor?.commands.blur();
+    },
+    focusId,
+    dependencies: [editor],
+  });
+
+  if (!isDefined(editor)) {
+    return null;
+  }
 
   return (
-    <BlockEditor
-      onFocus={handleBlockEditorFocus}
-      onBlur={handleBlockEditorBlur}
-      onChange={handleEditorChange}
-      editor={editor}
-      readonly={isRecordFieldReadOnly}
-    />
+    <StyledEditorContainer>
+      <AdvancedTextEditor
+        editor={editor}
+        readonly={isRecordFieldReadOnly}
+        minHeight={RICH_TEXT_FIELD_EDITOR_PROFILE.minHeight}
+        variant={RICH_TEXT_FIELD_EDITOR_PROFILE.variant}
+      />
+      {!isRecordFieldReadOnly && (
+        <AdvancedTextEditorBlockHandle editor={editor} />
+      )}
+    </StyledEditorContainer>
   );
 };

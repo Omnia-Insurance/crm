@@ -12,6 +12,7 @@ import { useStore } from 'jotai';
 
 export const useComputeColumnSuggestionsAndAutoMatch = () => {
   const store = useStore();
+  // OMNIA-CUSTOM: precomputedMatches for reconciliation
   const {
     spreadsheetImportFields: fields,
     autoMapHeaders,
@@ -36,6 +37,7 @@ export const useComputeColumnSuggestionsAndAutoMatch = () => {
             columns,
             fields,
             data,
+            // OMNIA-CUSTOM: a carrier's saved column map is applied before Fuse
             precomputedMatches,
           });
 

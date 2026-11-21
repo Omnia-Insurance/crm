@@ -55,7 +55,7 @@ export const useRecordIndexGroupCommonQueryVariables = () => {
 
   const { recordGqlOperationFilter: anyFieldFilter } =
     turnAnyFieldFilterIntoRecordGqlFilter({
-      fields: objectMetadataItem.fields,
+      fields: objectMetadataItem.readableFields,
       filterValue: anyFieldFilterValue,
     });
 
@@ -71,7 +71,7 @@ export const useRecordIndexGroupCommonQueryVariables = () => {
 
   const recordGqlFields = useRelevantRecordsGqlFields({
     objectMetadataItem,
-    additionalFieldMetadataId: recordIndexGroupFieldMetadataItem?.id,
+    additionalFieldMetadataIds: [recordIndexGroupFieldMetadataItem?.id],
   });
 
   const recordGroupDefinitions = useAtomComponentSelectorValue(

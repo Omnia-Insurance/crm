@@ -1,14 +1,8 @@
-import { styled } from '@linaria/react';
-import { motion } from 'framer-motion';
-import { useCallback, useContext, useMemo, useRef, useState } from 'react';
-
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { RecordChip } from '@/object-record/components/RecordChip';
 import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
 import { RecordFieldList } from '@/object-record/record-field-list/components/RecordFieldList';
-// OMNIA-CUSTOM: reconciliation diffs context
-import { ReconciliationDiffsContext } from '@/reconciliation/contexts/ReconciliationDiffsContext';
 import { useRecordFieldsScopeContextOrThrow } from '@/object-record/record-field-list/contexts/RecordFieldsScopeContext';
 import { RecordDetailRecordsListItemContainer } from '@/object-record/record-field-list/record-detail-section/components/RecordDetailRecordsListItemContainer';
 import { FieldContext } from '@/object-record/record-field/ui/contexts/FieldContext';
@@ -18,28 +12,32 @@ import { singleRecordPickerSelectedIdComponentState } from '@/object-record/reco
 import { getRecordFieldCardRelationPickerDropdownId } from '@/object-record/record-show/utils/getRecordFieldCardRelationPickerDropdownId';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
 import { getForeignKeyNameFromRelationFieldName } from '@/object-record/utils/getForeignKeyNameFromRelationFieldName';
-import { Dropdown } from '@/ui/layout/dropdown/components/Dropdown';
+import { ReconciliationRelationDiffsScope } from '@/reconciliation/components/ReconciliationRelationDiffsScope';
+import { ReconciliationRelationNameDiffChip } from '@/reconciliation/components/ReconciliationRelationNameDiffChip';
+import { ReconciliationDiffsContext } from '@/reconciliation/contexts/ReconciliationDiffsContext';
 import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
-import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
-import { useCloseDropdown } from '@/ui/layout/dropdown/hooks/useCloseDropdown';
-import { isDropdownOpenComponentState } from '@/ui/layout/dropdown/states/isDropdownOpenComponentState';
-import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
+import { DropdownRoot } from '@/ui/layout/dropdown/components/DropdownRoot';
+import { GenericDropdownContentWidth } from '@/ui/layout/dropdown/constants/GenericDropdownContentWidth';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
-import { t } from '@lingui/core/macro';
+import { styled } from '@linaria/react';
+import { useLingui } from '@lingui/react/macro';
+import { motion } from 'framer-motion';
+import { useCallback, useContext } from 'react';
 import {
   computeMorphRelationGqlFieldName,
   CustomError,
+  isDefined,
 } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
+import { LightIconButton } from 'twenty-ui/components/input';
+import { Dropdown } from 'twenty-ui/components/navigation';
 import {
   IconChevronDown,
   IconDotsVertical,
   IconUnlink,
   type IconComponent,
 } from 'twenty-ui/icon';
-import { LightIconButton } from 'twenty-ui/input';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
-import { MenuItem } from 'twenty-ui/navigation';
-import { AnimatedEaseInOut } from 'twenty-ui/layout';
+import { Collapsible } from 'twenty-ui/primitives/layout';
 import { FieldMetadataType, RelationType } from '~/generated-metadata/graphql';
 
 const StyledClickableZone = styled.div`
@@ -51,68 +49,11 @@ const StyledClickableZone = styled.div`
   justify-content: flex-end;
 `;
 
-const MotionIconChevronDown = motion.create(IconChevronDown);
-
-// OMNIA-CUSTOM: Diff highlight wrapper for the relation chip row
-const StyledDiffChipRow = styled.div<{ accepted: boolean }>`
-  align-items: center;
-  background: ${({ accepted }) =>
-    accepted
-      ? themeCssVariables.color.transparent.red2
-      : themeCssVariables.color.transparent.green2};
-  border-left: 2px solid
-    ${({ accepted }) =>
-      accepted ? themeCssVariables.color.red : themeCssVariables.color.green};
-  border-radius: 0 ${themeCssVariables.border.radius.sm}
-    ${themeCssVariables.border.radius.sm} 0;
+const StyledHoverRevealedAction = styled.div`
   display: flex;
-  flex: 1;
-  gap: ${themeCssVariables.spacing[2]};
-  margin: -${themeCssVariables.spacing[1]} 0;
-  min-width: 0;
-  padding: ${themeCssVariables.spacing[1]} ${themeCssVariables.spacing[2]};
 `;
 
-const StyledDiffAnnotation = styled.span`
-  align-items: center;
-  display: inline-flex;
-  font-size: ${themeCssVariables.font.size.sm};
-  gap: ${themeCssVariables.spacing[1]};
-  white-space: nowrap;
-`;
-
-const StyledDiffOldName = styled.span`
-  color: ${themeCssVariables.font.color.tertiary};
-  text-decoration: line-through;
-`;
-
-const StyledDiffArrow = styled.span`
-  color: ${themeCssVariables.font.color.light};
-`;
-
-const StyledDiffNewName = styled.span`
-  color: ${themeCssVariables.font.color.primary};
-  font-weight: ${themeCssVariables.font.weight.medium};
-`;
-
-const StyledDiffBtn = styled.button<{ isAccepted: boolean }>`
-  background: ${({ isAccepted }) =>
-    isAccepted ? themeCssVariables.color.red : themeCssVariables.color.green};
-  border: none;
-  border-radius: ${themeCssVariables.border.radius.sm};
-  color: ${themeCssVariables.font.color.inverted};
-  cursor: pointer;
-  flex-shrink: 0;
-  font-family: inherit;
-  font-size: ${themeCssVariables.font.size.xs};
-  font-weight: ${themeCssVariables.font.weight.medium};
-  height: 20px;
-  opacity: 0.75;
-  padding: 0 ${themeCssVariables.spacing[2]};
-  &:hover {
-    opacity: 1;
-  }
-`;
+const MotionIconChevronDown = motion.create(IconChevronDown);
 
 type RecordDetailRelationRecordsListItemProps = {
   isExpanded: boolean;
@@ -120,7 +61,6 @@ type RecordDetailRelationRecordsListItemProps = {
   relationRecord: ObjectRecord;
   relationObjectMetadataNameSingular: string;
   relationFieldMetadataId: string;
-  showRequiredIndicator?: boolean;
 };
 
 export const RecordDetailRelationRecordsListItem = ({
@@ -129,8 +69,8 @@ export const RecordDetailRelationRecordsListItem = ({
   relationRecord,
   relationObjectMetadataNameSingular,
   relationFieldMetadataId,
-  showRequiredIndicator = false,
 }: RecordDetailRelationRecordsListItemProps) => {
+  const { t } = useLingui();
   const { scopeInstanceId } = useRecordFieldsScopeContextOrThrow();
   const {
     fieldDefinition,
@@ -140,138 +80,9 @@ export const RecordDetailRelationRecordsListItem = ({
 
   const { onSubmit } = useContext(FieldInputEventContext);
 
-  // OMNIA-CUSTOM: Get reconciliation diffs for this relation's fields
-  const reconDiffs = useContext(ReconciliationDiffsContext);
-  const relationName = fieldDefinition?.metadata?.fieldName;
-  const relationFieldDiffs = useMemo(() => {
-    if (!reconDiffs?.fieldDiffs || !relationName) return undefined;
-    const relDiffs = reconDiffs.fieldDiffs.filter(
-      (d) =>
-        d.crmField?.startsWith(`${relationName}.`) &&
-        d.bobValue !== null &&
-        d.bobValue !== d.crmValue,
-    );
-    if (relDiffs.length === 0) return undefined;
-    return relDiffs.map((d) => ({
-      ...d,
-      crmField: d.crmField?.slice(relationName.length + 1) ?? d.crmField,
-    }));
-  }, [reconDiffs, relationName]);
-
-  // OMNIA-CUSTOM: Extract this relation's name diffs (composite or single).
-  // "Name-shaped" covers both composite (lead.name.firstName/lastName) and
-  // single TEXT name fields (agent.name). Non-name diffs surface only on
-  // the expanded RecordFieldList — the chip is name-focused.
-  const compositeNameDiffs = useMemo(() => {
-    if (!relationFieldDiffs) return [];
-    return relationFieldDiffs.filter((d) => d.crmField?.startsWith('name.'));
-  }, [relationFieldDiffs]);
-
-  const singleNameDiff = useMemo(() => {
-    if (!relationFieldDiffs) return null;
-    return relationFieldDiffs.find((d) => d.crmField === 'name') ?? null;
-  }, [relationFieldDiffs]);
-
-  const hasNameDiff = compositeNameDiffs.length > 0 || singleNameDiff !== null;
-
-  type NameProposal =
-    | {
-        kind: 'composite';
-        oldFirst: string;
-        oldLast: string;
-        newFirst: string;
-        newLast: string;
-      }
-    | { kind: 'single'; oldValue: string; newValue: string };
-
-  const proposedName = useMemo<NameProposal | null>(() => {
-    const recordObj = relationRecord as Record<string, unknown>;
-
-    if (compositeNameDiffs.length > 0) {
-      const first = compositeNameDiffs.find(
-        (d) => d.crmField === 'name.firstName',
-      );
-      const last = compositeNameDiffs.find(
-        (d) => d.crmField === 'name.lastName',
-      );
-      const nameVal =
-        recordObj.name && typeof recordObj.name === 'object'
-          ? (recordObj.name as Record<string, string>)
-          : null;
-      const currentFirst = nameVal?.firstName ?? null;
-      const currentLast = nameVal?.lastName ?? null;
-      return {
-        kind: 'composite',
-        oldFirst: first?.crmValue ?? currentFirst ?? '',
-        oldLast: last?.crmValue ?? currentLast ?? '',
-        newFirst: first?.bobValue ?? currentFirst ?? '',
-        newLast: last?.bobValue ?? currentLast ?? '',
-      };
-    }
-
-    if (singleNameDiff) {
-      const currentValue =
-        typeof recordObj.name === 'string' ? recordObj.name : '';
-      return {
-        kind: 'single',
-        oldValue: singleNameDiff.crmValue ?? currentValue,
-        newValue: singleNameDiff.bobValue ?? currentValue,
-      };
-    }
-
-    return null;
-  }, [compositeNameDiffs, singleNameDiff, relationRecord]);
-
-  // Check if name has already been accepted (current value matches proposed)
-  const nameAccepted = useMemo(() => {
-    if (!proposedName) return false;
-    const recordObj = relationRecord as Record<string, unknown>;
-
-    if (proposedName.kind === 'composite') {
-      const name = recordObj.name as Record<string, string> | null;
-      if (!name) return false;
-      return (
-        name.firstName === proposedName.newFirst &&
-        name.lastName === proposedName.newLast
-      );
-    }
-
-    return recordObj.name === proposedName.newValue;
-  }, [proposedName, relationRecord]);
-
-  const { updateOneRecord: updateRelationRecordForName } = useUpdateOneRecord();
-
-  const handleAcceptName = useCallback(() => {
-    if (!proposedName) return;
-
-    const newName =
-      proposedName.kind === 'composite'
-        ? {
-            name: {
-              firstName: nameAccepted
-                ? proposedName.oldFirst
-                : proposedName.newFirst,
-              lastName: nameAccepted
-                ? proposedName.oldLast
-                : proposedName.newLast,
-            },
-          }
-        : {
-            name: nameAccepted ? proposedName.oldValue : proposedName.newValue,
-          };
-
-    updateRelationRecordForName({
-      objectNameSingular: relationObjectMetadataNameSingular,
-      idToUpdate: relationRecord.id,
-      updateOneRecordInput: newName,
-    });
-  }, [
-    proposedName,
-    nameAccepted,
-    relationRecord.id,
-    relationObjectMetadataNameSingular,
-    updateRelationRecordForName,
-  ]);
+  // OMNIA-CUSTOM: the reconciliation review annotates relation chips and the
+  // expanded record with BOB diffs; null everywhere else.
+  const reconciliationDiffs = useContext(ReconciliationDiffsContext);
 
   const { relationType, objectMetadataNameSingular } =
     fieldDefinition.metadata as FieldRelationMetadata;
@@ -284,7 +95,7 @@ export const RecordDetailRelationRecordsListItem = ({
 
   if (!objectMetadataItem) {
     throw new CustomError(
-      'Object metadata item not found',
+      doNotTranslate('Object metadata item not found'),
       'OBJECT_METADATA_ITEM_NOT_FOUND',
     );
   }
@@ -298,12 +109,6 @@ export const RecordDetailRelationRecordsListItem = ({
   const { updateOneRecord: updateOneRelationRecord } = useUpdateOneRecord();
 
   const dropdownInstanceId = `record-field-card-menu:${scopeInstanceId}:${relationFieldMetadataId}:${relationRecord.id}`;
-
-  const { closeDropdown } = useCloseDropdown();
-  const isDropdownOpen = useAtomComponentStateValue(
-    isDropdownOpenComponentState,
-    dropdownInstanceId,
-  );
 
   const dropdownId = getRecordFieldCardRelationPickerDropdownId({
     fieldDefinition,
@@ -342,9 +147,9 @@ export const RecordDetailRelationRecordsListItem = ({
       };
 
   const handleDetach = () => {
-    closeDropdown(dropdownInstanceId);
-
-    if (!relationFieldMetadataItem?.name) return;
+    if (!relationFieldMetadataItem?.name) {
+      return;
+    }
 
     if (isToOneObject) {
       onSubmit?.({ newValue: null });
@@ -377,38 +182,16 @@ export const RecordDetailRelationRecordsListItem = ({
 
   return (
     <>
-      <RecordDetailRecordsListItemContainer
-        isDropdownOpen={isDropdownOpen}
-        data-testid="record-detail-records-list-item"
-      >
-        {hasNameDiff && proposedName ? (
-          <StyledDiffChipRow accepted={nameAccepted}>
-            <RecordChip
-              record={relationRecord}
-              objectNameSingular={relationObjectMetadataItem.nameSingular}
-            />
-            <StyledDiffAnnotation>
-              <StyledDiffArrow>→</StyledDiffArrow>
-              <StyledDiffNewName>
-                {proposedName.kind === 'composite'
-                  ? nameAccepted
-                    ? `${proposedName.oldFirst} ${proposedName.oldLast}`
-                    : `${proposedName.newFirst} ${proposedName.newLast}`
-                  : nameAccepted
-                    ? proposedName.oldValue
-                    : proposedName.newValue}
-              </StyledDiffNewName>
-            </StyledDiffAnnotation>
-            <StyledDiffBtn
-              isAccepted={nameAccepted}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleAcceptName();
-              }}
-            >
-              {nameAccepted ? 'Undo' : 'Accept'}
-            </StyledDiffBtn>
-          </StyledDiffChipRow>
+      <RecordDetailRecordsListItemContainer data-testid="record-detail-records-list-item">
+        {/* OMNIA-CUSTOM: name diff (old -> new, Accept/Undo) on the review page */}
+        {isDefined(reconciliationDiffs) ? (
+          <ReconciliationRelationNameDiffChip
+            relationRecord={relationRecord}
+            relationObjectMetadataNameSingular={
+              relationObjectMetadataItem.nameSingular
+            }
+            relationFieldName={fieldDefinition.metadata.fieldName}
+          />
         ) : (
           <RecordChip
             record={relationRecord}
@@ -416,57 +199,58 @@ export const RecordDetailRelationRecordsListItem = ({
           />
         )}
         <StyledClickableZone onClick={handleClick} data-testid="expand-button">
-          <LightIconButton
-            className="displayOnHover"
-            Icon={AnimatedIconChevronDown}
-            accent="tertiary"
-          />
+          <StyledHoverRevealedAction className="displayOnHover">
+            <LightIconButton emphasis="subtle" aria-label={t`Expand relation`}>
+              <AnimatedIconChevronDown />
+            </LightIconButton>
+          </StyledHoverRevealedAction>
         </StyledClickableZone>
         {!parentIsRecordFieldReadOnly && (
-          <Dropdown
-            dropdownId={dropdownInstanceId}
-            dropdownPlacement="right-start"
-            clickableComponent={
-              <LightIconButton
-                className="displayOnHover"
-                Icon={IconDotsVertical}
-                accent="tertiary"
+          <DropdownRoot dropdownId={dropdownInstanceId} type="menu">
+            <StyledHoverRevealedAction className="displayOnHover">
+              <Dropdown.Trigger
+                render={
+                  <LightIconButton
+                    emphasis="subtle"
+                    aria-label={t`More options`}
+                  >
+                    <IconDotsVertical />
+                  </LightIconButton>
+                }
               />
-            }
-            dropdownComponents={
-              <DropdownContent>
-                <DropdownMenuItemsContainer>
-                  {/*
-                    OMNIA-CUSTOM: Delete intentionally omitted. Detaching a
-                    relation from a record's detail panel must never delete the
-                    related record itself — admins were accidentally deleting
-                    Agents/Leads/etc. from here. Deletion happens from the
-                    object's own page.
-                  */}
-                  <MenuItem
-                    LeftIcon={IconUnlink}
-                    text={t`Detach`}
-                    onClick={handleDetach}
-                  />
-                </DropdownMenuItemsContainer>
-              </DropdownContent>
-            }
-          />
+            </StyledHoverRevealedAction>
+            <DropdownContent
+              side="right"
+              align="start"
+              width={GenericDropdownContentWidth.Medium}
+            >
+              <Dropdown.Section>
+                {/* OMNIA-CUSTOM: Delete intentionally omitted. Admins deleted the
+                    related Agent or Lead while trying to detach it; deletion
+                    happens from the object's own page. */}
+                <Dropdown.ActionItem
+                  startIcon={<IconUnlink />}
+                  onClick={handleDetach}
+                >{t`Detach`}</Dropdown.ActionItem>
+              </Dropdown.Section>
+            </DropdownContent>
+          </DropdownRoot>
         )}
       </RecordDetailRecordsListItemContainer>
-      <AnimatedEaseInOut isOpen={isExpanded}>
-        <RecordFieldList
-          instanceId={`${scopeInstanceId}-relation-${relationRecord.id}`}
-          objectNameSingular={relationObjectMetadataNameSingular}
-          objectRecordId={relationRecord.id}
-          showDuplicatesSection={false}
-          showRelationSections={false}
-          excludeCreatedAtAndUpdatedAt={true}
-          excludeFieldMetadataIds={[relationFieldMetadataId]}
-          showRequiredIndicator={showRequiredIndicator}
-          fieldDiffs={relationFieldDiffs}
-        />
-      </AnimatedEaseInOut>
+      <Collapsible.Root open={isExpanded}>
+        <Collapsible.Panel containAnimation={false}>
+          {/* OMNIA-CUSTOM: re-roots `<relation>.*` review diffs on the related record */}
+          <ReconciliationRelationDiffsScope
+            relationFieldName={fieldDefinition.metadata.fieldName}
+          >
+            <RecordFieldList
+              instanceId={`${scopeInstanceId}-relation-${relationRecord.id}`}
+              objectNameSingular={relationObjectMetadataNameSingular}
+              objectRecordId={relationRecord.id}
+            />
+          </ReconciliationRelationDiffsScope>
+        </Collapsible.Panel>
+      </Collapsible.Root>
     </>
   );
 };

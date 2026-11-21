@@ -1,104 +1,122 @@
+import { FieldMetadataType } from 'twenty-shared/types';
+import { isDefined } from 'twenty-shared/utils';
+
 import { RelationType } from 'src/engine/metadata-modules/field-metadata/interfaces/relation-type.interface';
 import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
+import { getFlatFieldMetadataMock } from 'src/engine/metadata-modules/flat-field-metadata/__mocks__/get-flat-field-metadata.mock';
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
-import { resolveRelationFromFlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/utils/resolve-relation-from-flat-field-metadata.util';
+import { getFlatObjectMetadataMock } from 'src/engine/metadata-modules/flat-object-metadata/__mocks__/get-flat-object-metadata.mock';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 import { findRelationPathsToPerson } from 'src/engine/core-modules/related-person-ids/utils/find-relation-paths-to-person.util';
-
-jest.mock(
-  'src/engine/metadata-modules/flat-field-metadata/utils/resolve-relation-from-flat-field-metadata.util',
-);
-
-const resolveRelationMock = jest.mocked(resolveRelationFromFlatFieldMetadata);
 
 type RelationSpec = {
   fieldName: string;
   relationType: RelationType;
   targetObjectNameSingular: string;
   inverseFieldName: string;
+  morphId?: string;
 };
+
+const fieldId = (objectNameSingular: string, fieldName: string) =>
+  `${objectNameSingular}.${fieldName}`;
+
+const invertRelationType = (relationType: RelationType) =>
+  relationType === RelationType.MANY_TO_ONE
+    ? RelationType.ONE_TO_MANY
+    : RelationType.MANY_TO_ONE;
 
 const buildGraphFixtures = (
   graph: Record<string, RelationSpec[]>,
   options: { systemObjectNames?: string[] } = {},
 ) => {
   const systemObjectNames = options.systemObjectNames ?? [];
-  const fieldId = (objectNameSingular: string, fieldName: string) =>
-    `${objectNameSingular}.${fieldName}`;
-
-  const flatObjectMetadataMaps = {
-    byUniversalIdentifier: {},
-    universalIdentifierById: {},
-  } as unknown as FlatEntityMaps<FlatObjectMetadata>;
-
-  const flatFieldMetadataMaps = {
-    byUniversalIdentifier: {},
-    universalIdentifierById: {},
-  } as unknown as FlatEntityMaps<FlatFieldMetadata>;
-
-  const relationSpecByFieldId = new Map<
-    string,
-    { sourceObjectNameSingular: string; spec: RelationSpec }
-  >();
+  const specsByObjectNameSingular = Object.fromEntries(
+    Object.entries(graph).map(([objectNameSingular, relationSpecs]) => [
+      objectNameSingular,
+      [...relationSpecs],
+    ]),
+  );
 
   for (const [objectNameSingular, relationSpecs] of Object.entries(graph)) {
-    flatObjectMetadataMaps.byUniversalIdentifier[objectNameSingular] = {
-      id: objectNameSingular,
-      nameSingular: objectNameSingular,
-      fieldIds: relationSpecs.map((spec) =>
-        fieldId(objectNameSingular, spec.fieldName),
-      ),
-    } as unknown as FlatObjectMetadata;
+    for (const spec of relationSpecs) {
+      const inverseSpecs =
+        specsByObjectNameSingular[spec.targetObjectNameSingular];
+
+      if (
+        !isDefined(inverseSpecs) ||
+        inverseSpecs.some(
+          (inverseSpec) => inverseSpec.fieldName === spec.inverseFieldName,
+        )
+      ) {
+        continue;
+      }
+
+      inverseSpecs.push({
+        fieldName: spec.inverseFieldName,
+        relationType: invertRelationType(spec.relationType),
+        targetObjectNameSingular: objectNameSingular,
+        inverseFieldName: spec.fieldName,
+      });
+    }
+  }
+
+  const flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata> = {
+    byUniversalIdentifier: {},
+    universalIdentifierById: {},
+    universalIdentifiersByApplicationId: {},
+  };
+
+  const flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata> = {
+    byUniversalIdentifier: {},
+    universalIdentifierById: {},
+    universalIdentifiersByApplicationId: {},
+  };
+
+  for (const [objectNameSingular, relationSpecs] of Object.entries(
+    specsByObjectNameSingular,
+  )) {
+    flatObjectMetadataMaps.byUniversalIdentifier[objectNameSingular] =
+      getFlatObjectMetadataMock({
+        id: objectNameSingular,
+        universalIdentifier: objectNameSingular,
+        nameSingular: objectNameSingular,
+        namePlural: `${objectNameSingular}s`,
+        isSystem: systemObjectNames.includes(objectNameSingular),
+        fieldIds: relationSpecs.map((spec) =>
+          fieldId(objectNameSingular, spec.fieldName),
+        ),
+      });
     flatObjectMetadataMaps.universalIdentifierById[objectNameSingular] =
       objectNameSingular;
 
     for (const spec of relationSpecs) {
       const id = fieldId(objectNameSingular, spec.fieldName);
 
-      flatFieldMetadataMaps.byUniversalIdentifier[id] = {
-        id,
-        type: 'RELATION',
-      } as unknown as FlatFieldMetadata;
+      flatFieldMetadataMaps.byUniversalIdentifier[id] =
+        getFlatFieldMetadataMock({
+          id,
+          universalIdentifier: id,
+          name: spec.fieldName,
+          objectMetadataId: objectNameSingular,
+          type: isDefined(spec.morphId)
+            ? FieldMetadataType.MORPH_RELATION
+            : FieldMetadataType.RELATION,
+          morphId: spec.morphId ?? null,
+          isActive: true,
+          isSystem: false,
+          relationTargetFieldMetadataId: fieldId(
+            spec.targetObjectNameSingular,
+            spec.inverseFieldName,
+          ),
+          settings: { relationType: spec.relationType },
+          universalSettings: { relationType: spec.relationType },
+        });
       flatFieldMetadataMaps.universalIdentifierById[id] = id;
-
-      relationSpecByFieldId.set(id, {
-        sourceObjectNameSingular: objectNameSingular,
-        spec,
-      });
     }
   }
 
-  resolveRelationMock.mockImplementation(({ sourceFlatFieldMetadata }) => {
-    const resolved = relationSpecByFieldId.get(sourceFlatFieldMetadata.id);
-
-    if (resolved === undefined) {
-      return null;
-    }
-
-    const { sourceObjectNameSingular, spec } = resolved;
-
-    return {
-      type: spec.relationType,
-      sourceObjectMetadata: {
-        id: sourceObjectNameSingular,
-        nameSingular: sourceObjectNameSingular,
-      },
-      targetObjectMetadata: {
-        id: spec.targetObjectNameSingular,
-        nameSingular: spec.targetObjectNameSingular,
-        isSystem: systemObjectNames.includes(spec.targetObjectNameSingular),
-      },
-      sourceFieldMetadata: { name: spec.fieldName },
-      targetFieldMetadata: { name: spec.inverseFieldName },
-    } as ReturnType<typeof resolveRelationFromFlatFieldMetadata>;
-  });
-
   return { flatObjectMetadataMaps, flatFieldMetadataMaps };
 };
-
-afterEach(() => {
-  resolveRelationMock.mockReset();
-});
 
 describe('findRelationPathsToPerson', () => {
   it('returns the empty path for the person object itself', () => {
@@ -261,6 +279,62 @@ describe('findRelationPathsToPerson', () => {
           direction: RelationType.ONE_TO_MANY,
           queryObjectNameSingular: 'person',
           joinColumnName: 'companyId',
+        },
+      ],
+    ]);
+  });
+
+  it('targets the morph field owning the join column rather than the morph group name', () => {
+    const { flatObjectMetadataMaps, flatFieldMetadataMaps } =
+      buildGraphFixtures({
+        note: [],
+        task: [],
+        person: [
+          {
+            fieldName: 'lastActivityItemNote',
+            relationType: RelationType.MANY_TO_ONE,
+            targetObjectNameSingular: 'note',
+            inverseFieldName: 'peopleWithLastActivityItem',
+            morphId: 'lastActivityItem',
+          },
+          {
+            fieldName: 'lastActivityItemTask',
+            relationType: RelationType.MANY_TO_ONE,
+            targetObjectNameSingular: 'task',
+            inverseFieldName: 'peopleWithLastActivityItem',
+            morphId: 'lastActivityItem',
+          },
+        ],
+      });
+
+    expect(
+      findRelationPathsToPerson({
+        rootObjectNameSingular: 'note',
+        flatObjectMetadataMaps,
+        flatFieldMetadataMaps,
+      }),
+    ).toEqual([
+      [
+        {
+          direction: RelationType.ONE_TO_MANY,
+          queryObjectNameSingular: 'person',
+          joinColumnName: 'lastActivityItemNoteId',
+        },
+      ],
+    ]);
+
+    expect(
+      findRelationPathsToPerson({
+        rootObjectNameSingular: 'task',
+        flatObjectMetadataMaps,
+        flatFieldMetadataMaps,
+      }),
+    ).toEqual([
+      [
+        {
+          direction: RelationType.ONE_TO_MANY,
+          queryObjectNameSingular: 'person',
+          joinColumnName: 'lastActivityItemTaskId',
         },
       ],
     ]);

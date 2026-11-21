@@ -7,6 +7,7 @@ import {
 import {
   type FieldMetadataMultiItemSettings,
   type PartialFieldMetadataItemOption,
+  type RequiredCondition,
 } from 'twenty-shared/types';
 import { type ThemeColor } from 'twenty-ui/theme';
 import { type Field } from '~/generated-metadata/graphql';
@@ -26,6 +27,8 @@ export type FieldMetadataItem = Omit<
   | 'morphRelations'
   // Deprecated GraphQL field kept server-side for one release; no longer queried
   | 'isUIReadOnly'
+  // OMNIA-CUSTOM: typed below; the generated JSON scalar is any
+  | 'requiredCondition'
 > & {
   __typename?: string;
   applicationId?: string;
@@ -41,5 +44,6 @@ export type FieldMetadataItem = Omit<
     | null;
   isLabelSyncedWithName?: boolean | null;
   morphId?: string | null;
-  requiredCondition?: any;
+  // OMNIA-CUSTOM: soft required-field rule, checked in the browser only; the server never enforces it
+  requiredCondition?: RequiredCondition | null;
 };

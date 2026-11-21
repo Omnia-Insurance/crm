@@ -94,7 +94,6 @@ describe('evaluateFilterConditions', () => {
         expect(result).toBe(true);
       });
 
-      // Enhanced relation filter tests with object id extraction
       it('should extract id from left operand object for relation comparison', () => {
         const uuid1 = '550e8400-e29b-41d4-a716-446655440000';
         const leftObject = { id: uuid1, name: 'John Doe' };
@@ -514,6 +513,109 @@ describe('evaluateFilterConditions', () => {
         expect(result).toBe(true);
       });
 
+      it('should return false when the selected value is a substring of an option (IS)', () => {
+        const filter = createFilter(
+          ViewFilterOperand.IS,
+          'INVALID',
+          '["VALID"]',
+          'SELECT',
+        );
+        const result = evaluateFilterConditions({ filters: [filter] });
+
+        expect(result).toBe(false);
+      });
+
+      it('should return true when the selected value matches an option exactly (IS)', () => {
+        const filter = createFilter(
+          ViewFilterOperand.IS,
+          'VALID',
+          '["VALID"]',
+          'SELECT',
+        );
+        const result = evaluateFilterConditions({ filters: [filter] });
+
+        expect(result).toBe(true);
+      });
+
+      it('should return true when the selected value is a substring of an option (IsNot)', () => {
+        const filter = createFilter(
+          ViewFilterOperand.IS_NOT,
+          'INVALID',
+          '["VALID"]',
+          'SELECT',
+        );
+        const result = evaluateFilterConditions({ filters: [filter] });
+
+        expect(result).toBe(true);
+      });
+
+      it('should return false when the selected value matches an option exactly (IsNot)', () => {
+        const filter = createFilter(
+          ViewFilterOperand.IS_NOT,
+          'VALID',
+          '["VALID"]',
+          'SELECT',
+        );
+        const result = evaluateFilterConditions({ filters: [filter] });
+
+        expect(result).toBe(false);
+      });
+
+      it('should match scalar option values that are valid JSON (IS)', () => {
+        const filter = createFilter(ViewFilterOperand.IS, '1', '1', 'SELECT');
+        const result = evaluateFilterConditions({ filters: [filter] });
+
+        expect(result).toBe(true);
+      });
+
+      it('should match scalar option values that are valid JSON (IsNot)', () => {
+        const filter = createFilter(
+          ViewFilterOperand.IS_NOT,
+          '1',
+          '1',
+          'SELECT',
+        );
+        const result = evaluateFilterConditions({ filters: [filter] });
+
+        expect(result).toBe(false);
+      });
+
+      it('should match any of several selected options (IS)', () => {
+        const filter = createFilter(
+          ViewFilterOperand.IS,
+          'PENDING',
+          '["VALID","PENDING"]',
+          'SELECT',
+        );
+        const result = evaluateFilterConditions({ filters: [filter] });
+
+        expect(result).toBe(true);
+      });
+
+      it('should treat an empty option as a null value match (IS)', () => {
+        const filter = createFilter(
+          ViewFilterOperand.IS,
+          null,
+          '[""]',
+          'SELECT',
+        );
+        const result = evaluateFilterConditions({ filters: [filter] });
+
+        expect(result).toBe(true);
+      });
+
+      it('should not match a non-null value against an empty option (IS)', () => {
+        const filter = createFilter(
+          ViewFilterOperand.IS,
+          'VALID',
+          '[""]',
+          'SELECT',
+        );
+        const result = evaluateFilterConditions({ filters: [filter] });
+
+        expect(result).toBe(false);
+      });
+
       it('should return true when there are no values (IsEmpty)', () => {
         const filter = createFilter(
           ViewFilterOperand.IS_EMPTY,
@@ -613,6 +715,50 @@ describe('evaluateFilterConditions', () => {
         expect(evaluateFilterConditions({ filters: [filter1] })).toBe(true);
         expect(evaluateFilterConditions({ filters: [filter2] })).toBe(true);
         expect(evaluateFilterConditions({ filters: [filter3] })).toBe(false);
+      });
+
+      it('should not treat an empty value as zero', () => {
+        const nullLessThanOrEqual = createFilter(
+          ViewFilterOperand.LESS_THAN_OR_EQUAL,
+          null,
+          100,
+          'NUMBER',
+        );
+        const emptyStringGreaterThanOrEqual = createFilter(
+          ViewFilterOperand.GREATER_THAN_OR_EQUAL,
+          '',
+          -1,
+          'NUMBER',
+        );
+        const undefinedIsZero = createFilter(
+          ViewFilterOperand.IS,
+          undefined,
+          0,
+          'NUMBER',
+        );
+        const nullIsNotZero = createFilter(
+          ViewFilterOperand.IS_NOT,
+          null,
+          0,
+          'NUMBER',
+        );
+        const zeroIsZero = createFilter(ViewFilterOperand.IS, 0, 0, 'NUMBER');
+
+        expect(
+          evaluateFilterConditions({ filters: [nullLessThanOrEqual] }),
+        ).toBe(false);
+        expect(
+          evaluateFilterConditions({
+            filters: [emptyStringGreaterThanOrEqual],
+          }),
+        ).toBe(false);
+        expect(evaluateFilterConditions({ filters: [undefinedIsZero] })).toBe(
+          false,
+        );
+        expect(evaluateFilterConditions({ filters: [nullIsNotZero] })).toBe(
+          true,
+        );
+        expect(evaluateFilterConditions({ filters: [zeroIsZero] })).toBe(true);
       });
 
       it('should handle LessThanOrEqual operand correctly', () => {
@@ -779,6 +925,37 @@ describe('evaluateFilterConditions', () => {
         expect(evaluateFilterConditions({ filters: [filter5] })).toBe(false);
       });
 
+      it('should handle Contains operand with array values that look like JSON scalars', () => {
+        const numericValue = createFilter(
+          ViewFilterOperand.CONTAINS,
+          ['2024', '2025'],
+          '2024',
+          'ARRAY',
+        );
+        const booleanValue = createFilter(
+          ViewFilterOperand.CONTAINS,
+          ['true', 'false'],
+          'true',
+          'ARRAY',
+        );
+        const missingNumericValue = createFilter(
+          ViewFilterOperand.DOES_NOT_CONTAIN,
+          ['2024', '2025'],
+          '2026',
+          'ARRAY',
+        );
+
+        expect(evaluateFilterConditions({ filters: [numericValue] })).toBe(
+          true,
+        );
+        expect(evaluateFilterConditions({ filters: [booleanValue] })).toBe(
+          true,
+        );
+        expect(
+          evaluateFilterConditions({ filters: [missingNumericValue] }),
+        ).toBe(true);
+      });
+
       it('should handle DoesNotContain operand with arrays', () => {
         const filter1 = createFilter(
           ViewFilterOperand.DOES_NOT_CONTAIN,
@@ -803,6 +980,100 @@ describe('evaluateFilterConditions', () => {
         expect(evaluateFilterConditions({ filters: [filter1] })).toBe(false);
         expect(evaluateFilterConditions({ filters: [filter2] })).toBe(true);
         expect(evaluateFilterConditions({ filters: [filter3] })).toBe(true);
+      });
+
+      it('should match legacy Is operand on text by equality', () => {
+        const matching = createFilter(
+          ViewFilterOperand.IS,
+          'World',
+          'World',
+          'TEXT',
+        );
+        const substring = createFilter(
+          ViewFilterOperand.IS,
+          'Hello World',
+          'World',
+          'TEXT',
+        );
+        const notMatching = createFilter(
+          ViewFilterOperand.IS,
+          'Hello',
+          'World',
+          'TEXT',
+        );
+
+        expect(evaluateFilterConditions({ filters: [matching] })).toBe(true);
+        expect(evaluateFilterConditions({ filters: [substring] })).toBe(false);
+        expect(evaluateFilterConditions({ filters: [notMatching] })).toBe(
+          false,
+        );
+      });
+
+      it('should match legacy IsNot operand on text by inequality', () => {
+        const matching = createFilter(
+          ViewFilterOperand.IS_NOT,
+          'Hello',
+          'World',
+          'TEXT',
+        );
+        const notMatching = createFilter(
+          ViewFilterOperand.IS_NOT,
+          'World',
+          'World',
+          'TEXT',
+        );
+
+        expect(evaluateFilterConditions({ filters: [matching] })).toBe(true);
+        expect(evaluateFilterConditions({ filters: [notMatching] })).toBe(
+          false,
+        );
+      });
+
+      it('should match legacy Is operand on arrays by equality', () => {
+        const matching = createFilter(
+          ViewFilterOperand.IS,
+          ['apple', 'banana'],
+          ['apple', 'banana'],
+          'MULTI_SELECT',
+        );
+        const subset = createFilter(
+          ViewFilterOperand.IS,
+          ['apple', 'banana'],
+          ['apple'],
+          'MULTI_SELECT',
+        );
+        const notMatching = createFilter(
+          ViewFilterOperand.IS,
+          ['apple', 'banana'],
+          ['grape'],
+          'MULTI_SELECT',
+        );
+
+        expect(evaluateFilterConditions({ filters: [matching] })).toBe(true);
+        expect(evaluateFilterConditions({ filters: [subset] })).toBe(false);
+        expect(evaluateFilterConditions({ filters: [notMatching] })).toBe(
+          false,
+        );
+      });
+
+      it('should match legacy IsNot operand on arrays by set inequality', () => {
+        const matching = createFilter(
+          ViewFilterOperand.IS_NOT,
+          ['apple', 'banana'],
+          ['grape'],
+          'MULTI_SELECT',
+        );
+        const notMatching = createFilter(
+          ViewFilterOperand.IS_NOT,
+          ['apple', 'banana'],
+          ['apple', 'banana'],
+          'MULTI_SELECT',
+        );
+
+        expect(evaluateFilterConditions({ filters: [matching] })).toBe(true);
+        expect(evaluateFilterConditions({ filters: [notMatching] })).toBe(
+          false,
+        );
       });
     });
 
@@ -887,10 +1158,12 @@ describe('evaluateFilterConditions', () => {
     });
 
     describe('date operands', () => {
-      const now = new Date();
-      const pastDate = new Date(now.getTime() - 24 * 60 * 60 * 1000); // 1 day ago
-      const futureDate = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 1 day from now
-      const today = new Date();
+      const now = new Date().toISOString();
+      const pastDate = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(); // 1 day ago
+      const futureDate = new Date(
+        Date.now() + 24 * 60 * 60 * 1000,
+      ).toISOString(); // 1 day from now
+      const today = new Date().toISOString();
 
       it('should handle IsInPast operand correctly', () => {
         const filter = createFilter(
@@ -997,26 +1270,120 @@ describe('evaluateFilterConditions', () => {
       });
 
       it('should handle Is operand for dates correctly', () => {
-        const sameDate1 = new Date('2023-01-15');
-        const sameDate2 = new Date('2023-01-15');
         const filter = createFilter(
           ViewFilterOperand.IS,
-          sameDate1,
-          sameDate2,
+          '2023-01-15',
+          '2023-01-15',
           'DATE',
         );
 
         expect(evaluateFilterConditions({ filters: [filter] })).toBe(true);
 
-        const otherDate = new Date('2023-01-16');
         const differentFilter = createFilter(
           ViewFilterOperand.IS,
-          sameDate1,
-          otherDate,
+          '2023-01-15',
+          '2023-01-16',
           'DATE',
         );
 
         expect(evaluateFilterConditions({ filters: [differentFilter] })).toBe(
+          false,
+        );
+      });
+
+      it('should not match Is when dates share the day of month but differ in month or year', () => {
+        const januaryFilter = createFilter(
+          ViewFilterOperand.IS,
+          '2023-01-15',
+          '2023-02-15',
+          'DATE',
+        );
+
+        expect(evaluateFilterConditions({ filters: [januaryFilter] })).toBe(
+          false,
+        );
+
+        const yearFilter = createFilter(
+          ViewFilterOperand.IS,
+          '2023-01-15',
+          '2024-01-15',
+          'DATE',
+        );
+
+        expect(evaluateFilterConditions({ filters: [yearFilter] })).toBe(false);
+      });
+
+      it('should match Is on the same UTC day for date-time values', () => {
+        const sameDayFilter = createFilter(
+          ViewFilterOperand.IS,
+          '2023-01-15T08:30:00.000Z',
+          '2023-01-15T21:45:00.000Z',
+          'DATE_TIME',
+        );
+
+        expect(evaluateFilterConditions({ filters: [sameDayFilter] })).toBe(
+          true,
+        );
+      });
+
+      it('should handle Date instance operands (database-event trigger passes raw ORM records)', () => {
+        const isFilter = createFilter(
+          ViewFilterOperand.IS,
+          new Date('2023-01-15T08:30:00.000Z'),
+          new Date('2023-01-15T21:45:00.000Z'),
+          'DATE_TIME',
+        );
+
+        expect(evaluateFilterConditions({ filters: [isFilter] })).toBe(true);
+
+        const beforeFilter = createFilter(
+          ViewFilterOperand.IS_BEFORE,
+          new Date('2023-01-15T00:00:00.000Z'),
+          new Date('2023-01-16T00:00:00.000Z'),
+          'DATE_TIME',
+        );
+
+        expect(evaluateFilterConditions({ filters: [beforeFilter] })).toBe(
+          true,
+        );
+
+        const invalidFilter = createFilter(
+          ViewFilterOperand.IS_BEFORE,
+          new Date('invalid'),
+          new Date('2023-01-16T00:00:00.000Z'),
+          'DATE_TIME',
+        );
+
+        expect(evaluateFilterConditions({ filters: [invalidFilter] })).toBe(
+          false,
+        );
+      });
+
+      it('should not match Is or Before/After when the right operand is an invalid date', () => {
+        const isFilter = createFilter(
+          ViewFilterOperand.IS,
+          '2023-01-15',
+          'not-a-date',
+          'DATE',
+        );
+        const beforeFilter = createFilter(
+          ViewFilterOperand.IS_BEFORE,
+          '2023-01-15',
+          'not-a-date',
+          'DATE',
+        );
+        const afterFilter = createFilter(
+          ViewFilterOperand.IS_AFTER,
+          '2023-01-15',
+          'not-a-date',
+          'DATE',
+        );
+
+        expect(evaluateFilterConditions({ filters: [isFilter] })).toBe(false);
+        expect(evaluateFilterConditions({ filters: [beforeFilter] })).toBe(
+          false,
+        );
+        expect(evaluateFilterConditions({ filters: [afterFilter] })).toBe(
           false,
         );
       });
@@ -1042,6 +1409,45 @@ describe('evaluateFilterConditions', () => {
           true,
         );
       });
+
+      it.each([
+        ViewFilterOperand.IS,
+        ViewFilterOperand.IS_IN_PAST,
+        ViewFilterOperand.IS_IN_FUTURE,
+        ViewFilterOperand.IS_TODAY,
+        ViewFilterOperand.IS_BEFORE,
+        ViewFilterOperand.IS_AFTER,
+        ViewFilterOperand.IS_RELATIVE,
+      ])(
+        'should not match and not throw when the left operand is an empty/invalid date (%s)',
+        (operand) => {
+          const relativeValue = JSON.stringify({
+            direction: 'PAST',
+            amount: 1,
+            unit: 'DAY',
+          });
+
+          const emptyStepOutputFilter = createFilter(
+            operand,
+            '',
+            relativeValue,
+            'DATE',
+          );
+          const missingStepOutputFilter = createFilter(
+            operand,
+            undefined,
+            relativeValue,
+            'DATE_TIME',
+          );
+
+          expect(
+            evaluateFilterConditions({ filters: [emptyStepOutputFilter] }),
+          ).toBe(false);
+          expect(
+            evaluateFilterConditions({ filters: [missingStepOutputFilter] }),
+          ).toBe(false);
+        },
+      );
     });
 
     describe('currency operands', () => {
@@ -1074,6 +1480,53 @@ describe('evaluateFilterConditions', () => {
       });
     });
 
+    describe('raw JSON operands', () => {
+      const jsonValue = { name: 'Acme', tags: ['vip-gold'] };
+
+      const evaluateRawJson = (
+        operand: ViewFilterOperand,
+        leftOperand: unknown,
+        rightOperand: unknown = '',
+      ) =>
+        evaluateFilterConditions({
+          filters: [
+            createFilter(operand, leftOperand, rightOperand, 'RAW_JSON'),
+          ],
+        });
+
+      it('should search inside JSON values case-insensitively', () => {
+        expect(
+          evaluateRawJson(ViewFilterOperand.CONTAINS, jsonValue, 'acme'),
+        ).toBe(true);
+        expect(
+          evaluateRawJson(
+            ViewFilterOperand.CONTAINS,
+            JSON.stringify(jsonValue),
+            'VIP',
+          ),
+        ).toBe(true);
+        expect(
+          evaluateRawJson(
+            ViewFilterOperand.DOES_NOT_CONTAIN,
+            jsonValue,
+            'Acme',
+          ),
+        ).toBe(false);
+      });
+
+      it('should treat missing values and a stringified null as empty', () => {
+        expect(evaluateRawJson(ViewFilterOperand.IS_EMPTY, 'null')).toBe(true);
+        expect(evaluateRawJson(ViewFilterOperand.IS_EMPTY, null)).toBe(true);
+        expect(evaluateRawJson(ViewFilterOperand.IS_EMPTY, '')).toBe(true);
+        expect(evaluateRawJson(ViewFilterOperand.IS_NOT_EMPTY, jsonValue)).toBe(
+          true,
+        );
+        expect(
+          evaluateRawJson(ViewFilterOperand.DOES_NOT_CONTAIN, null, 'Acme'),
+        ).toBe(true);
+      });
+    });
+
     describe('error cases', () => {
       it('should throw error for unknown operand', () => {
         const filter = createFilter(
@@ -1094,7 +1547,6 @@ describe('evaluateFilterConditions', () => {
           'UNSUPPORTED_TYPE',
         );
 
-        // Unsupported types fall through to default filter logic
         expect(evaluateFilterConditions({ filters: [filter] })).toBe(true);
       });
     });
@@ -1405,7 +1857,6 @@ describe('evaluateFilterConditions', () => {
           50,
           'unknown',
         );
-        // strings are converted to numbers
         const filter3 = createFilter(
           ViewFilterOperand.GREATER_THAN_OR_EQUAL,
           '1234',

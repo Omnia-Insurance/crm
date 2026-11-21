@@ -6,33 +6,47 @@
  * 2. Resolve SMART_UPDATE relations (lead) with scoring-based matching
  * 3. Check unique constraints before updating related records
  * 4. Detect conflicts when multiple rows update the same related record differently
- * 5. Strip relation sub-field data from rows, leaving only direct fields for upsert
+ * 5. Strip relation sub-field data from rows, leaving only direct fields for insert or updateMany
  */
 
-import { type ObjectLiteral, type Repository } from 'typeorm';
-import { isValidUuid } from 'twenty-shared/utils';
+import { Logger } from '@nestjs/common';
 
-import { normalizeUsState } from 'src/engine/core-modules/export-job/utils/normalize-us-state.util';
+import { type ObjectRecord } from 'twenty-shared/types';
+import { isValidUuid, normalizeUsState } from 'twenty-shared/utils';
 
-import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
-import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
-import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
-
+import {
+  type NewRelatedRecord,
+  type RelatedRecordUpdate,
+  type RelationBehavior,
+  type RelationReassignment,
+  type RelationResolutionError,
+  type RelationResolutionPlan,
+} from 'src/engine/core-modules/import-job/utils/relation-resolution.types';
 import {
   extractMatchDataFromRecord,
   isSamePerson,
   type RecordMatchData,
-} from './score-record-match.util';
-import {
-  type RelationBehavior,
-  type RelationResolutionError,
-  type RelationResolutionPlan,
-  type RelatedRecordUpdate,
-  type RelationReassignment,
-  type NewRelatedRecord,
-} from './relation-resolution.types';
+} from 'src/engine/core-modules/import-job/utils/score-record-match.util';
+import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
+import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
+import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
+import { PermissionsException } from 'src/engine/permissions/permissions.exception';
+import { type WorkspaceRepository } from 'src/engine/twenty-orm/repository/workspace-repository';
 
 const BATCH_SIZE = 200;
+
+const logger = new Logger('resolveImportRelations');
+
+// Lookups run as the requester: a swallowed permission error would blind the match and create duplicates
+const rethrowPermissionErrorOrLog = (error: unknown, failedQuery: string) => {
+  if (error instanceof PermissionsException) {
+    throw error;
+  }
+
+  logger.error(
+    `${failedQuery} failed: ${error instanceof Error ? error.message : 'unknown error'}`,
+  );
+};
 
 // ─── Metadata Helpers ─────────────────────────────────────────────────
 
@@ -63,7 +77,9 @@ function getJoinColumnName(
 ): string {
   const objectMeta = findObjectByName(mainObjectName, objectMaps);
 
-  if (!objectMeta) return `${relationFieldName}Id`;
+  if (!objectMeta) {
+    return `${relationFieldName}Id`;
+  }
 
   const fieldMeta = findFieldOnObject(
     objectMeta.id,
@@ -85,7 +101,9 @@ function getRelationTargetObjectName(
 ): string | undefined {
   const objectMeta = findObjectByName(mainObjectName, objectMaps);
 
-  if (!objectMeta) return undefined;
+  if (!objectMeta) {
+    return undefined;
+  }
 
   const fieldMeta = findFieldOnObject(
     objectMeta.id,
@@ -93,7 +111,9 @@ function getRelationTargetObjectName(
     fieldMaps,
   );
 
-  if (!fieldMeta?.relationTargetObjectMetadataId) return undefined;
+  if (!fieldMeta?.relationTargetObjectMetadataId) {
+    return undefined;
+  }
 
   const targetObject = Object.values(objectMaps.byUniversalIdentifier).find(
     (m) => m?.id === fieldMeta.relationTargetObjectMetadataId,
@@ -109,31 +129,15 @@ function getLabelIdentifierFieldName(
 ): string | undefined {
   const objectMeta = findObjectByName(objectNameSingular, objectMaps);
 
-  if (!objectMeta?.labelIdentifierFieldMetadataId) return undefined;
+  if (!objectMeta?.labelIdentifierFieldMetadataId) {
+    return undefined;
+  }
 
   const labelField = Object.values(fieldMaps.byUniversalIdentifier).find(
     (f) => f?.id === objectMeta.labelIdentifierFieldMetadataId,
   ) as FlatFieldMetadata | undefined;
 
   return labelField?.name;
-}
-
-function extractRecordLabel(record: Record<string, unknown>): string {
-  if (typeof record.name === 'string' && record.name) return record.name;
-
-  if (typeof record.name === 'object' && record.name !== null) {
-    const nameObj = record.name as Record<string, unknown>;
-
-    return [nameObj.firstName, nameObj.lastName].filter(Boolean).join(' ');
-  }
-
-  for (const key of ['title', 'label', 'displayName']) {
-    if (typeof record[key] === 'string' && record[key]) {
-      return record[key] as string;
-    }
-  }
-
-  return '';
 }
 
 // ─── Row Parsing ──────────────────────────────────────────────────────
@@ -176,18 +180,22 @@ const applyResolvedRelationId = ({
   relatedRecordId: string;
   reassignments: RelationReassignment[];
 }) => {
-  parsed.directFields[joinColumnName] = relatedRecordId;
-
   const mainRecordId = parsed.directFields.id;
+  const currentFk =
+    typeof mainRecordId === 'string'
+      ? existingMainRecords.get(mainRecordId)?.[joinColumnName]
+      : undefined;
 
-  if (typeof mainRecordId !== 'string') {
+  // Updates check edit permission on every column they send, so an unchanged key stays out of the row
+  if (currentFk === relatedRecordId) {
+    delete parsed.directFields[joinColumnName];
+
     return;
   }
 
-  const existingMain = existingMainRecords.get(mainRecordId);
-  const currentFk = existingMain?.[joinColumnName] as string | undefined;
+  parsed.directFields[joinColumnName] = relatedRecordId;
 
-  if (currentFk !== relatedRecordId) {
+  if (typeof mainRecordId === 'string') {
     reassignments.push({
       mainRecordId,
       joinColumnName,
@@ -270,13 +278,15 @@ function parseRows(
 // ─── Batch Loading ────────────────────────────────────────────────────
 
 async function batchLoadRecords(
-  repository: Repository<ObjectLiteral>,
+  repository: WorkspaceRepository<ObjectRecord>,
   objectNameSingular: string,
   ids: string[],
 ): Promise<Map<string, Record<string, unknown>>> {
   const result = new Map<string, Record<string, unknown>>();
 
-  if (ids.length === 0) return result;
+  if (ids.length === 0) {
+    return result;
+  }
 
   for (let i = 0; i < ids.length; i += BATCH_SIZE) {
     const batchIds = ids.slice(i, i + BATCH_SIZE);
@@ -304,7 +314,7 @@ async function resolveLookupAssign(
   rb: RelationBehavior,
   parsedRows: ParsedRow[],
   existingMainRecords: Map<string, Record<string, unknown>>,
-  targetRepo: Repository<ObjectLiteral>,
+  targetRepo: WorkspaceRepository<ObjectRecord>,
   targetObjectName: string,
   joinColumnName: string,
   labelFieldName: string | undefined,
@@ -378,7 +388,9 @@ async function resolveLookupAssign(
       }
     }
 
-    if (!label) continue;
+    if (!label) {
+      continue;
+    }
 
     const existing = labelsToRowIndices.get(label) ?? [];
 
@@ -386,7 +398,9 @@ async function resolveLookupAssign(
     labelsToRowIndices.set(label, existing);
   }
 
-  if (labelsToRowIndices.size === 0) return;
+  if (labelsToRowIndices.size === 0) {
+    return;
+  }
 
   // Batch lookup by label identifier field
   const labelValues = [...labelsToRowIndices.keys()];
@@ -450,7 +464,7 @@ async function resolveLookupAssign(
  * This replaces per-row DB queries with O(1) in-memory Map lookups.
  */
 async function buildLookupIndices(
-  targetRepo: Repository<ObjectLiteral>,
+  targetRepo: WorkspaceRepository<ObjectRecord>,
   targetObjectName: string,
 ): Promise<{
   phoneIndex: Map<string, string>;
@@ -462,14 +476,11 @@ async function buildLookupIndices(
   try {
     const phoneRecords = await targetRepo
       .createQueryBuilder(targetObjectName)
-      .select([
-        `"${targetObjectName}"."id"`,
-        `"${targetObjectName}"."phonesPrimaryPhoneNumber"`,
-      ])
+      .select(['id', 'phonesPrimaryPhoneNumber'])
       .where(`"${targetObjectName}"."deletedAt" IS NULL`)
       .andWhere(`"${targetObjectName}"."phonesPrimaryPhoneNumber" IS NOT NULL`)
       .andWhere(`"${targetObjectName}"."phonesPrimaryPhoneNumber" != ''`)
-      .getRawMany();
+      .getMany({ noFormatting: true });
 
     for (const r of phoneRecords as Record<string, unknown>[]) {
       const phone = String(r.phonesPrimaryPhoneNumber).replace(/[^0-9]/g, '');
@@ -479,23 +490,17 @@ async function buildLookupIndices(
       }
     }
   } catch (error) {
-    console.error(
-      '[buildLookupIndices] Phone index query failed:',
-      error instanceof Error ? error.message : error,
-    );
+    rethrowPermissionErrorOrLog(error, 'Phone index query');
   }
 
   try {
     const emailRecords = await targetRepo
       .createQueryBuilder(targetObjectName)
-      .select([
-        `"${targetObjectName}"."id"`,
-        `"${targetObjectName}"."emailsPrimaryEmail"`,
-      ])
+      .select(['id', 'emailsPrimaryEmail'])
       .where(`"${targetObjectName}"."deletedAt" IS NULL`)
       .andWhere(`"${targetObjectName}"."emailsPrimaryEmail" IS NOT NULL`)
       .andWhere(`"${targetObjectName}"."emailsPrimaryEmail" != ''`)
-      .getRawMany();
+      .getMany({ noFormatting: true });
 
     for (const r of emailRecords as Record<string, unknown>[]) {
       const email = String(r.emailsPrimaryEmail).toLowerCase();
@@ -505,10 +510,7 @@ async function buildLookupIndices(
       }
     }
   } catch (error) {
-    console.error(
-      '[buildLookupIndices] Email index query failed:',
-      error instanceof Error ? error.message : error,
-    );
+    rethrowPermissionErrorOrLog(error, 'Email index query');
   }
 
   return { phoneIndex, emailIndex };
@@ -529,8 +531,12 @@ function checkUniqueConstraintsFromIndex(
     const csvValue = getCompositeOrScalar(csvSubFields, constraintField);
     const existingValue = currentRelated[constraintField];
 
-    if (csvValue === undefined || csvValue === null) continue;
-    if (valuesEqual(csvValue, existingValue)) continue;
+    if (csvValue === undefined || csvValue === null) {
+      continue;
+    }
+    if (valuesEqual(csvValue, existingValue)) {
+      continue;
+    }
 
     // Extract phone number from composite value
     if (typeof csvValue === 'object' && csvValue !== null) {
@@ -567,14 +573,16 @@ async function searchForRecordFromIndex(
   matchData: RecordMatchData,
   phoneIndex: Map<string, string>,
   emailIndex: Map<string, string>,
-  targetRepo: Repository<ObjectLiteral>,
+  targetRepo: WorkspaceRepository<ObjectRecord>,
   targetObjectName: string,
 ): Promise<string | null> {
   // Search by email (strongest signal)
   if (matchData.email) {
     const matchId = emailIndex.get(matchData.email.toLowerCase());
 
-    if (matchId) return matchId;
+    if (matchId) {
+      return matchId;
+    }
   }
 
   // Search by phone
@@ -582,7 +590,9 @@ async function searchForRecordFromIndex(
     const normalized = matchData.phone.replace(/[^0-9]/g, '');
     const matchId = phoneIndex.get(normalized);
 
-    if (matchId) return matchId;
+    if (matchId) {
+      return matchId;
+    }
   }
 
   // Search by exact name match — requires DB query (rare fallback)
@@ -604,10 +614,7 @@ async function searchForRecordFromIndex(
         return (byName[0] as Record<string, unknown>).id as string;
       }
     } catch (error) {
-      console.error(
-        '[resolveImportRelations] Name search query failed:',
-        error instanceof Error ? error.message : error,
-      );
+      rethrowPermissionErrorOrLog(error, 'Name search query');
     }
   }
 
@@ -625,7 +632,9 @@ async function resolveSmartUpdate(
   rb: RelationBehavior,
   parsedRows: ParsedRow[],
   existingMainRecords: Map<string, Record<string, unknown>>,
-  getRepository: (objectName: string) => Promise<Repository<ObjectLiteral>>,
+  getRepository: (
+    objectName: string,
+  ) => Promise<WorkspaceRepository<ObjectRecord>>,
   mainObjectName: string,
   targetObjectName: string,
   joinColumnName: string,
@@ -683,7 +692,9 @@ async function resolveSmartUpdate(
     const subFields = parsed.relationData.get(rb.relationFieldName);
     const csvLabel = parsed.relationLabels.get(rb.relationFieldName);
 
-    if (!subFields && !csvLabel) continue;
+    if (!subFields && !csvLabel) {
+      continue;
+    }
 
     const mainId = parsed.directFields.id as string;
     const explicitRelationId = getExplicitRelationId(
@@ -898,7 +909,9 @@ async function resolveSmartUpdate(
     for (const deferred of deferredUpdates) {
       const matchRecord = existingRelated.get(deferred.matchId);
 
-      if (!matchRecord) continue;
+      if (!matchRecord) {
+        continue;
+      }
 
       const updates = buildSubFieldUpdates(
         deferred.subFields,
@@ -920,100 +933,14 @@ async function resolveSmartUpdate(
 
 // ─── Sub-field Helpers ────────────────────────────────────────────────
 
-type UniqueConstraintConflict = {
-  conflictRecordId: string;
-  conflictRecord: Record<string, unknown>;
-  conflictFieldName: string;
-};
-
-async function checkUniqueConstraints(
-  rb: RelationBehavior,
-  csvSubFields: Record<string, unknown>,
-  currentRelated: Record<string, unknown>,
-  currentRelatedId: string,
-  targetRepo: Repository<ObjectLiteral>,
-  targetObjectName: string,
-): Promise<UniqueConstraintConflict | null> {
-  for (const constraintField of rb.uniqueConstraintFields ?? []) {
-    // Get CSV value for this constraint field (may be composite path)
-    const csvValue = getCompositeOrScalar(csvSubFields, constraintField);
-    const existingValue = currentRelated[constraintField];
-
-    if (csvValue === undefined || csvValue === null) continue;
-    if (valuesEqual(csvValue, existingValue)) continue;
-
-    // Value changed — check if another record owns it
-    const searchColumn = getUniqueSearchColumn(constraintField, csvValue);
-
-    if (!searchColumn) continue;
-
-    try {
-      const conflict = await targetRepo
-        .createQueryBuilder(targetObjectName)
-        .where(`"${targetObjectName}"."${searchColumn.column}" = :value`, {
-          value: searchColumn.value,
-        })
-        .andWhere(`"${targetObjectName}"."id" != :excludeId`, {
-          excludeId: currentRelatedId,
-        })
-        .andWhere(`"${targetObjectName}"."deletedAt" IS NULL`)
-        .getOne();
-
-      if (conflict) {
-        return {
-          conflictRecordId: (conflict as Record<string, unknown>).id as string,
-          conflictRecord: conflict as Record<string, unknown>,
-          conflictFieldName: constraintField,
-        };
-      }
-    } catch (error) {
-      console.error(
-        `[checkUniqueConstraints] Query failed for field "${constraintField}", column "${searchColumn.column}":`,
-        error instanceof Error ? error.message : error,
-      );
-    }
-  }
-
-  return null;
-}
-
-function getUniqueSearchColumn(
-  fieldName: string,
-  value: unknown,
-): { column: string; value: unknown } | null {
-  if (typeof value === 'object' && value !== null) {
-    const obj = value as Record<string, unknown>;
-
-    if ('primaryPhoneNumber' in obj && obj.primaryPhoneNumber) {
-      return {
-        column: `${fieldName}PrimaryPhoneNumber`,
-        value: String(obj.primaryPhoneNumber).replace(/[^0-9]/g, ''),
-      };
-    }
-
-    if ('primaryEmail' in obj && obj.primaryEmail) {
-      return {
-        column: `${fieldName}PrimaryEmail`,
-        value: String(obj.primaryEmail).toLowerCase(),
-      };
-    }
-
-    return null;
-  }
-
-  if (typeof value === 'string' && value.length > 0) {
-    return { column: fieldName, value };
-  }
-
-  return null;
-}
-
 function getCompositeOrScalar(
   subFields: Record<string, unknown>,
   fieldName: string,
 ): unknown {
   // Check for direct match
-  if (fieldName in subFields) return subFields[fieldName];
+  if (fieldName in subFields) {
+    return subFields[fieldName];
+  }
 
   // Check for composite sub-fields: "phones.primaryPhoneNumber" etc.
   const composite: Record<string, unknown> = {};
@@ -1049,7 +976,9 @@ function buildSubFieldUpdates(
     if (dotIndex !== -1) {
       const parent = path.substring(0, dotIndex);
 
-      if (excludeSet.has(parent)) continue;
+      if (excludeSet.has(parent)) {
+        continue;
+      }
 
       const child = path.substring(dotIndex + 1);
       const existing = composites.get(parent) ?? {};
@@ -1057,7 +986,9 @@ function buildSubFieldUpdates(
       existing[child] = value;
       composites.set(parent, existing);
     } else {
-      if (excludeSet.has(path)) continue;
+      if (excludeSet.has(path)) {
+        continue;
+      }
 
       scalars.set(path, value);
     }
@@ -1189,90 +1120,6 @@ function buildMatchDataFromSubFields(
   return result;
 }
 
-async function searchForRecord(
-  repository: Repository<ObjectLiteral>,
-  objectNameSingular: string,
-  matchData: RecordMatchData,
-): Promise<{ recordId: string; record: Record<string, unknown> } | null> {
-  // Search by email (strongest signal)
-  if (matchData.email) {
-    try {
-      const byEmail = await repository
-        .createQueryBuilder(objectNameSingular)
-        .where(`"${objectNameSingular}"."emailsPrimaryEmail" ILIKE :email`, {
-          email: matchData.email,
-        })
-        .andWhere(`"${objectNameSingular}"."deletedAt" IS NULL`)
-        .getOne();
-
-      if (byEmail) {
-        const record = byEmail as Record<string, unknown>;
-
-        return { recordId: record.id as string, record };
-      }
-    } catch (error) {
-      console.error(
-        `[resolveImportRelations] Query failed:`,
-        error instanceof Error ? error.message : error,
-      );
-    }
-  }
-
-  // Search by phone
-  if (matchData.phone) {
-    const normalized = matchData.phone.replace(/[^0-9]/g, '');
-
-    try {
-      const byPhone = await repository
-        .createQueryBuilder(objectNameSingular)
-        .where(`"${objectNameSingular}"."phonesPrimaryPhoneNumber" = :phone`, {
-          phone: normalized,
-        })
-        .andWhere(`"${objectNameSingular}"."deletedAt" IS NULL`)
-        .getOne();
-
-      if (byPhone) {
-        const record = byPhone as Record<string, unknown>;
-
-        return { recordId: record.id as string, record };
-      }
-    } catch (error) {
-      console.error(
-        `[resolveImportRelations] Query failed:`,
-        error instanceof Error ? error.message : error,
-      );
-    }
-  }
-
-  // Search by exact name match
-  if (matchData.firstName && matchData.lastName) {
-    try {
-      const byName = await repository
-        .createQueryBuilder(objectNameSingular)
-        .where(`"${objectNameSingular}"."nameFirstName" ILIKE :firstName`, {
-          firstName: matchData.firstName,
-        })
-        .andWhere(`"${objectNameSingular}"."nameLastName" ILIKE :lastName`, {
-          lastName: matchData.lastName,
-        })
-        .andWhere(`"${objectNameSingular}"."deletedAt" IS NULL`)
-        .limit(2)
-        .getMany();
-
-      // Only match if exactly 1 result (no ambiguity)
-      if (byName.length === 1) {
-        const record = byName[0] as Record<string, unknown>;
-
-        return { recordId: record.id as string, record };
-      }
-    } catch {
-      // Columns might not exist
-    }
-  }
-
-  return null;
-}
-
 // ─── Conflict Detection ───────────────────────────────────────────────
 
 function detectConflicts(
@@ -1291,7 +1138,9 @@ function detectConflicts(
   }
 
   for (const [, groupUpdates] of grouped) {
-    if (groupUpdates.length <= 1) continue;
+    if (groupUpdates.length <= 1) {
+      continue;
+    }
 
     // Check each field for conflicting values — last row wins, log warning
     const fieldValues = new Map<string, { value: unknown; rows: number[] }>();
@@ -1347,10 +1196,18 @@ function deduplicateUpdates(
 // ─── Value Comparison ─────────────────────────────────────────────────
 
 function valuesEqual(a: unknown, b: unknown): boolean {
-  if (a === b) return true;
-  if (a == null && b == null) return true;
-  if (a === '' && b == null) return true;
-  if (a == null && b === '') return true;
+  if (a === b) {
+    return true;
+  }
+  if (a == null && b == null) {
+    return true;
+  }
+  if (a === '' && b == null) {
+    return true;
+  }
+  if (a == null && b === '') {
+    return true;
+  }
 
   if (
     typeof a === 'object' &&
@@ -1372,7 +1229,9 @@ export async function resolveImportRelations(
   mainObjectName: string,
   objectMaps: FlatEntityMaps<FlatObjectMetadata>,
   fieldMaps: FlatEntityMaps<FlatFieldMetadata>,
-  getRepository: (objectName: string) => Promise<Repository<ObjectLiteral>>,
+  getRepository: (
+    objectName: string,
+  ) => Promise<WorkspaceRepository<ObjectRecord>>,
 ): Promise<RelationResolutionPlan> {
   const errors: RelationResolutionError[] = [];
   const relatedRecordUpdates: RelatedRecordUpdate[] = [];
@@ -1396,7 +1255,9 @@ export async function resolveImportRelations(
 
   // Process each relation behavior
   for (const rb of relationBehaviors) {
-    if (rb.behavior === 'SKIP') continue;
+    if (rb.behavior === 'SKIP') {
+      continue;
+    }
 
     const targetObjectName = getRelationTargetObjectName(
       mainObjectName,
@@ -1405,7 +1266,9 @@ export async function resolveImportRelations(
       fieldMaps,
     );
 
-    if (!targetObjectName) continue;
+    if (!targetObjectName) {
+      continue;
+    }
 
     const joinColumnName = getJoinColumnName(
       mainObjectName,
@@ -1458,39 +1321,12 @@ export async function resolveImportRelations(
 
   detectConflicts(relatedRecordUpdates, warnings);
 
-  // Build processed rows (direct fields only, with resolved FKs)
-  // Precompute join column names for each relation behavior
-  const joinColumnsByRelation = new Map<string, string>();
-
-  for (const rb of relationBehaviors) {
-    joinColumnsByRelation.set(
-      rb.relationFieldName,
-      getJoinColumnName(
-        mainObjectName,
-        rb.relationFieldName,
-        objectMaps,
-        fieldMaps,
-      ),
-    );
-  }
-
+  // Build processed rows (direct fields only, with resolved FKs). updateMany leaves absent columns alone,
+  // so a row carries only the foreign keys the CSV changed.
   const processedRows = parsedRows.map((parsed) => {
     const row = { ...parsed.directFields };
     const mainId = row.id as string;
-    const existingMain = existingMainRecords.get(mainId);
 
-    // Preserve FK columns from existing records for relations where no
-    // reassignment occurred. Without this, TypeORM's upsert sets missing
-    // FK columns to NULL.
-    if (existingMain) {
-      for (const [, joinCol] of joinColumnsByRelation) {
-        if (!(joinCol in row) && existingMain[joinCol] != null) {
-          row[joinCol] = existingMain[joinCol];
-        }
-      }
-    }
-
-    // Apply reassignments to the row's FK columns (overrides preserved FKs)
     for (const reassignment of reassignments) {
       if (reassignment.mainRecordId === mainId) {
         row[reassignment.joinColumnName] = reassignment.newRelatedRecordId;

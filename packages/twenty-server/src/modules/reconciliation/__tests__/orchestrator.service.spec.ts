@@ -82,10 +82,18 @@ describe('ReconciliationOrchestratorService', () => {
           stats: { parsingStartedAt: expect.any(String) },
         },
       );
-      expect(queue.add).toHaveBeenCalledWith('reconciliation-parse', {
-        workspaceId: WORKSPACE_ID,
-        reconciliationId: RECONCILIATION_ID,
-      });
+      expect(queue.add).toHaveBeenCalledWith(
+        'reconciliation-parse',
+        { workspaceId: WORKSPACE_ID, reconciliationId: RECONCILIATION_ID },
+        {
+          isWorkspaceJob: true,
+          workspaceId: WORKSPACE_ID,
+          deduplication: {
+            id: `reconciliation-parse-${RECONCILIATION_ID}`,
+            keepLastIfActive: true,
+          },
+        },
+      );
     });
 
     it('should preserve existing stats counters when stamping parsingStartedAt', async () => {
@@ -201,10 +209,18 @@ describe('ReconciliationOrchestratorService', () => {
           },
         },
       );
-      expect(queue.add).toHaveBeenCalledWith('reconciliation-match', {
-        workspaceId: WORKSPACE_ID,
-        reconciliationId: RECONCILIATION_ID,
-      });
+      expect(queue.add).toHaveBeenCalledWith(
+        'reconciliation-match',
+        { workspaceId: WORKSPACE_ID, reconciliationId: RECONCILIATION_ID },
+        {
+          isWorkspaceJob: true,
+          workspaceId: WORKSPACE_ID,
+          deduplication: {
+            id: `reconciliation-match-${RECONCILIATION_ID}`,
+            keepLastIfActive: true,
+          },
+        },
+      );
     });
 
     it('should treat a stuck MATCHING run with no phase-start stamp as recoverable', async () => {

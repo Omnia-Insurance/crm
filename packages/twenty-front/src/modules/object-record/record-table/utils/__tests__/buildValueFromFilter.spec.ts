@@ -1,12 +1,12 @@
 import { type FieldMetadataItemOption } from '@/object-metadata/types/FieldMetadataItem';
 import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
 import { buildValueFromFilter } from '@/object-record/record-table/utils/buildValueFromFilter';
-import { type ColorScheme } from '@/workspace-member/types/WorkspaceMember';
 import {
   type FilterableFieldType,
   ViewFilterOperand,
 } from 'twenty-shared/types';
 import { RelationType } from '~/generated-metadata/graphql';
+import { type ColorScheme } from '@/ui/theme/types/ColorScheme';
 
 // TODO: fix the dates, and test the not supported types
 const mockDate = new Date('2024-03-20T12:00:00Z');
@@ -44,6 +44,16 @@ describe('buildValueFromFilter', () => {
       },
       {
         operand: ViewFilterOperand.DOES_NOT_CONTAIN,
+        value: 'test',
+        expected: undefined,
+      },
+      {
+        operand: ViewFilterOperand.IS,
+        value: 'test',
+        expected: 'test',
+      },
+      {
+        operand: ViewFilterOperand.IS_NOT,
         value: 'test',
         expected: undefined,
       },

@@ -5,6 +5,7 @@ import {
   IsEnum,
   IsNumber,
   IsOptional,
+  // OMNIA-CUSTOM: validates the relation sub-field column input
   IsString,
   IsUUID,
 } from 'class-validator';
@@ -52,6 +53,7 @@ export class CreateViewFieldInput {
   @Field(() => UUIDScalarType, { nullable: true })
   viewFieldGroupId?: string;
 
+  // OMNIA-CUSTOM: relation sub-field column (e.g. "Lead / Date of Birth")
   @IsOptional()
   @IsString()
   @Field(() => String, { nullable: true })

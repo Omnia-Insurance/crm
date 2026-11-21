@@ -123,7 +123,7 @@ export default defineApplication({
   serverVariables: {
     DEEPGRAM_API_KEY: {
       description:
-        'Deepgram API key used for call transcription. Must belong to the BAA-covered Deepgram Enterprise project because call audio contains PHI. In production the key can also arrive via pod env (deepgram-credentials secret).',
+        'Deepgram API key used for call transcription. Stored encrypted as a registration server variable: set it in Settings > Developers > Apps > Compliance > Config, or in the admin panel. Must belong to the BAA-covered Deepgram Enterprise project because call audio contains PHI.',
       isSecret: true,
       isRequired: false,
     },

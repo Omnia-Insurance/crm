@@ -15,6 +15,7 @@ export const getActionIcon = (actionType: WorkflowActionType) => {
     case 'PICK_RECORD':
       return RECORD_ACTIONS.find((item) => item.type === actionType)?.icon;
     case 'AI_AGENT':
+    case 'CLASSIFY':
       return AI_ACTIONS.find((item) => item.type === actionType)?.icon;
     case 'CODE':
     case 'HTTP_REQUEST':
@@ -24,10 +25,14 @@ export const getActionIcon = (actionType: WorkflowActionType) => {
       return CORE_ACTIONS.find((item) => item.type === actionType)?.icon;
     case 'LOGIC_FUNCTION':
       return 'IconFunction';
+    case 'MCP_TOOL':
+      return 'IconSparkles';
     case 'FORM':
+    case 'SEND_CHAT_MESSAGE':
       return HUMAN_INPUT_ACTIONS.find((item) => item.type === actionType)?.icon;
     case 'ITERATOR':
     case 'DELAY':
+    case 'WAIT_FOR_EVENT':
     case 'FILTER':
     case 'IF_ELSE':
       return FLOW_ACTIONS.find((item) => item.type === actionType)?.icon;

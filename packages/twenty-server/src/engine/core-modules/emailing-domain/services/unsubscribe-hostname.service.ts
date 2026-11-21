@@ -8,11 +8,12 @@ import {
   DnsManagerException,
   DnsManagerExceptionCode,
 } from 'src/engine/core-modules/dns-manager/exceptions/dns-manager.exception';
-import { UNSUBSCRIBE_HOSTNAME_PREFIX } from 'src/engine/core-modules/emailing-domain/constants/unsubscribe-hostname-prefix.constant';
+import { RECIPIENT_LINKS_HOSTNAME_PREFIX } from 'src/engine/core-modules/emailing-domain/constants/recipient-links-hostname-prefix.constant';
 import { UnsubscribeHostnameStatus } from 'src/engine/core-modules/emailing-domain/drivers/types/unsubscribe-hostname-status.type';
-import { type VerificationRecord } from 'src/engine/core-modules/emailing-domain/drivers/types/verifications-record';
+import { type VerificationRecord } from 'src/engine/core-modules/emailing-domain/drivers/types/verifications-record.type';
 import { EmailingDomainEntity } from 'src/engine/core-modules/emailing-domain/emailing-domain.entity';
 import { DnsManagerService } from 'src/engine/core-modules/dns-manager/services/dns-manager.service';
+import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
 import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 
@@ -24,6 +25,7 @@ export class UnsubscribeHostnameService {
     @InjectWorkspaceScopedRepository(EmailingDomainEntity)
     private readonly emailingDomainRepository: WorkspaceScopedRepository<EmailingDomainEntity>,
     private readonly dnsManagerService: DnsManagerService,
+    private readonly twentyConfigService: TwentyConfigService,
   ) {}
 
   async provision(emailingDomain: EmailingDomainEntity): Promise<void> {
@@ -90,7 +92,10 @@ export class UnsubscribeHostnameService {
   }
 
   async deprovision(emailingDomain: EmailingDomainEntity): Promise<void> {
-    if (!isNonEmptyString(emailingDomain.unsubscribeHostname)) {
+    if (
+      !this.dnsManagerService.isConfigured() ||
+      !isNonEmptyString(emailingDomain.unsubscribeHostname)
+    ) {
       return;
     }
 
@@ -105,6 +110,12 @@ export class UnsubscribeHostnameService {
     { provision }: { provision: boolean },
   ): Promise<void> {
     try {
+      if (!this.dnsManagerService.isConfigured()) {
+        await this.useServerHostname(workspaceId, emailingDomainId);
+
+        return;
+      }
+
       const emailingDomain = await this.emailingDomainRepository.findOneOrFail(
         workspaceId,
         { where: { id: emailingDomainId } },
@@ -147,7 +158,10 @@ export class UnsubscribeHostnameService {
   async getDnsRecords(
     emailingDomain: EmailingDomainEntity,
   ): Promise<VerificationRecord[]> {
-    if (!isNonEmptyString(emailingDomain.unsubscribeHostname)) {
+    if (
+      !this.dnsManagerService.isConfigured() ||
+      !isNonEmptyString(emailingDomain.unsubscribeHostname)
+    ) {
       return [];
     }
 
@@ -165,6 +179,7 @@ export class UnsubscribeHostnameService {
         type: 'CNAME' as const,
         key: record.key,
         value: record.value,
+        status: record.status,
       }));
     } catch (error) {
       this.logger.warn(
@@ -175,7 +190,28 @@ export class UnsubscribeHostnameService {
     }
   }
 
+  private async useServerHostname(
+    workspaceId: string,
+    emailingDomainId: string,
+  ): Promise<void> {
+    const serverUrl = new URL(this.twentyConfigService.get('SERVER_URL'));
+
+    if (serverUrl.protocol !== 'https:') {
+      return;
+    }
+
+    await this.emailingDomainRepository.update(
+      workspaceId,
+      { id: emailingDomainId },
+      {
+        unsubscribeHostname: serverUrl.host,
+        unsubscribeHostnameId: null,
+        unsubscribeHostnameStatus: UnsubscribeHostnameStatus.ACTIVE,
+      },
+    );
+  }
+
   private buildHostname(domain: string): string {
-    return `${UNSUBSCRIBE_HOSTNAME_PREFIX}.${domain}`;
+    return `${RECIPIENT_LINKS_HOSTNAME_PREFIX}.${domain}`;
   }
 }

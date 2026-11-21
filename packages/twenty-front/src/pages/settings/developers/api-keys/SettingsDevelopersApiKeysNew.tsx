@@ -7,7 +7,6 @@ import { SettingsSkeletonLoader } from '@/settings/components/SettingsSkeletonLo
 import { SettingsDevelopersRoleSelector } from '@/settings/developers/components/SettingsDevelopersRoleSelector';
 import { EXPIRATION_DATES } from '@/settings/developers/constants/ExpirationDates';
 import { apiKeyTokenFamilyState } from '@/settings/developers/states/apiKeyTokenFamilyState';
-import type { RoleWithPartialMembers } from '@/settings/roles/types/RoleWithPartialMembers';
 import { Select } from '@/ui/input/components/Select';
 import { SettingsTextInput } from '@/ui/input/components/SettingsTextInput';
 import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
@@ -17,24 +16,24 @@ import { useStore } from 'jotai';
 import { Key } from 'ts-key-enum';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath, isDefined } from 'twenty-shared/utils';
-import { H2Title } from 'twenty-ui/typography';
-import { Section } from 'twenty-ui/layout';
 import {
   CreateApiKeyDocument,
   GenerateApiKeyTokenDocument,
+  GetApiKeyRolesDocument,
   GetApiKeysDocument,
-  GetRolesDocument,
 } from '~/generated-metadata/graphql';
 import { useNavigateSettings } from '~/hooks/useNavigateSettings';
+import { SETTINGS_DEVELOPERS_TABS } from '@/settings/developers/constants/SettingsDevelopersTabs';
+import { Section } from 'twenty-ui/components/layout';
 
 export const SettingsDevelopersApiKeysNew = () => {
-  const { t } = useLingui();
+  const { t, i18n } = useLingui();
   const [generateOneApiKeyToken] = useMutation(GenerateApiKeyTokenDocument);
   const navigateSettings = useNavigateSettings();
-  const { data: rolesData, loading: rolesLoading } = useQuery(GetRolesDocument);
-  // getRoles returns the upstream Role type; cast to our extended type
-  const roles = (rolesData?.getRoles ??
-    []) as unknown as RoleWithPartialMembers[];
+  const { data: rolesData, loading: rolesLoading } = useQuery(
+    GetApiKeyRolesDocument,
+  );
+  const roles = rolesData?.getApiKeyRoles ?? [];
 
   const [formValues, setFormValues] = useState<{
     name: string;
@@ -47,8 +46,8 @@ export const SettingsDevelopersApiKeysNew = () => {
   });
 
   useEffect(() => {
-    if (isDefined(rolesData?.getRoles)) {
-      const apiKeyAssignableRoles = rolesData.getRoles.filter(
+    if (isDefined(rolesData?.getApiKeyRoles)) {
+      const apiKeyAssignableRoles = rolesData.getApiKeyRoles.filter(
         (role) => role.canBeAssignedToApiKeys,
       );
       if (apiKeyAssignableRoles.length > 0) {
@@ -77,7 +76,9 @@ export const SettingsDevelopersApiKeysNew = () => {
   );
 
   const handleSave = async () => {
-    if (!formValues.name) return;
+    if (!formValues.name) {
+      return;
+    }
 
     const expiresAt = addDays(
       new Date(),
@@ -139,8 +140,13 @@ export const SettingsDevelopersApiKeysNew = () => {
           href: getSettingsPath(SettingsPath.General),
         },
         {
-          children: t`APIs & Webhooks`,
-          href: getSettingsPath(SettingsPath.ApiWebhooks),
+          children: t`Developers`,
+          href: getSettingsPath(
+            SettingsPath.Developers,
+            undefined,
+            undefined,
+            SETTINGS_DEVELOPERS_TABS.TABS_IDS.API,
+          ),
         },
         { children: t`New Key` },
       ]}
@@ -148,15 +154,24 @@ export const SettingsDevelopersApiKeysNew = () => {
         <SaveAndCancelButtons
           isSaveDisabled={!canSave}
           onCancel={() => {
-            navigateSettings(SettingsPath.ApiWebhooks);
+            navigateSettings(
+              SettingsPath.Developers,
+              undefined,
+              undefined,
+              undefined,
+              SETTINGS_DEVELOPERS_TABS.TABS_IDS.API,
+            );
           }}
           onSave={handleSave}
         />
       }
     >
       <SettingsPageContainer>
-        <Section>
-          <H2Title title={t`Name`} description={t`Name of your API key`} />
+        <Section.Root>
+          <Section.Header
+            title={t`Name`}
+            description={t`Name of your API key`}
+          />
           <SettingsTextInput
             instanceId="api-key-new-name"
             placeholder={t`E.g. backoffice integration`}
@@ -177,9 +192,9 @@ export const SettingsDevelopersApiKeysNew = () => {
             }}
             fullWidth
           />
-        </Section>
-        <Section>
-          <H2Title
+        </Section.Root>
+        <Section.Root>
+          <Section.Header
             title={t`Role`}
             description={t`What this API can do: Select a user role to define its permissions.`}
           />
@@ -193,15 +208,18 @@ export const SettingsDevelopersApiKeysNew = () => {
             }}
             roles={roles}
           />
-        </Section>
-        <Section>
-          <H2Title
+        </Section.Root>
+        <Section.Root>
+          <Section.Header
             title={t`Expiration Date`}
             description={t`When the API key will expire.`}
           />
           <Select
             dropdownId="object-field-type-select"
-            options={EXPIRATION_DATES}
+            options={EXPIRATION_DATES.map(({ label, value }) => ({
+              label: i18n._(label),
+              value,
+            }))}
             value={formValues.expirationDate}
             onChange={(value) => {
               setFormValues((prevState) => ({
@@ -210,7 +228,7 @@ export const SettingsDevelopersApiKeysNew = () => {
               }));
             }}
           />
-        </Section>
+        </Section.Root>
       </SettingsPageContainer>
     </SettingsPageLayout>
   );

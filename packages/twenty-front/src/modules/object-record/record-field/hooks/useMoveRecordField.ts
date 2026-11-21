@@ -18,6 +18,7 @@ export const useMoveRecordField = (recordTableId?: string) => {
 
   const { updateRecordField } = useUpdateRecordField(recordTableId);
 
+  // OMNIA-CUSTOM: by record field id; sub-field columns ("Lead / DOB") share fieldMetadataItemId with their relation
   const moveRecordField = useCallback(
     async ({
       direction,
@@ -55,11 +56,11 @@ export const useMoveRecordField = (recordTableId?: string) => {
       const targetRecordFieldNewPosition = currentRecordField.position;
       const currentRecordFieldNewPosition = targetRecordField.position;
 
-      updateRecordField(targetRecordField.fieldMetadataItemId, {
+      updateRecordField(targetRecordField.id, {
         position: targetRecordFieldNewPosition,
       });
 
-      updateRecordField(currentRecordField.fieldMetadataItemId, {
+      updateRecordField(currentRecordField.id, {
         position: currentRecordFieldNewPosition,
       });
 

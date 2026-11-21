@@ -1,9 +1,11 @@
 import { useFilteredObjectMetadataItems } from '@/object-metadata/hooks/useFilteredObjectMetadataItems';
 import { useGetIsMetadataItemCustom } from '@/object-metadata/hooks/useGetIsMetadataItemCustom';
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
-import { isObjectMetadataAvailableForRelation } from '@/object-metadata/utils/isObjectMetadataAvailableForRelation';
+import { isAdvancedRelationTargetObjectMetadata } from '@/object-metadata/utils/isAdvancedRelationTargetObjectMetadata';
+import { isObjectMetadataEligibleAsRelationTarget } from '@/object-metadata/utils/isObjectMetadataEligibleAsRelationTarget';
 import { fieldMetadataItemHasMorphRelations } from '@/settings/data-model/fields/forms/morph-relation/utils/fieldMetadataItemHasMorphRelations';
 import { isDefined } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
 
 export const useRelationSettingsFormInitialTargetObjectMetadatas = ({
   sourceObjectMetadataId,
@@ -40,9 +42,14 @@ export const useRelationSettingsFormInitialTargetObjectMetadatas = ({
   }
 
   const availableItems = activeObjectMetadataItems
-    .filter(isObjectMetadataAvailableForRelation)
+    .filter(isObjectMetadataEligibleAsRelationTarget)
     .filter((item) => item.id !== sourceObjectMetadataId)
     .sort((a, b) => {
+      const aIsAdvanced = isAdvancedRelationTargetObjectMetadata(a);
+      const bIsAdvanced = isAdvancedRelationTargetObjectMetadata(b);
+      if (aIsAdvanced !== bIsAdvanced) {
+        return aIsAdvanced ? 1 : -1;
+      }
       const aIsCustom = getIsMetadataItemCustom(a);
       const bIsCustom = getIsMetadataItemCustom(b);
       if (aIsCustom === bIsCustom) {
@@ -54,7 +61,9 @@ export const useRelationSettingsFormInitialTargetObjectMetadatas = ({
   const firstInitialObjectCandidate = availableItems[0];
   if (!isDefined(firstInitialObjectCandidate)) {
     throw new Error(
-      'Relation Form initialization error: invariant violated – no valid object available for relation (this should never happen).',
+      doNotTranslate(
+        'Relation Form initialization error: invariant violated – no valid object available for relation (this should never happen).',
+      ),
     );
   }
 

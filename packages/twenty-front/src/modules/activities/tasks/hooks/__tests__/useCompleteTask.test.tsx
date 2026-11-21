@@ -13,15 +13,14 @@ const task: Task = {
   status: 'DONE',
   title: 'Test',
   bodyV2: {
-    blocknote: 'Test',
     markdown: 'Test',
+    tiptap: null,
   },
   dueAt: '2024-03-15T07:33:14.212Z',
   createdAt: '2024-03-15T07:33:14.212Z',
   updatedAt: '2024-03-15T07:33:14.212Z',
   assignee: null,
   assigneeId: null,
-  taskTargets: [],
   __typename: 'Task',
 };
 
@@ -49,8 +48,8 @@ const mocks: MockedResponse[] = [
           assigneeId: '123',
           attachments: { edges: [] },
           bodyV2: {
-            blocknote: 'Test',
             markdown: 'Test',
+            tiptap: null,
           },
           createdAt: '2024-03-15T07:33:14.212Z',
           createdBy: {

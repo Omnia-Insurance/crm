@@ -36,8 +36,8 @@ import {
 } from 'src/modules/messaging/message-import-manager/jobs/messaging-message-list-fetch.job';
 
 @Injectable()
-export class ImapSmtpCalDavAPIService {
-  private readonly logger = new Logger(ImapSmtpCalDavAPIService.name);
+export class ImapSmtpCalDavApiService {
+  private readonly logger = new Logger(ImapSmtpCalDavApiService.name);
 
   constructor(
     @InjectRepository(CalendarChannelEntity)
@@ -65,9 +65,6 @@ export class ImapSmtpCalDavAPIService {
     handle: string;
     userWorkspaceId: string;
     workspaceId: string;
-    // Caller (resolver) has already validated the input through
-    // `ImapSmtpCaldavService.validateAndTestConnectionParameters`, which
-    // produces fully plaintext passwords ready for re-encryption.
     connectionParameters: PlaintextImapSmtpCaldavParams;
     existingAccount?: ConnectedAccountEntity | null;
   }): Promise<string> {
@@ -86,10 +83,16 @@ export class ImapSmtpCalDavAPIService {
     const existingAccount =
       input.existingAccount ??
       (await this.connectedAccountRepository.findOne({
-        where: { handle, userWorkspaceId, workspaceId },
+        where: {
+          handle,
+          userWorkspaceId,
+          workspaceId,
+          provider: ConnectedAccountProvider.IMAP_SMTP_CALDAV,
+        },
       }));
 
     const newOrExistingAccountId = existingAccount?.id ?? v4();
+    const wasArchived = isDefined(existingAccount?.archivedAt);
 
     const existingMessageChannel = existingAccount
       ? await this.messageChannelRepository.findOne({
@@ -129,6 +132,8 @@ export class ImapSmtpCalDavAPIService {
           userWorkspaceId,
           workspaceId,
           authFailedAt: null,
+          authFailedReason: null,
+          archivedAt: null,
         });
 
         if (shouldCreateMessageChannel) {
@@ -147,6 +152,32 @@ export class ImapSmtpCalDavAPIService {
             handle,
             transactionManager,
           });
+        }
+
+        if (
+          wasArchived &&
+          isDefined(existingMessageChannel) &&
+          isDefined(input.connectionParameters.IMAP)
+        ) {
+          await transactionManager
+            .getRepository(MessageChannelEntity)
+            .update(
+              { id: existingMessageChannel.id, workspaceId },
+              { isSyncEnabled: true },
+            );
+        }
+
+        if (
+          wasArchived &&
+          isDefined(existingCalendarChannel) &&
+          isDefined(input.connectionParameters.CALDAV)
+        ) {
+          await transactionManager
+            .getRepository(CalendarChannelEntity)
+            .update(
+              { id: existingCalendarChannel.id, workspaceId },
+              { isSyncEnabled: true },
+            );
         }
       },
     );
@@ -196,6 +227,10 @@ export class ImapSmtpCalDavAPIService {
       await this.messageQueueService.add<MessagingMessageListFetchJobData>(
         MessagingMessageListFetchJob.name,
         { workspaceId, messageChannelId: existingMessageChannel.id },
+        {
+          workspaceId,
+          isWorkspaceJob: true,
+        },
       );
     }
 
@@ -213,6 +248,10 @@ export class ImapSmtpCalDavAPIService {
       await this.calendarQueueService.add<CalendarEventListFetchJobData>(
         CalendarEventListFetchJob.name,
         { workspaceId, calendarChannelId: existingCalendarChannel.id },
+        {
+          workspaceId,
+          isWorkspaceJob: true,
+        },
       );
     }
 

@@ -1,9 +1,13 @@
+import { NavigationButton } from '@/ui/input/components/NavigationButton';
+import { isNonEmptyString } from '@sniptt/guards';
 import { SettingsApplicationInstallPermissionValidationModal } from '@/marketplace/components/SettingsApplicationInstallPermissionValidationModal';
+import { useCopyMarketplaceAppLink } from '@/marketplace/hooks/useCopyMarketplaceAppLink';
 import { useInstallMarketplaceAppWithPermissionValidation } from '@/marketplace/hooks/useInstallMarketplaceAppWithPermissionValidation';
+import { getMarketplaceAppDefaultRoleManifest } from '@/marketplace/utils/getMarketplaceAppDefaultRoleManifest';
+import { formatQueueJobProgressLabel } from '@/queue-job/utils/formatQueueJobProgressLabel';
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
 import { useQuery } from '@apollo/client/react';
-import { type Manifest } from 'twenty-shared/application';
 import { isDefined } from 'twenty-shared/utils';
 import {
   IconArrowUpRight,
@@ -11,10 +15,9 @@ import {
   IconDownload,
   IconInfoCircle,
 } from 'twenty-ui/icon';
-import { Button } from 'twenty-ui/input';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { Button } from 'twenty-ui/primitives/input';
+import { themeCssVariables } from 'twenty-ui/theme';
 import { FindMarketplaceAppDetailDocument } from '~/generated-metadata/graphql';
-import { useCopyToClipboard } from '~/hooks/useCopyToClipboard';
 
 const StyledButtonGroup = styled.div`
   display: flex;
@@ -36,79 +39,88 @@ export const SettingsApplicationRegistrationShareLinkButtons = ({
 }) => {
   const { t } = useLingui();
 
-  const { copyToClipboard } = useCopyToClipboard();
-
-  const { requestInstall, install, isInstalling, modalInstanceId } =
-    useInstallMarketplaceAppWithPermissionValidation();
+  const { copyMarketplaceAppLink } = useCopyMarketplaceAppLink();
 
   const installable =
     isDefined(isInstalled) && isDefined(universalIdentifier) && !isInstalled;
+
+  const {
+    requestInstall,
+    install,
+    isInstalling,
+    installProgress,
+    modalInstanceId,
+  } = useInstallMarketplaceAppWithPermissionValidation({
+    universalIdentifier,
+  });
 
   const { data: detailData } = useQuery(FindMarketplaceAppDetailDocument, {
     variables: { universalIdentifier: universalIdentifier ?? '' },
     skip: !installable || !isDefined(universalIdentifier),
   });
 
-  const manifest = detailData?.findMarketplaceAppDetail?.manifest as
-    | Manifest
-    | undefined;
-  const app = manifest?.application;
-  const displayName = app?.displayName ?? '';
+  const detail = detailData?.findMarketplaceAppDetail;
+  const displayName = detail?.name ?? '';
 
-  const defaultRole = manifest?.roles?.find(
-    (r) => r.universalIdentifier === app?.defaultRoleUniversalIdentifier,
+  const defaultRole = getMarketplaceAppDefaultRoleManifest(detail);
+
+  const displayedInstallProgress = formatQueueJobProgressLabel(
+    installProgress ?? 0,
   );
-
-  const handleInstall = async () => {
-    if (installable) {
-      await install({ universalIdentifier });
-    }
-  };
 
   return (
     <StyledButtonGroup>
       {installable && (
         <>
           <Button
-            Icon={IconDownload}
-            title={isInstalling ? t`Installing...` : t`Install`}
-            variant={'secondary'}
+            startIcon={<IconDownload />}
             onClick={requestInstall}
-            disabled={isInstalling}
-          />
+            disabled={!isDefined(detail)}
+            loading={isInstalling}
+            loadingPosition="end"
+            variant="outline"
+          >
+            {isInstalling
+              ? t`Installing ${displayedInstallProgress}`
+              : t`Install`}
+          </Button>
           <SettingsApplicationInstallPermissionValidationModal
             modalInstanceId={modalInstanceId}
             appDisplayName={displayName}
-            appLogoUrl={app?.logoUrl}
+            appLogoUrl={detail?.logoUrl ?? undefined}
             defaultRole={defaultRole}
-            onAuthorize={handleInstall}
+            appObjects={detail?.objects ?? undefined}
+            requestedCapabilities={detail?.requestedCapabilities}
+            requestedIframeMediaPermissions={
+              detail?.requestedIframeMediaPermissions
+            }
+            billsCredits={detail?.billsCredits}
+            isListed={detail?.isListed}
+            onAuthorize={install}
             isInstalling={isInstalling}
           />
         </>
       )}
       {withCopyButton && (
         <Button
-          Icon={IconCopy}
-          title={t`Copy sharing link`}
-          variant="secondary"
-          disabled={!shareLink}
-          onClick={async () => {
-            if (shareLink) {
-              await copyToClipboard(
-                `${window.location.origin}${shareLink}`,
-                t`Sharing link copied to clipboard`,
-              );
+          startIcon={<IconCopy />}
+          disabled={!isDefined(universalIdentifier)}
+          onClick={() => {
+            if (isDefined(universalIdentifier)) {
+              copyMarketplaceAppLink(universalIdentifier);
             }
           }}
-        />
+          variant="outline"
+        >{t`Copy sharing link`}</Button>
       )}
-      <Button
-        Icon={isNpmSource ? IconArrowUpRight : IconInfoCircle}
-        title={isNpmSource ? t`See on marketplace` : t`See app page`}
-        variant="secondary"
+      <NavigationButton
+        startIcon={isNpmSource ? <IconArrowUpRight /> : <IconInfoCircle />}
         disabled={!shareLink}
-        to={shareLink}
-      />
+        to={isNonEmptyString(shareLink) ? shareLink : undefined}
+        variant="outline"
+      >
+        {isNpmSource ? t`See on marketplace` : t`See app page`}
+      </NavigationButton>
     </StyledButtonGroup>
   );
 };

@@ -1,0 +1,141 @@
+import { styled } from '@linaria/react';
+import { isNonEmptyString } from '@sniptt/guards';
+import {
+  StandardObjectNameSingular,
+  MessageCampaignStatus,
+} from 'twenty-shared/types';
+import { isDefined, isValidUuid } from 'twenty-shared/utils';
+import { themeCssVariables } from 'twenty-ui/theme';
+
+import { ComposerFieldRow } from '@/activities/components/ComposerFieldRow';
+import { CampaignEnvelopeBox } from '@/activities/emails/components/CampaignEnvelopeBox';
+import { useUnsubscribeTopics } from '@/activities/emails/hooks/useUnsubscribeTopics';
+import { type MessageCampaign } from '@/activities/emails/types/MessageCampaign';
+import { formatCampaignSendTime } from '@/activities/emails/utils/formatCampaignSendTime';
+import { useDateTimeFormat } from '@/localization/hooks/useDateTimeFormat';
+import { RecordChip } from '@/object-record/components/RecordChip';
+import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { dateLocaleState } from '@/localization/states/dateLocaleState';
+import { useLingui } from '@lingui/react/macro';
+
+const StyledValue = styled.span`
+  color: ${themeCssVariables.font.color.primary};
+  font-size: ${themeCssVariables.font.size.md};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
+const StyledEmptyValue = styled.span`
+  color: ${themeCssVariables.font.color.light};
+  font-size: ${themeCssVariables.font.size.md};
+`;
+
+type CampaignSentEnvelopeProps = {
+  campaign: MessageCampaign;
+};
+
+// Doesn't reuse CampaignDetailsFields, which owns draft persistence state a sent campaign has no use for.
+export const CampaignSentEnvelope = ({
+  campaign,
+}: CampaignSentEnvelopeProps) => {
+  const { t } = useLingui();
+  const { unsubscribeTopics, loading: areTopicsLoading } =
+    useUnsubscribeTopics();
+  const { timeFormat, timeZone } = useDateTimeFormat();
+  const { localeCatalog } = useAtomStateValue(dateLocaleState);
+
+  const hasList = isDefined(campaign.listId) && isValidUuid(campaign.listId);
+
+  const { record: list, loading: isListLoading } = useFindOneRecord({
+    objectNameSingular: StandardObjectNameSingular.MessageList,
+    objectRecordId: campaign.listId ?? '',
+    // A list deleted after the send must still name what the campaign went to.
+    withSoftDeleted: true,
+    skip: !hasList,
+  });
+
+  // An empty lookup can't tell deletion, permissions or failure apart, so report what's true in every case.
+  const isListUnresolved = hasList && !isDefined(list) && !isListLoading;
+
+  const fromAddress = campaign.fromAddress?.primaryEmail;
+  const subject = campaign.subject;
+
+  // Follows the sent id: a topic deleted afterwards must not erase that the send was scoped to one.
+  const hasUnsubscribeTopic = isDefined(campaign.unsubscribeTopicId);
+
+  const unsubscribeTopic = hasUnsubscribeTopic
+    ? unsubscribeTopics.find(
+        (topic) => topic.id === campaign.unsubscribeTopicId,
+      )
+    : undefined;
+
+  // A missing topic may be deleted or unreadable by this role; the two look alike.
+  const isTopicUnresolved =
+    hasUnsubscribeTopic && !isDefined(unsubscribeTopic) && !areTopicsLoading;
+
+  const scheduledSendTime =
+    campaign.status === MessageCampaignStatus.SCHEDULED
+      ? formatCampaignSendTime({
+          value: campaign.scheduledAt,
+          timeZone,
+          timeFormat,
+          localeCatalog,
+        })
+      : '';
+
+  return (
+    <CampaignEnvelopeBox>
+      <ComposerFieldRow label={t`From`}>
+        {isNonEmptyString(fromAddress) ? (
+          <StyledValue>{fromAddress}</StyledValue>
+        ) : (
+          <StyledEmptyValue>{t`No sender`}</StyledEmptyValue>
+        )}
+      </ComposerFieldRow>
+      <ComposerFieldRow label={t`To`}>
+        {isDefined(list) ? (
+          <RecordChip
+            record={list}
+            objectNameSingular={StandardObjectNameSingular.MessageList}
+          />
+        ) : !hasList ? (
+          <StyledEmptyValue>{t`No list`}</StyledEmptyValue>
+        ) : (
+          isListUnresolved && (
+            <StyledEmptyValue>{t`Unavailable`}</StyledEmptyValue>
+          )
+        )}
+      </ComposerFieldRow>
+      {hasUnsubscribeTopic && (
+        <ComposerFieldRow label={t`Topic`}>
+          {isDefined(unsubscribeTopic) ? (
+            <StyledValue>
+              {unsubscribeTopic.name ?? t`Untitled topic`}
+            </StyledValue>
+          ) : (
+            isTopicUnresolved && (
+              <StyledEmptyValue>{t`Unavailable`}</StyledEmptyValue>
+            )
+          )}
+        </ComposerFieldRow>
+      )}
+      <ComposerFieldRow
+        label={t`Subject`}
+        hasDivider={isNonEmptyString(scheduledSendTime)}
+      >
+        {isNonEmptyString(subject) ? (
+          <StyledValue>{subject}</StyledValue>
+        ) : (
+          <StyledEmptyValue>{t`No subject`}</StyledEmptyValue>
+        )}
+      </ComposerFieldRow>
+      {isNonEmptyString(scheduledSendTime) && (
+        <ComposerFieldRow label={t`Send at`} hasDivider={false}>
+          <StyledValue>{scheduledSendTime}</StyledValue>
+        </ComposerFieldRow>
+      )}
+    </CampaignEnvelopeBox>
+  );
+};

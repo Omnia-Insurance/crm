@@ -1,9 +1,7 @@
-import { UseFilters, UseGuards } from '@nestjs/common';
+import { UseFilters, UseGuards, UseInterceptors } from '@nestjs/common';
 import { Args, Mutation, Parent, Query, ResolveField } from '@nestjs/graphql';
 
 import { type QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
-import { PermissionFlagType } from 'twenty-shared/constants';
-
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
 import { ApiKeyEntity } from 'src/engine/core-modules/api-key/api-key.entity';
@@ -15,21 +13,20 @@ import { UpdateApiKeyInput } from 'src/engine/core-modules/api-key/dtos/update-a
 import { apiKeyGraphqlApiExceptionHandler } from 'src/engine/core-modules/api-key/utils/api-key-graphql-api-exception-handler.util';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
-import { RequireAccessTokenGuard } from 'src/engine/guards/require-access-token.guard';
-import { SettingsPermissionGuard } from 'src/engine/guards/settings-permission.guard';
-import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
-import { PermissionsGraphqlApiExceptionFilter } from 'src/engine/metadata-modules/permissions/utils/permissions-graphql-api-exception.filter';
+import { PermissionsGraphqlApiExceptionFilter } from 'src/engine/permissions/utils/permissions-graphql-api-exception.filter';
 import { RoleDTO } from 'src/engine/metadata-modules/role/dtos/role.dto';
+import { WorkspaceMigrationGraphqlApiExceptionInterceptor } from 'src/engine/workspace-manager/workspace-migration/interceptors/workspace-migration-graphql-api-exception.interceptor';
 
 import { ApiKeyRoleService } from './services/api-key-role.service';
 import { ApiKeyService } from './services/api-key.service';
+import { API_KEY_READ_ACCESS_POLICY } from 'src/engine/core-modules/api-key/constants/api-key-read-access-policy.constant';
+import { API_KEY_ROLE_WRITE_ACCESS_POLICY } from 'src/engine/core-modules/api-key/constants/api-key-role-write-access-policy.constant';
+import { API_KEY_WRITE_ACCESS_POLICY } from 'src/engine/core-modules/api-key/constants/api-key-write-access-policy.constant';
+import { AccessPolicyGuard } from 'src/engine/guards/access-policy.guard';
 
 @MetadataResolver(() => ApiKeyEntity)
+@UseInterceptors(WorkspaceMigrationGraphqlApiExceptionInterceptor)
 @UseFilters(AuthGraphqlApiExceptionFilter, PermissionsGraphqlApiExceptionFilter)
-@UseGuards(
-  WorkspaceAuthGuard,
-  SettingsPermissionGuard(PermissionFlagType.API_KEYS_AND_WEBHOOKS),
-)
 export class ApiKeyResolver {
   constructor(
     private readonly apiKeyService: ApiKeyService,
@@ -37,13 +34,23 @@ export class ApiKeyResolver {
   ) {}
 
   @Query(() => [ApiKeyEntity])
+  @UseGuards(AccessPolicyGuard(API_KEY_READ_ACCESS_POLICY))
   async apiKeys(
     @AuthWorkspace() workspace: WorkspaceEntity,
   ): Promise<ApiKeyEntity[]> {
     return this.apiKeyService.findActiveByWorkspaceId(workspace.id);
   }
 
+  @Query(() => [RoleDTO])
+  @UseGuards(AccessPolicyGuard(API_KEY_READ_ACCESS_POLICY))
+  async getApiKeyRoles(
+    @AuthWorkspace() workspace: WorkspaceEntity,
+  ): Promise<RoleDTO[]> {
+    return this.apiKeyRoleService.getApiKeyAssignableRoles(workspace.id);
+  }
+
   @Query(() => ApiKeyEntity, { nullable: true })
+  @UseGuards(AccessPolicyGuard(API_KEY_READ_ACCESS_POLICY))
   async apiKey(
     @Args('input') input: GetApiKeyInput,
     @AuthWorkspace() workspace: WorkspaceEntity,
@@ -62,9 +69,10 @@ export class ApiKeyResolver {
     }
   }
 
-  // Minting an API key requires an ACCESS token — derived PLAYGROUND tokens
-  // and API keys must not escalate into a long-lived credential.
-  @UseGuards(RequireAccessTokenGuard)
+  // Creating a key assigns it a role, so it also requires ROLES to prevent
+  // binding a role above the caller's own. Refusing playground sessions blocks
+  // minting from derived PLAYGROUND tokens.
+  @UseGuards(AccessPolicyGuard(API_KEY_ROLE_WRITE_ACCESS_POLICY))
   @Mutation(() => ApiKeyEntity)
   async createApiKey(
     @AuthWorkspace() workspace: WorkspaceEntity,
@@ -79,7 +87,7 @@ export class ApiKeyResolver {
     });
   }
 
-  @UseGuards(RequireAccessTokenGuard)
+  @UseGuards(AccessPolicyGuard(API_KEY_WRITE_ACCESS_POLICY))
   @Mutation(() => ApiKeyEntity, { nullable: true })
   async updateApiKey(
     @AuthWorkspace() workspace: WorkspaceEntity,
@@ -87,17 +95,29 @@ export class ApiKeyResolver {
   ): Promise<ApiKeyEntity | null> {
     const updateData: QueryDeepPartialEntity<ApiKeyEntity> = {};
 
-    if (input.name !== undefined) updateData.name = input.name;
-    if (input.expiresAt !== undefined)
+    if (input.name !== undefined) {
+      updateData.name = input.name;
+    }
+    if (input.expiresAt !== undefined) {
       updateData.expiresAt = new Date(input.expiresAt);
+    }
     if (input.revokedAt !== undefined) {
       updateData.revokedAt = input.revokedAt ? new Date(input.revokedAt) : null;
     }
 
-    return this.apiKeyService.update(input.id, workspace.id, updateData);
+    try {
+      return await this.apiKeyService.update(
+        input.id,
+        workspace.id,
+        updateData,
+      );
+    } catch (error) {
+      apiKeyGraphqlApiExceptionHandler(error);
+      throw error;
+    }
   }
 
-  @UseGuards(RequireAccessTokenGuard)
+  @UseGuards(AccessPolicyGuard(API_KEY_WRITE_ACCESS_POLICY))
   @Mutation(() => ApiKeyEntity, { nullable: true })
   async revokeApiKey(
     @AuthWorkspace() workspace: WorkspaceEntity,
@@ -106,7 +126,8 @@ export class ApiKeyResolver {
     return this.apiKeyService.revoke(input.id, workspace.id);
   }
 
-  @UseGuards(RequireAccessTokenGuard)
+  // Binding a role to an API key requires ROLES to prevent privilege escalation.
+  @UseGuards(AccessPolicyGuard(API_KEY_ROLE_WRITE_ACCESS_POLICY))
   @Mutation(() => Boolean)
   async assignRoleToApiKey(
     @AuthWorkspace() workspace: WorkspaceEntity,

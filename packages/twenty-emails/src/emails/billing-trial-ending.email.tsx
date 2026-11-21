@@ -3,7 +3,6 @@ import { BaseEmail } from 'src/components/BaseEmail';
 import { CallToAction } from 'src/components/CallToAction';
 import { MainText } from 'src/components/MainText';
 import { Title } from 'src/components/Title';
-import { BILLING_SETTINGS_URL } from 'src/constants/billing-settings-url.constant';
 import { createI18nInstance } from 'src/utils/i18n.utils';
 import { type APP_LOCALES } from 'twenty-shared/translations';
 
@@ -12,17 +11,17 @@ type BillingTrialEndingEmailProps = {
   workspaceDisplayName: string | undefined;
   trialEndsAt: Date;
   dataRetentionDays: number;
+  link: string;
   locale: keyof typeof APP_LOCALES;
 };
 
-// Sent the day before a trial WITHOUT a credit card ends. Goal: get the user to
-// add a payment method so they keep their workspace and data. No card on file means
-// there is no surprise charge risk, only a data-loss risk, so the framing is helpful.
+// Sent the day before a cardless trial ends; the risk is data loss, not a surprise charge.
 export const BillingTrialEndingEmail = ({
   userName,
   workspaceDisplayName,
   trialEndsAt,
   dataRetentionDays,
+  link,
   locale,
 }: BillingTrialEndingEmailProps) => {
   const i18n = createI18nInstance(locale);
@@ -59,10 +58,7 @@ export const BillingTrialEndingEmail = ({
         />
       </MainText>
       <br />
-      <CallToAction
-        href={BILLING_SETTINGS_URL}
-        value={i18n._('Add a payment method')}
-      />
+      <CallToAction href={link} value={i18n._('Add a payment method')} />
       <br />
       <br />
     </BaseEmail>
@@ -74,6 +70,7 @@ BillingTrialEndingEmail.PreviewProps = {
   workspaceDisplayName: 'Acme Inc.',
   trialEndsAt: new Date('2026-07-02'),
   dataRetentionDays: 14,
+  link: 'https://acme.twenty.com/settings/billing',
   locale: 'en',
 } as BillingTrialEndingEmailProps;
 

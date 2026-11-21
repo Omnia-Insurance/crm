@@ -1,8 +1,8 @@
-// Authed GET against the Twenty partners API, cached at the fetch layer (the
-// house pattern — no unstable_cache wrapper). Env-gated: throws when the env is
+// Authed GET against the Twenty partners API. Env-gated: throws when the env is
 // missing so the seam's catch can fall back to [] cleanly.
-const REVALIDATE_SECONDS = 300;
-
+//
+// Never cached. Every payload embeds file URLs signed with a token that expires
+// in 24h, so a Data Cache entry outliving its tokens serves a page of 403s.
 export async function partnersApiFetch(path: string): Promise<unknown> {
   const baseUrl = process.env.TWENTY_PARTNERS_API_URL;
   const apiKey = process.env.TWENTY_PARTNERS_API_KEY;
@@ -15,7 +15,7 @@ export async function partnersApiFetch(path: string): Promise<unknown> {
       Accept: 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },
-    next: { revalidate: REVALIDATE_SECONDS },
+    cache: 'no-store',
   });
 
   if (!response.ok) {

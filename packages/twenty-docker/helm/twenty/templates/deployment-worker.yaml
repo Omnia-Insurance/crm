@@ -15,7 +15,15 @@ spec:
       app.kubernetes.io/name: {{ include "twenty.name" . }}
       app.kubernetes.io/component: worker
   strategy:
-    type: Recreate
+    {{- /* OMNIA-CUSTOM: worker.strategy knob (Recreate keeps one worker generation); unset keeps upstream */}}
+    {{- if .Values.worker.strategy }}
+    {{- toYaml .Values.worker.strategy | nindent 4 }}
+    {{- else }}
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    {{- end }}
   template:
     metadata:
       labels:
@@ -23,14 +31,7 @@ spec:
         app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: worker
     spec:
-      {{- /* OMNIA-CUSTOM: serviceAccountName for EKS Pod Identity (Bedrock, Transcribe, and S3 QA runtime access under AWS BAA) */}}
-      {{- with .Values.worker.serviceAccountName }}
-      serviceAccountName: {{ . }}
-      {{- end }}
-      {{- with .Values.tolerations }}
-      tolerations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+      serviceAccountName: {{ include "twenty.serviceAccountName" . }}
       securityContext:
 {{- toYaml .Values.securityContext | nindent 8 }}
       {{- with .Values.worker.nodeSelector }}

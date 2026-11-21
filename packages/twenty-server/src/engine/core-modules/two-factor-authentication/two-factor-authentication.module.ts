@@ -1,14 +1,18 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { AppTokenEntity } from 'src/engine/core-modules/app-token/app-token.entity';
 import { TokenModule } from 'src/engine/core-modules/auth/token/token.module';
 import { WorkspaceDomainsModule } from 'src/engine/core-modules/domain/workspace-domains/workspace-domains.module';
-import { MetricsModule } from 'src/engine/core-modules/metrics/metrics.module';
 import { SecretEncryptionModule } from 'src/engine/core-modules/secret-encryption/secret-encryption.module';
-import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
+import { ThrottlerModule } from 'src/engine/core-modules/throttler/throttler.module';
+import { TwoFactorAuthenticationBackupCodeService } from 'src/engine/core-modules/two-factor-authentication/services/two-factor-authentication-backup-code.service';
+import { TwoFactorAuthenticationEmailService } from 'src/engine/core-modules/two-factor-authentication/services/two-factor-authentication-email.service';
+import { TwoFactorAuthenticationRecoveryService } from 'src/engine/core-modules/two-factor-authentication/services/two-factor-authentication-recovery.service';
+import { UserSessionModule } from 'src/engine/core-modules/user-session/user-session.module';
 import { UserWorkspaceModule } from 'src/engine/core-modules/user-workspace/user-workspace.module';
-import { UserEntity } from 'src/engine/core-modules/user/user.entity';
 import { UserModule } from 'src/engine/core-modules/user/user.module';
+import { PermissionsModule } from 'src/engine/permissions/permissions.module';
 import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/provide-workspace-scoped-repository';
 import { TwoFactorAuthenticationResolver } from './two-factor-authentication.resolver';
 import { TwoFactorAuthenticationService } from './two-factor-authentication.service';
@@ -19,21 +23,28 @@ import { TwoFactorAuthenticationMethodEntity } from './entities/two-factor-authe
   imports: [
     UserWorkspaceModule,
     WorkspaceDomainsModule,
-    MetricsModule,
     TokenModule,
     SecretEncryptionModule,
+    ThrottlerModule,
+    UserSessionModule,
+    PermissionsModule,
     TypeOrmModule.forFeature([
-      UserEntity,
       TwoFactorAuthenticationMethodEntity,
-      UserWorkspaceEntity,
+      AppTokenEntity,
     ]),
     UserModule,
   ],
   providers: [
     TwoFactorAuthenticationService,
+    TwoFactorAuthenticationBackupCodeService,
+    TwoFactorAuthenticationEmailService,
+    TwoFactorAuthenticationRecoveryService,
     TwoFactorAuthenticationResolver,
     provideWorkspaceScopedRepository(TwoFactorAuthenticationMethodEntity),
   ],
-  exports: [TwoFactorAuthenticationService],
+  exports: [
+    TwoFactorAuthenticationService,
+    TwoFactorAuthenticationRecoveryService,
+  ],
 })
 export class TwoFactorAuthenticationModule {}

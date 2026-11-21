@@ -1,6 +1,3 @@
-// OMNIA-CUSTOM: GraphQL resolver for reconciliation pipeline operations.
-// Exposes mutations to trigger parsing and matching from the frontend.
-
 import {
   BadRequestException,
   UseFilters,
@@ -9,18 +6,19 @@ import {
 } from '@nestjs/common';
 import { Args, Float, Mutation, Query } from '@nestjs/graphql';
 
-import { PermissionFlagType } from 'twenty-shared/constants';
-
-import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
+import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
 import { AuthGraphqlApiExceptionFilter } from 'src/engine/core-modules/auth/filters/auth-graphql-api-exception.filter';
+import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
+import { getWorkspaceAuthContext } from 'src/engine/core-modules/auth/storage/workspace-auth-context.storage';
+import { type UserWorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { ResolverValidationPipe } from 'src/engine/core-modules/graphql/pipes/resolver-validation.pipe';
+import { AuthenticationError } from 'src/engine/core-modules/graphql/utils/graphql-errors.util';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
-import { AuthUserWorkspaceId } from 'src/engine/decorators/auth/auth-user-workspace-id.decorator';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
-import { AuthWorkspaceMemberId } from 'src/engine/decorators/auth/auth-workspace-member-id.decorator';
-import { SettingsPermissionGuard } from 'src/engine/guards/settings-permission.guard';
-import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
+import { AccessPolicyGuard } from 'src/engine/guards/access-policy.guard';
+import { PermissionsGraphqlApiExceptionFilter } from 'src/engine/permissions/utils/permissions-graphql-api-exception.filter';
+import { RECONCILIATION_ACCESS_POLICY } from 'src/modules/reconciliation/constants/reconciliation-access-policy.constant';
 import { StartReconciliationResultDTO } from 'src/modules/reconciliation/dtos/start-reconciliation.dto';
 import { ValidateCarrierConfigResultDTO } from 'src/modules/reconciliation/dtos/validate-carrier-config.dto';
 import { ReconciliationOrchestratorService } from 'src/modules/reconciliation/orchestrator.service';
@@ -29,11 +27,8 @@ import { ReviewItemService } from 'src/modules/reconciliation/services/review-it
 
 @MetadataResolver()
 @UsePipes(ResolverValidationPipe)
-@UseFilters(AuthGraphqlApiExceptionFilter)
-@UseGuards(
-  WorkspaceAuthGuard,
-  SettingsPermissionGuard(PermissionFlagType.RECONCILIATION),
-)
+@UseFilters(PermissionsGraphqlApiExceptionFilter, AuthGraphqlApiExceptionFilter)
+@UseGuards(AccessPolicyGuard(RECONCILIATION_ACCESS_POLICY))
 export class ReconciliationResolver {
   constructor(
     private readonly orchestratorService: ReconciliationOrchestratorService,
@@ -41,13 +36,8 @@ export class ReconciliationResolver {
     private readonly carrierConfigValidationService: CarrierConfigValidationService,
   ) {}
 
-  /**
-   * Synchronous pre-run config validation (OMN-11): runs the full parse/match
-   * fail-fast chain — boundary parse, engine id, engineParams, status-role
-   * presence/resolvability against the latest parsed run's actual headers —
-   * WITHOUT enqueuing anything. Config problems land in `errors`, never as a
-   * thrown GraphQL error (see CarrierConfigValidationService).
-   */
+  // Pre-run check of the full parse/match fail-fast chain (OMN-11) without enqueuing
+  // anything; config problems come back in `errors`, never as a thrown GraphQL error
   @Query(() => ValidateCarrierConfigResultDTO)
   async validateCarrierConfig(
     @Args('carrierConfigId', { type: () => UUIDScalarType })
@@ -60,15 +50,8 @@ export class ReconciliationResolver {
     );
   }
 
-  /**
-   * Starts (or restarts) parsing. Legal from UPLOADED, FAILED, and — since
-   * OMN-11 — REVIEW, so parse-time knob edits (transformRules, computed
-   * fields, hand-edited columnMapping snapshot) can be re-applied to the
-   * same pinned source file without a re-upload. The CAS transition inside
-   * the orchestrator serializes concurrent restarts; reviewer decisions
-   * survive the downstream re-match (ReviewItemService.reconcileMatchResults
-   * preserves decided items).
-   */
+  // Also legal from REVIEW (OMN-11) so parse-time config edits re-apply to the pinned
+  // file; the CAS transition serializes restarts and the re-match keeps decided items
   @Mutation(() => StartReconciliationResultDTO)
   async startReconciliationParsing(
     @Args('reconciliationId', { type: () => UUIDScalarType })
@@ -110,16 +93,14 @@ export class ReconciliationResolver {
     minConfidence: number | undefined,
     @Args('reviewItemIds', { type: () => [UUIDScalarType], nullable: true })
     reviewItemIds: string[] | undefined,
-    @AuthWorkspace() workspace: WorkspaceEntity,
-    @AuthUserWorkspaceId({ allowUndefined: true })
-    userWorkspaceId: string | undefined,
-    @AuthWorkspaceMemberId() workspaceMemberId: string | undefined,
   ): Promise<StartReconciliationResultDTO> {
+    const authContext = this.getUserAuthContextOrThrow();
+
     const result = await this.reviewItemService.batchApprove(
-      workspace.id,
+      authContext.workspace.id,
       reconciliationId,
       { minConfidence, reviewItemIds },
-      { userWorkspaceId, workspaceMemberId },
+      { authContext },
     );
 
     return {
@@ -139,11 +120,8 @@ export class ReconciliationResolver {
     minConfidence: number | undefined,
     @Args('reviewItemIds', { type: () => [UUIDScalarType], nullable: true })
     reviewItemIds: string[] | undefined,
-    @AuthWorkspace() workspace: WorkspaceEntity,
-    @AuthUserWorkspaceId({ allowUndefined: true })
-    userWorkspaceId: string | undefined,
-    @AuthWorkspaceMemberId() workspaceMemberId: string | undefined,
   ): Promise<StartReconciliationResultDTO> {
+    const authContext = this.getUserAuthContextOrThrow();
     const normalizedAction = action.toUpperCase();
 
     if (normalizedAction !== 'APPLY' && normalizedAction !== 'UNDO') {
@@ -153,14 +131,11 @@ export class ReconciliationResolver {
     }
 
     const result = await this.reviewItemService.batchApply(
-      workspace.id,
+      authContext.workspace.id,
       reconciliationId,
       normalizedAction,
       { minConfidence, reviewItemIds },
-      {
-        userWorkspaceId,
-        workspaceMemberId,
-      },
+      { authContext },
     );
 
     return {
@@ -171,5 +146,16 @@ export class ReconciliationResolver {
           ? `APPLIED_${result.updatedCount}`
           : `UNDONE_${result.updatedCount}`,
     };
+  }
+
+  // Batch writes are authorized against the acting member, so a user context is required
+  private getUserAuthContextOrThrow(): UserWorkspaceAuthContext {
+    const authContext = getWorkspaceAuthContext();
+
+    if (!isUserAuthContext(authContext)) {
+      throw new AuthenticationError('User authentication required');
+    }
+
+    return authContext;
   }
 }

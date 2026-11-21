@@ -7,6 +7,7 @@ import { sidePanelNavigationStackState } from '@/side-panel/states/sidePanelNavi
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useFlowOrThrow } from '@/workflow/hooks/useFlowOrThrow';
 import { workflowVisualizerWorkflowIdComponentState } from '@/workflow/states/workflowVisualizerWorkflowIdComponentState';
+import { getWorkflowStepDisplayName } from '@/workflow/utils/getWorkflowStepDisplayName';
 import {
   type WorkflowAction,
   type WorkflowActionType,
@@ -16,8 +17,10 @@ import { workflowSelectedNodeComponentState } from '@/workflow/workflow-diagram/
 import { useUpdateStep } from '@/workflow/workflow-steps/hooks/useUpdateStep';
 import { getActionIcon } from '@/workflow/workflow-steps/workflow-actions/utils/getActionIcon';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
-import { isDefined } from 'twenty-shared/utils';
-import { useIcons } from 'twenty-ui/icon';
+import { isString } from '@sniptt/guards';
+import { isDefined, isPlainObject } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
+import { useIcons } from 'twenty-ui/icon/provider';
 
 export const SidePanelWorkflowEditStepTypeContent = () => {
   const { getIcon } = useIcons();
@@ -29,7 +32,7 @@ export const SidePanelWorkflowEditStepTypeContent = () => {
   );
   const flow = useFlowOrThrow();
 
-  const { updateStep } = useUpdateStep();
+  const { updateStepNow } = useUpdateStep();
 
   const { openWorkflowEditStepInSidePanel } = useSidePanelWorkflowNavigation();
   const { closeRightClickMenu } = useCloseRightClickMenu();
@@ -40,7 +43,9 @@ export const SidePanelWorkflowEditStepTypeContent = () => {
   const handleUpdateStepType = async (selection: WorkflowActionSelection) => {
     if (!isDefined(workflowVisualizerWorkflowId)) {
       throw new Error(
-        'Workflow ID must be configured for the edge when creating a step',
+        doNotTranslate(
+          'Workflow ID must be configured for the edge when creating a step',
+        ),
       );
     }
 
@@ -49,16 +54,34 @@ export const SidePanelWorkflowEditStepTypeContent = () => {
     );
 
     if (!isDefined(existingStep)) {
-      throw new Error('Step not found');
+      throw new Error(doNotTranslate('Step not found'));
     }
+
+    const selectedInput = selection.defaultSettings?.input;
+    const selectedAgentId =
+      isPlainObject(selectedInput) && isString(selectedInput.agentId)
+        ? selectedInput.agentId
+        : undefined;
+
+    // both AI step kinds share one type, so the agent picked (none for Generate) tells the server which to rebuild into
+    const settings =
+      existingStep.type === 'AI_AGENT' && selection.type === 'AI_AGENT'
+        ? {
+            ...existingStep.settings,
+            input: {
+              ...existingStep.settings.input,
+              agentId: selectedAgentId,
+            },
+          }
+        : (selection.defaultSettings ?? existingStep.settings);
 
     const stepUpdate = {
       ...existingStep,
       type: selection.type,
-      settings: selection.defaultSettings ?? existingStep.settings,
+      settings,
     };
 
-    const { updatedStep } = await updateStep(stepUpdate as WorkflowAction);
+    const { updatedStep } = await updateStepNow(stepUpdate as WorkflowAction);
 
     if (!isDefined(updatedStep)) {
       return;
@@ -68,12 +91,15 @@ export const SidePanelWorkflowEditStepTypeContent = () => {
 
     setSidePanelNavigationStack([]);
 
-    openWorkflowEditStepInSidePanel(
-      workflowVisualizerWorkflowId,
-      updatedStep.name,
-      getIcon(getActionIcon(updatedStep.type as WorkflowActionType)),
-      updatedStep.id,
-    );
+    openWorkflowEditStepInSidePanel({
+      workflowId: workflowVisualizerWorkflowId,
+      title: getWorkflowStepDisplayName({
+        name: updatedStep.name,
+        type: updatedStep.type as WorkflowActionType,
+      }),
+      icon: getIcon(getActionIcon(updatedStep.type as WorkflowActionType)),
+      stepId: updatedStep.id,
+    });
   };
 
   return (

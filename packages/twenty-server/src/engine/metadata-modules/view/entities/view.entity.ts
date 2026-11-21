@@ -12,6 +12,8 @@ import {
   type Relation,
   UpdateDateColumn,
 } from 'typeorm';
+import { DEFAULT_VIEW_GROUP_LOAD_LIMIT } from 'twenty-shared/constants';
+import { type APP_LOCALES } from 'twenty-shared/translations';
 import {
   AggregateOperations,
   type SerializedRelation,
@@ -23,10 +25,16 @@ import {
 } from 'twenty-shared/types';
 
 import { WasIntroducedInUpgrade } from 'src/engine/core-modules/upgrade/decorators/was-introduced-in-upgrade.decorator';
+import { WasRemovedInUpgrade } from 'src/engine/core-modules/upgrade/decorators/was-removed-in-upgrade.decorator';
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
 import { ADD_IS_SYSTEM_SIDE_EFFECT_UPGRADE_COMMAND_NAME } from 'src/database/commands/upgrade-version-command/2-15/is-system-side-effect-upgrade-command-name.constant';
 import { ADD_VIEW_KANBAN_COLUMN_WIDTH_UPGRADE_COMMAND_NAME } from 'src/database/commands/upgrade-version-command/2-15/add-view-kanban-column-width-upgrade-command-name.constant';
+import { ADD_CALENDAR_END_FIELD_METADATA_ID_TO_VIEW_UPGRADE_COMMAND_NAME } from 'src/database/commands/upgrade-version-command/2-22/add-calendar-end-field-metadata-id-to-view-upgrade-command-name.constant';
+import { ADD_VIEW_GROUP_LOAD_LIMIT_UPGRADE_COMMAND_NAME } from 'src/database/commands/upgrade-version-command/2-42/add-view-group-load-limit-upgrade-command-name.constant';
+import { DROP_IS_CUSTOM_FROM_AGENT_SKILL_VIEW_INDEX_AND_AGENT_CHAT_CHANNEL_UPGRADE_COMMAND_NAME } from 'src/database/commands/upgrade-version-command/2-54/drop-is-custom-from-agent-skill-view-index-and-agent-chat-channel-upgrade-command-name.constant';
+import { ADD_VIEW_SHOULD_DISPLAY_GROUPS_AS_TABS_UPGRADE_COMMAND_NAME } from 'src/database/commands/upgrade-version-command/2-58/add-view-should-display-groups-as-tabs-upgrade-command-name.constant';
 import { FieldMetadataEntity } from 'src/engine/metadata-modules/field-metadata/field-metadata.entity';
+import { NavigationMenuItemEntity } from 'src/engine/metadata-modules/navigation-menu-item/entities/navigation-menu-item.entity';
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { ViewFieldGroupEntity } from 'src/engine/metadata-modules/view-field-group/entities/view-field-group.entity';
 import { ViewFieldEntity } from 'src/engine/metadata-modules/view-field/entities/view-field.entity';
@@ -34,9 +42,10 @@ import { ViewFilterGroupEntity } from 'src/engine/metadata-modules/view-filter-g
 import { ViewFilterEntity } from 'src/engine/metadata-modules/view-filter/entities/view-filter.entity';
 import { ViewGroupEntity } from 'src/engine/metadata-modules/view-group/entities/view-group.entity';
 import { ViewSortEntity } from 'src/engine/metadata-modules/view-sort/entities/view-sort.entity';
-import { OverridableEntity } from 'src/engine/workspace-manager/types/overridable-entity';
+import { OverridableEntity } from 'src/engine/workspace-manager/types/overridable-entity.type';
 
 export type ViewOverrides = {
+  isActive?: boolean;
   name?: string;
   type?: ViewType;
   icon?: string;
@@ -48,20 +57,28 @@ export type ViewOverrides = {
   anyFieldFilterValue?: string | null;
   calendarLayout?: ViewCalendarLayout | null;
   calendarFieldMetadataId?: SerializedRelation | null;
+  calendarEndFieldMetadataId?: SerializedRelation | null;
   visibility?: ViewVisibility;
   mainGroupByFieldMetadataId?: SerializedRelation | null;
   shouldHideEmptyGroups?: boolean;
+  shouldDisplayGroupsAsTabs?: boolean;
   kanbanColumnWidth?: number | null;
+  groupLoadLimit?: number;
+  translations?: Partial<
+    Record<keyof typeof APP_LOCALES, { name?: string | null }>
+  > | null;
 };
 
-// We could refactor this type to be dynamic to view type
+// TODO: make this type dynamic to the view type
 @Entity({ name: 'view', schema: 'core' })
-@Index('IDX_VIEW_WORKSPACE_ID_OBJECT_METADATA_ID', [
-  'workspaceId',
+@Index('IDX_VIEW_APPLICATION_ID', ['applicationId'])
+@Index('IDX_VIEW_OBJECT_METADATA_ID_WORKSPACE_ID', [
   'objectMetadataId',
+  'workspaceId',
 ])
 @Index('IDX_VIEW_VISIBILITY', ['visibility'])
 @Index('IDX_VIEW_CALENDAR_FIELD_METADATA', ['calendarFieldMetadataId'])
+@Index('IDX_VIEW_CALENDAR_END_FIELD_METADATA', ['calendarEndFieldMetadataId'])
 @Index('IDX_VIEW_KANBAN_FIELD_METADATA', [
   'kanbanAggregateOperationFieldMetadataId',
 ])
@@ -69,7 +86,7 @@ export type ViewOverrides = {
 @Index('IDX_VIEW_CREATED_BY_USER_WORKSPACE', ['createdByUserWorkspaceId'])
 @Check(
   'CHK_VIEW_CALENDAR_INTEGRITY',
-  `("type" != 'CALENDAR' OR ("calendarLayout" IS NOT NULL AND "calendarFieldMetadataId" IS NOT NULL))`,
+  `("type" NOT IN ('CALENDAR', 'CALENDAR_WIDGET') OR ("calendarLayout" IS NOT NULL AND "calendarFieldMetadataId" IS NOT NULL))`,
 )
 export class ViewEntity
   extends OverridableEntity<ViewOverrides>
@@ -115,9 +132,14 @@ export class ViewEntity
   @Column({ nullable: false, default: false, type: 'boolean' })
   isCompact: boolean;
 
+  @WasRemovedInUpgrade({
+    upgradeCommandName:
+      DROP_IS_CUSTOM_FROM_AGENT_SKILL_VIEW_INDEX_AND_AGENT_CHAT_CHANNEL_UPGRADE_COMMAND_NAME,
+  })
   @Column({ nullable: false, default: false, type: 'boolean' })
-  isCustom: boolean;
+  isCustom: WasRemovedInUpgrade<boolean>;
 
+  // Deprecated: superseded by objectMetadata.openRecordIn and the member preference.
   @Column({
     type: 'enum',
     enum: Object.values(ViewOpenRecordIn),
@@ -170,6 +192,24 @@ export class ViewEntity
   @JoinColumn({ name: 'calendarFieldMetadataId' })
   calendarFieldMetadata: Relation<FieldMetadataEntity> | null;
 
+  @WasIntroducedInUpgrade({
+    upgradeCommandName:
+      ADD_CALENDAR_END_FIELD_METADATA_ID_TO_VIEW_UPGRADE_COMMAND_NAME,
+  })
+  @Column({ nullable: true, type: 'uuid' })
+  calendarEndFieldMetadataId: string | null;
+
+  @ManyToOne(
+    () => FieldMetadataEntity,
+    (fieldMetadata) => fieldMetadata.calendarEndViews,
+    {
+      onDelete: 'SET NULL',
+      nullable: true,
+    },
+  )
+  @JoinColumn({ name: 'calendarEndFieldMetadataId' })
+  calendarEndFieldMetadata: Relation<FieldMetadataEntity> | null;
+
   @Column({ nullable: true, type: 'uuid' })
   mainGroupByFieldMetadataId: string | null;
 
@@ -188,10 +228,27 @@ export class ViewEntity
   shouldHideEmptyGroups: boolean;
 
   @WasIntroducedInUpgrade({
+    upgradeCommandName:
+      ADD_VIEW_SHOULD_DISPLAY_GROUPS_AS_TABS_UPGRADE_COMMAND_NAME,
+  })
+  @Column({ nullable: false, default: false, type: 'boolean' })
+  shouldDisplayGroupsAsTabs: boolean;
+
+  @WasIntroducedInUpgrade({
     upgradeCommandName: ADD_VIEW_KANBAN_COLUMN_WIDTH_UPGRADE_COMMAND_NAME,
   })
   @Column({ nullable: true, type: 'int', default: null })
   kanbanColumnWidth: number | null;
+
+  @WasIntroducedInUpgrade({
+    upgradeCommandName: ADD_VIEW_GROUP_LOAD_LIMIT_UPGRADE_COMMAND_NAME,
+  })
+  @Column({
+    nullable: false,
+    type: 'int',
+    default: DEFAULT_VIEW_GROUP_LOAD_LIMIT,
+  })
+  groupLoadLimit: number;
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
@@ -251,6 +308,12 @@ export class ViewEntity
     (viewFilterGroup) => viewFilterGroup.view,
   )
   viewFilterGroups: Relation<ViewFilterGroupEntity[]>;
+
+  @OneToMany(
+    () => NavigationMenuItemEntity,
+    (navigationMenuItem) => navigationMenuItem.view,
+  )
+  navigationMenuItems: Relation<NavigationMenuItemEntity[]>;
 }
 
 const VIEW_OVERRIDABLE_COLUMNS_UPGRADE_COMMAND_NAME =

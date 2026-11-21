@@ -1,5 +1,8 @@
+import { Button } from 'twenty-ui/primitives/input';
 import { styled } from '@linaria/react';
 import { Trans, useLingui } from '@lingui/react/macro';
+import { isNonEmptyString } from '@sniptt/guards';
+import { useState } from 'react';
 import { FormProvider } from 'react-hook-form';
 import QRCodeModule from 'react-qr-code';
 
@@ -7,6 +10,7 @@ import { qrCodeState } from '@/auth/states/qrCode';
 import { SaveAndCancelButtons } from '@/settings/components/SaveAndCancelButtons/SaveAndCancelButtons';
 import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
 import { DeleteTwoFactorAuthentication } from '@/settings/two-factor-authentication/components/DeleteTwoFactorAuthenticationMethod';
+import { TwoFactorAuthenticationBackupCodesSection } from '@/settings/two-factor-authentication/components/TwoFactorAuthenticationBackupCodesSection';
 import { TwoFactorAuthenticationSetupForSettingsEffect } from '@/settings/two-factor-authentication/components/TwoFactorAuthenticationSetupForSettingsEffect';
 import { TwoFactorAuthenticationVerificationForSettings } from '@/settings/two-factor-authentication/components/TwoFactorAuthenticationVerificationForSettings';
 import { useCurrentUserWorkspaceTwoFactorAuthentication } from '@/settings/two-factor-authentication/hooks/useCurrentUserWorkspaceTwoFactorAuthentication';
@@ -14,12 +18,15 @@ import { useTwoFactorVerificationForSettings } from '@/settings/two-factor-authe
 import { extractSecretFromOtpUri } from '@/settings/two-factor-authentication/utils/extractSecretFromOtpUri';
 import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
 import { SettingsPath } from 'twenty-shared/types';
-import { getSettingsPath } from 'twenty-shared/utils';
-import { H2Title } from 'twenty-ui/typography';
-import { Loader } from 'twenty-ui/feedback';
-import { Section } from 'twenty-ui/layout';
+import {
+  getSettingsPath,
+  isDefined,
+  isNonEmptyArray,
+} from 'twenty-shared/utils';
+import { Section } from 'twenty-ui/components/layout';
+import { Loader } from 'twenty-ui/primitives/feedback';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
 import { resolveCjsModuleDefaultExport } from '~/utils/resolveCjsModuleDefaultExport';
 import { useCopyToClipboard } from '~/hooks/useCopyToClipboard';
 
@@ -64,22 +71,6 @@ const StyledCopySetupKeyText = styled.div`
   text-align: left;
 `;
 
-const StyledCopySetupKeyLink = styled.button`
-  background: none;
-  border: none;
-  color: ${themeCssVariables.font.color.tertiary};
-  cursor: pointer;
-  display: inline;
-  font-size: ${themeCssVariables.font.size.sm};
-  margin-left: 0;
-  padding: 0;
-  text-decoration: underline;
-
-  &:hover {
-    color: ${themeCssVariables.font.color.secondary};
-  }
-`;
-
 const StyledDivider = styled.div`
   margin: ${themeCssVariables.spacing[6]} 0;
   width: 100%;
@@ -97,15 +88,26 @@ export const SettingsTwoFactorAuthenticationMethod = () => {
     currentUserWorkspaceTwoFactorAuthenticationMethods['TOTP']?.status ===
     'VERIFIED';
 
-  const verificationForm = useTwoFactorVerificationForSettings();
+  const [generatedBackupCodes, setGeneratedBackupCodes] = useState<
+    string[] | null
+  >(null);
 
-  const shouldShowActionButtons = !has2FAMethod;
+  const verificationForm = useTwoFactorVerificationForSettings({
+    onBackupCodesIssued: setGeneratedBackupCodes,
+  });
+
+  const isSetupCompleted =
+    has2FAMethod || isNonEmptyArray(generatedBackupCodes);
+
+  const shouldShowActionButtons = !isSetupCompleted;
 
   const handleCopySetupKey = async () => {
-    if (!qrCode) return;
+    if (!isNonEmptyString(qrCode)) {
+      return;
+    }
 
     const secret = extractSecretFromOtpUri(qrCode);
-    if (secret !== null) {
+    if (isDefined(secret)) {
       await copyToClipboard(secret, t`Setup key copied to clipboard`);
     }
   };
@@ -143,14 +145,20 @@ export const SettingsTwoFactorAuthenticationMethod = () => {
         }
       >
         <SettingsPageContainer>
-          {has2FAMethod ? (
-            <Section>
-              <DeleteTwoFactorAuthentication />
-            </Section>
+          {isSetupCompleted ? (
+            <>
+              <TwoFactorAuthenticationBackupCodesSection
+                generatedBackupCodes={generatedBackupCodes}
+                onBackupCodesGenerated={setGeneratedBackupCodes}
+              />
+              <Section.Root>
+                <DeleteTwoFactorAuthentication />
+              </Section.Root>
+            </>
           ) : (
-            <Section>
+            <Section.Root>
               <TwoFactorAuthenticationSetupForSettingsEffect />
-              <H2Title
+              <Section.Header
                 title={t`Authenticator app`}
                 description={t`Authenticator apps and browser extensions like 1Password, Authy, Microsoft Authenticator, etc. generate one-time passwords that are used as a second factor to verify your identity when prompted during sign-in.`}
               />
@@ -166,9 +174,13 @@ export const SettingsTwoFactorAuthenticationMethod = () => {
                     </StyledQRCodeWrapper>
                     <StyledCopySetupKeyText>
                       <Trans>Can't scan? Copy the</Trans>{' '}
-                      <StyledCopySetupKeyLink onClick={handleCopySetupKey}>
+                      <Button
+                        variant="link"
+                        size="sm"
+                        onClick={handleCopySetupKey}
+                      >
                         <Trans>setup key</Trans>
-                      </StyledCopySetupKeyLink>
+                      </Button>
                     </StyledCopySetupKeyText>
                   </>
                 )}
@@ -176,14 +188,14 @@ export const SettingsTwoFactorAuthenticationMethod = () => {
 
               <StyledDivider />
 
-              <H2Title
+              <Section.Header
                 title={t`Verify the code from the app`}
                 description={t`Copy paste the code below`}
               />
               <StyledOTPContainer>
                 <TwoFactorAuthenticationVerificationForSettings />
               </StyledOTPContainer>
-            </Section>
+            </Section.Root>
           )}
         </SettingsPageContainer>
       </SettingsPageLayout>

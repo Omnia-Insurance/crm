@@ -1,13 +1,15 @@
+import { isNumber, isString } from '@sniptt/guards';
+
 const DECIMAL_NUMBER_PATTERN = /^-?(?:\d+|\d*\.\d+)$/;
 
 export const normalizeAddressCoordinate = (
   coordinate: unknown,
 ): number | null => {
-  if (typeof coordinate === 'number') {
+  if (isNumber(coordinate)) {
     return Number.isFinite(coordinate) ? coordinate : null;
   }
 
-  if (typeof coordinate !== 'string') {
+  if (!isString(coordinate)) {
     return null;
   }
 

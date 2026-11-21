@@ -1,280 +1,465 @@
-// OMNIA-CUSTOM: regression test for the reconciliation admin-only lockdown
-// (audit 2026-06-10, finding: roles created after the seed command ran got
-// default object permissions, silently bypassing the lockdown).
-
 import { Logger } from '@nestjs/common';
 
-import { type Repository } from 'typeorm';
-
-import { type ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
-import { type ObjectPermissionEntity } from 'src/engine/metadata-modules/object-permission/object-permission.entity';
-import { type ObjectPermissionService } from 'src/engine/metadata-modules/object-permission/object-permission.service';
-import { type RoleEntity } from 'src/engine/metadata-modules/role/role.entity';
 import {
-  RECONCILIATION_ADMIN_ONLY_OBJECT_NAMES,
-  ReconciliationObjectLockdownService,
-} from 'src/modules/reconciliation/services/object-lockdown.service';
+  buildLockdownWorkspaceFixture,
+  createLockdownServiceMock,
+  createLockdownWorkspaceMock,
+  LOCKDOWN_WORKSPACE_ID,
+  type LockdownWorkspaceState,
+} from 'src/modules/reconciliation/listeners/__mocks__/reconciliation-object-lockdown-workspace.mock';
 
-const WORKSPACE_ID = 'workspace-id';
-
-const RECONCILIATION_OBJECTS = RECONCILIATION_ADMIN_ONLY_OBJECT_NAMES.map(
-  (nameSingular, index) =>
-    ({
-      id: `object-${index}`,
-      nameSingular,
-    }) as ObjectMetadataEntity,
-);
-
-const ADMIN_ROLE = { id: 'admin-role-id', label: 'Admin' } as RoleEntity;
-const AGENT_ROLE = { id: 'agent-role-id', label: 'Agent' } as RoleEntity;
-
-const buildDenyPermission = (objectMetadataId: string) => ({
-  objectMetadataId,
+const DENYING_GRANTS = {
+  canCreateObjectRecords: false,
   canReadObjectRecords: false,
   canUpdateObjectRecords: false,
   canSoftDeleteObjectRecords: false,
   canDestroyObjectRecords: false,
-  showInSidebar: false,
-  editWindowMinutes: null,
-});
+};
+
+const setup = (
+  overrideState: (state: LockdownWorkspaceState) => LockdownWorkspaceState = (
+    state,
+  ) => state,
+) => {
+  const fixture = buildLockdownWorkspaceFixture();
+  const workspace = createLockdownWorkspaceMock(overrideState(fixture.state));
+  const { service, dependencies } = createLockdownServiceMock(workspace);
+
+  const getReconciliationObjectPermissions = (roleId: string) =>
+    workspace.state.objectPermissions.filter(
+      (objectPermission) =>
+        objectPermission.roleId === roleId &&
+        fixture.reconciliationObjectMetadataIds.includes(
+          objectPermission.objectMetadataId,
+        ),
+    );
+
+  const expectRoleLocked = (roleId: string) => {
+    const reconciliationObjectPermissions =
+      getReconciliationObjectPermissions(roleId);
+
+    expect(reconciliationObjectPermissions).toHaveLength(
+      fixture.reconciliationObjectMetadataIds.length,
+    );
+
+    for (const objectPermission of reconciliationObjectPermissions) {
+      expect(objectPermission).toMatchObject(DENYING_GRANTS);
+      expect(objectPermission.showInSidebar).not.toBe(true);
+    }
+
+    expect(
+      workspace.state.rules.filter(
+        (rule) =>
+          rule.roleId === roleId &&
+          fixture.reconciliationObjectMetadataIds.includes(
+            rule.objectMetadataId,
+          ),
+      ),
+    ).toEqual([]);
+  };
+
+  return {
+    fixture,
+    workspace,
+    service,
+    invalidateAndRecompute: jest.spyOn(
+      dependencies.workspaceCacheService,
+      'invalidateAndRecompute',
+    ),
+    evictWorkspaceFromLocalCache: jest.spyOn(
+      dependencies.workspaceCacheService,
+      'evictWorkspaceFromLocalCache',
+    ),
+    validateBuildAndRunWorkspaceMigration: jest.spyOn(
+      dependencies.workspaceMigrationValidateBuildAndRunService,
+      'validateBuildAndRunWorkspaceMigration',
+    ),
+    upsertGrantRole: jest.spyOn(
+      dependencies.applicationGrantRoleService,
+      'upsertGrantRole',
+    ),
+    withLock: jest.spyOn(dependencies.cacheLockService, 'withLock'),
+    getReconciliationObjectPermissions,
+    expectRoleLocked,
+  };
+};
 
 describe('ReconciliationObjectLockdownService', () => {
-  let objectMetadataRepository: { find: jest.Mock };
-  let roleRepository: { find: jest.Mock; findOne: jest.Mock };
-  let objectPermissionRepository: { find: jest.Mock };
-  let objectPermissionService: { upsertObjectPermissions: jest.Mock };
-  let service: ReconciliationObjectLockdownService;
-
   beforeEach(() => {
     jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
-
-    objectMetadataRepository = {
-      // Query-aware: the system-object lookup (isSystem: true) finds none by
-      // default; findAdminOnlyObjects (nameSingular In) returns the recon objects.
-      find: jest
-        .fn()
-        .mockImplementation(({ where }) =>
-          Promise.resolve(
-            where?.isSystem === true ? [] : RECONCILIATION_OBJECTS,
-          ),
-        ),
-    };
-    roleRepository = {
-      find: jest.fn().mockResolvedValue([ADMIN_ROLE, AGENT_ROLE]),
-      findOne: jest.fn().mockResolvedValue(AGENT_ROLE),
-    };
-    objectPermissionRepository = {
-      find: jest.fn().mockResolvedValue([]),
-    };
-    objectPermissionService = {
-      upsertObjectPermissions: jest.fn().mockResolvedValue([]),
-    };
-
-    service = new ReconciliationObjectLockdownService(
-      objectMetadataRepository as unknown as Repository<ObjectMetadataEntity>,
-      roleRepository as unknown as Repository<RoleEntity>,
-      objectPermissionRepository as unknown as Repository<ObjectPermissionEntity>,
-      objectPermissionService as unknown as ObjectPermissionService,
-    );
   });
 
   afterEach(() => {
     jest.restoreAllMocks();
   });
 
-  describe('applyToRole', () => {
-    it('should write deny rows for every reconciliation object when a non-admin role is created', async () => {
-      await service.applyToRole({
-        workspaceId: WORKSPACE_ID,
-        roleId: AGENT_ROLE.id,
-      });
-
-      expect(
-        objectPermissionService.upsertObjectPermissions,
-      ).toHaveBeenCalledWith({
-        workspaceId: WORKSPACE_ID,
-        input: {
-          roleId: AGENT_ROLE.id,
-          objectPermissions: RECONCILIATION_OBJECTS.map((objectMetadata) =>
-            buildDenyPermission(objectMetadata.id),
-          ),
-        },
-      });
-    });
-
-    it('should preserve permissions on unrelated objects while overwriting stale reconciliation grants', async () => {
-      const unrelatedPermission = {
-        objectMetadataId: 'unrelated-object-id',
-        canReadObjectRecords: true,
-        canUpdateObjectRecords: true,
-        canSoftDeleteObjectRecords: false,
-        canDestroyObjectRecords: false,
-        showInSidebar: true,
-        editWindowMinutes: 30,
-      };
-      // Stale allow row on a reconciliation object must be replaced by a deny
-      const staleReconciliationGrant = {
-        objectMetadataId: RECONCILIATION_OBJECTS[0].id,
-        canReadObjectRecords: true,
-        canUpdateObjectRecords: true,
-        canSoftDeleteObjectRecords: true,
-        canDestroyObjectRecords: true,
-        showInSidebar: true,
-        editWindowMinutes: null,
-      };
-
-      objectPermissionRepository.find.mockResolvedValue([
-        unrelatedPermission,
-        staleReconciliationGrant,
-      ]);
-
-      await service.applyToRole({
-        workspaceId: WORKSPACE_ID,
-        roleId: AGENT_ROLE.id,
-      });
-
-      const { input } =
-        objectPermissionService.upsertObjectPermissions.mock.calls[0][0];
-
-      expect(input.objectPermissions).toContainEqual(unrelatedPermission);
-      expect(input.objectPermissions).toContainEqual(
-        buildDenyPermission(RECONCILIATION_OBJECTS[0].id),
-      );
-      expect(input.objectPermissions).not.toContainEqual(
-        staleReconciliationGrant,
-      );
-    });
-
-    it('should skip the upsert when every reconciliation object is already denied (idempotent re-run)', async () => {
-      objectPermissionRepository.find.mockResolvedValue(
-        RECONCILIATION_OBJECTS.map((objectMetadata) =>
-          buildDenyPermission(objectMetadata.id),
-        ),
-      );
-
-      await service.applyToRole({
-        workspaceId: WORKSPACE_ID,
-        roleId: AGENT_ROLE.id,
-      });
-
-      expect(
-        objectPermissionService.upsertObjectPermissions,
-      ).not.toHaveBeenCalled();
-    });
-
-    it('should skip (with a warning) a not-yet-locked role that holds permissions on a system object', async () => {
-      const warnSpy = jest
-        .spyOn(Logger.prototype, 'warn')
-        .mockImplementation(() => undefined);
-
-      // The role's only existing permission is on a system object; upsert
-      // would either reject it (platform-managed) or delete it, so the
-      // lockdown must skip rather than corrupt the role.
-      objectPermissionRepository.find.mockResolvedValue([
-        {
-          objectMetadataId: 'system-object-id',
-          canReadObjectRecords: true,
-          canUpdateObjectRecords: false,
-          canSoftDeleteObjectRecords: false,
-          canDestroyObjectRecords: false,
-          showInSidebar: true,
-          editWindowMinutes: null,
-        },
-      ]);
-      objectMetadataRepository.find.mockImplementation(({ where }) =>
-        Promise.resolve(
-          where?.isSystem === true
-            ? [{ id: 'system-object-id' } as ObjectMetadataEntity]
-            : RECONCILIATION_OBJECTS,
-        ),
-      );
-
-      await service.applyToRole({
-        workspaceId: WORKSPACE_ID,
-        roleId: AGENT_ROLE.id,
-      });
-
-      expect(
-        objectPermissionService.upsertObjectPermissions,
-      ).not.toHaveBeenCalled();
-      expect(warnSpy).toHaveBeenCalled();
-    });
-
-    it('should not touch permissions for the admin role', async () => {
-      roleRepository.findOne.mockResolvedValue(ADMIN_ROLE);
-
-      await service.applyToRole({
-        workspaceId: WORKSPACE_ID,
-        roleId: ADMIN_ROLE.id,
-      });
-
-      expect(
-        objectPermissionService.upsertObjectPermissions,
-      ).not.toHaveBeenCalled();
-    });
-
-    it('should no-op when the reconciliation objects are not seeded in the workspace', async () => {
-      objectMetadataRepository.find.mockResolvedValue([]);
-
-      await service.applyToRole({
-        workspaceId: WORKSPACE_ID,
-        roleId: AGENT_ROLE.id,
-      });
-
-      expect(
-        objectPermissionService.upsertObjectPermissions,
-      ).not.toHaveBeenCalled();
-    });
-  });
-
   describe('applyToAllNonAdminRoles', () => {
-    it('should lock every non-admin role and skip the admin role', async () => {
-      const result = await service.applyToAllNonAdminRoles({
-        workspaceId: WORKSPACE_ID,
+    it('should skip the standard admin by universal identifier even when it is relabelled', async () => {
+      const { fixture, service, getReconciliationObjectPermissions } = setup();
+
+      const { lockedRoleLabels } = await service.applyToAllNonAdminRoles({
+        workspaceId: LOCKDOWN_WORKSPACE_ID,
       });
 
-      expect(result).toEqual({
-        objectCount: RECONCILIATION_OBJECTS.length,
-        lockedRoleLabels: [AGENT_ROLE.label],
+      expect(lockedRoleLabels).not.toContain(fixture.flatRoles.admin.label);
+      expect(
+        getReconciliationObjectPermissions(fixture.flatRoles.admin.id),
+      ).toEqual([]);
+    });
+
+    it('should lock a role labelled Admin that is not the standard admin', async () => {
+      const { fixture, service, expectRoleLocked } = setup();
+
+      const { lockedRoleLabels } = await service.applyToAllNonAdminRoles({
+        workspaceId: LOCKDOWN_WORKSPACE_ID,
       });
-      expect(
-        objectPermissionService.upsertObjectPermissions,
-      ).toHaveBeenCalledTimes(1);
-      expect(
-        objectPermissionService.upsertObjectPermissions,
-      ).toHaveBeenCalledWith(
+
+      expect(lockedRoleLabels).toContain('Admin');
+      expectRoleLocked(fixture.flatRoles.relabelledAdmin.id);
+    });
+
+    it('should lock every non-admin role, including app roles and grant roles', async () => {
+      const { fixture, service, expectRoleLocked } = setup();
+
+      const { objectCount, changedRoleIds } =
+        await service.applyToAllNonAdminRoles({
+          workspaceId: LOCKDOWN_WORKSPACE_ID,
+        });
+
+      const { admin: _admin, ...nonAdminFlatRoles } = fixture.flatRoles;
+
+      expect(objectCount).toBe(4);
+      expect([...changedRoleIds].sort()).toEqual(
+        Object.values(nonAdminFlatRoles)
+          .map(({ id }) => id)
+          .sort(),
+      );
+
+      for (const flatRole of Object.values(nonAdminFlatRoles)) {
+        expectRoleLocked(flatRole.id);
+      }
+    });
+
+    it('should write an app role through a system build owned by its application', async () => {
+      const { fixture, service, validateBuildAndRunWorkspaceMigration } =
+        setup();
+
+      await service.applyToAllNonAdminRoles({
+        workspaceId: LOCKDOWN_WORKSPACE_ID,
+      });
+
+      expect(validateBuildAndRunWorkspaceMigration).toHaveBeenCalledWith(
         expect.objectContaining({
-          input: expect.objectContaining({ roleId: AGENT_ROLE.id }),
+          workspaceId: LOCKDOWN_WORKSPACE_ID,
+          isSystemBuild: true,
+          applicationUniversalIdentifier:
+            fixture.flatApplications.complianceQa.universalIdentifier,
+          allFlatEntityOperationByMetadataName: expect.objectContaining({
+            objectPermission: expect.objectContaining({
+              flatEntityToDelete: [],
+              flatEntityToCreate: expect.arrayContaining([
+                expect.objectContaining({
+                  roleUniversalIdentifier:
+                    fixture.flatRoles.complianceQa.universalIdentifier,
+                  ...DENYING_GRANTS,
+                }),
+              ]),
+            }),
+          }),
         }),
       );
     });
 
-    it('should report without writing when dryRun is set', async () => {
-      const result = await service.applyToAllNonAdminRoles({
-        workspaceId: WORKSPACE_ID,
-        dryRun: true,
+    it('should re-sync a grant role after locking its source role, so the grant copies the deny rows', async () => {
+      const {
+        fixture,
+        service,
+        workspace,
+        upsertGrantRole,
+        getReconciliationObjectPermissions,
+      } = setup();
+
+      await service.applyToAllNonAdminRoles({
+        workspaceId: LOCKDOWN_WORKSPACE_ID,
       });
 
-      expect(result).toEqual({
-        objectCount: RECONCILIATION_OBJECTS.length,
-        lockedRoleLabels: [AGENT_ROLE.label],
+      expect(upsertGrantRole).toHaveBeenCalledWith({
+        workspaceId: LOCKDOWN_WORKSPACE_ID,
+        applicationId: fixture.flatApplications.complianceQa.id,
       });
+
+      const sourceUniversalIdentifiers = new Set(
+        getReconciliationObjectPermissions(
+          fixture.flatRoles.complianceQa.id,
+        ).map(({ universalIdentifier }) => universalIdentifier),
+      );
+      const grantRows = getReconciliationObjectPermissions(
+        fixture.flatRoles.complianceQaGrant.id,
+      );
+
+      expect(grantRows).toHaveLength(4);
+      // Copies keep no row of their own, so the next app sync rebuilds the same deny rows
       expect(
-        objectPermissionService.upsertObjectPermissions,
-      ).not.toHaveBeenCalled();
+        grantRows.every(
+          ({ universalIdentifier }) =>
+            !sourceUniversalIdentifiers.has(universalIdentifier),
+        ),
+      ).toBe(true);
+      expect(
+        workspace.state.objectPermissions.filter(
+          ({ roleId }) => roleId === fixture.flatRoles.complianceQaGrant.id,
+        ),
+      ).toHaveLength(5);
+    });
+
+    it('should lock the twenty-standard grant role in place without re-syncing it from the standard admin', async () => {
+      const { fixture, service, upsertGrantRole, expectRoleLocked } = setup();
+
+      await service.applyToAllNonAdminRoles({
+        workspaceId: LOCKDOWN_WORKSPACE_ID,
+      });
+
+      expect(upsertGrantRole).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          applicationId: fixture.flatApplications.twentyStandard.id,
+        }),
+      );
+      expectRoleLocked(fixture.flatRoles.twentyStandardGrant.id);
+    });
+
+    it('should delete a rule on a reconciliation object with its predicates, groups and field permissions', async () => {
+      const { fixture, service, workspace, invalidateAndRecompute } = setup();
+
+      await service.applyToAllNonAdminRoles({
+        workspaceId: LOCKDOWN_WORKSPACE_ID,
+      });
+
+      const reviewItemId = fixture.flatObjectMetadatas.reviewItem.id;
+
+      expect(workspace.state.rules).toEqual([fixture.agentPolicyRule]);
+      expect(
+        workspace.state.predicates.map(
+          ({ objectMetadataId }) => objectMetadataId,
+        ),
+      ).toEqual([fixture.flatObjectMetadatas.policy.id]);
+      expect(workspace.state.predicateGroups).toEqual([]);
+      expect(
+        workspace.state.fieldPermissions.filter(
+          ({ objectMetadataId }) => objectMetadataId === reviewItemId,
+        ),
+      ).toEqual([]);
+      expect(invalidateAndRecompute).toHaveBeenCalledWith(
+        LOCKDOWN_WORKSPACE_ID,
+        ['rolesPermissions'],
+      );
+    });
+
+    it('should keep the role permissions on other objects as they are', async () => {
+      const { fixture, service, workspace } = setup();
+
+      await service.applyToAllNonAdminRoles({
+        workspaceId: LOCKDOWN_WORKSPACE_ID,
+      });
+
+      expect(workspace.state.objectPermissions).toContainEqual(
+        fixture.memberPolicyObjectPermission,
+      );
+    });
+
+    it('should update a deny row that leaves create to the role-wide default', async () => {
+      const { fixture, service, getReconciliationObjectPermissions } = setup();
+      const [carrierConfigRowBefore] = getReconciliationObjectPermissions(
+        fixture.flatRoles.member.id,
+      ).filter(
+        ({ objectMetadataId }) =>
+          objectMetadataId === fixture.flatObjectMetadatas.carrierConfig.id,
+      );
+
+      await service.applyToAllNonAdminRoles({
+        workspaceId: LOCKDOWN_WORKSPACE_ID,
+      });
+
+      const [carrierConfigRowAfter] = getReconciliationObjectPermissions(
+        fixture.flatRoles.member.id,
+      ).filter(
+        ({ objectMetadataId }) =>
+          objectMetadataId === fixture.flatObjectMetadatas.carrierConfig.id,
+      );
+
+      expect(carrierConfigRowBefore.canCreateObjectRecords).toBeNull();
+      expect(carrierConfigRowAfter).toMatchObject({
+        universalIdentifier: carrierConfigRowBefore.universalIdentifier,
+        ...DENYING_GRANTS,
+      });
+    });
+
+    it('should be a no-op on a second run', async () => {
+      const {
+        service,
+        validateBuildAndRunWorkspaceMigration,
+        upsertGrantRole,
+      } = setup();
+
+      await service.applyToAllNonAdminRoles({
+        workspaceId: LOCKDOWN_WORKSPACE_ID,
+      });
+
+      validateBuildAndRunWorkspaceMigration.mockClear();
+      upsertGrantRole.mockClear();
+
+      const { changedRoleIds } = await service.applyToAllNonAdminRoles({
+        workspaceId: LOCKDOWN_WORKSPACE_ID,
+      });
+
+      expect(changedRoleIds).toEqual([]);
+      expect(validateBuildAndRunWorkspaceMigration).not.toHaveBeenCalled();
+      expect(upsertGrantRole).not.toHaveBeenCalled();
+    });
+
+    it('should report the roles that need locking without writing on a dry run', async () => {
+      const {
+        fixture,
+        service,
+        validateBuildAndRunWorkspaceMigration,
+        upsertGrantRole,
+        withLock,
+      } = setup();
+
+      const { objectCount, changedRoleIds } =
+        await service.applyToAllNonAdminRoles({
+          workspaceId: LOCKDOWN_WORKSPACE_ID,
+          dryRun: true,
+        });
+
+      expect(objectCount).toBe(4);
+      expect(changedRoleIds).toContain(fixture.flatRoles.agent.id);
+      expect(changedRoleIds).not.toContain(fixture.flatRoles.admin.id);
+      expect(validateBuildAndRunWorkspaceMigration).not.toHaveBeenCalled();
+      expect(upsertGrantRole).not.toHaveBeenCalled();
+      expect(withLock).not.toHaveBeenCalled();
     });
 
     it('should report zero objects when the reconciliation objects are not seeded', async () => {
-      objectMetadataRepository.find.mockResolvedValue([]);
+      const { service, validateBuildAndRunWorkspaceMigration } = setup(
+        (state) => ({
+          ...state,
+          objectMetadatas: state.objectMetadatas.filter(
+            ({ nameSingular }) => nameSingular === 'policy',
+          ),
+        }),
+      );
 
       const result = await service.applyToAllNonAdminRoles({
-        workspaceId: WORKSPACE_ID,
+        workspaceId: LOCKDOWN_WORKSPACE_ID,
       });
 
-      expect(result).toEqual({ objectCount: 0, lockedRoleLabels: [] });
+      expect(result).toEqual({
+        objectCount: 0,
+        lockedRoleLabels: [],
+        changedRoleIds: [],
+      });
+      expect(validateBuildAndRunWorkspaceMigration).not.toHaveBeenCalled();
+    });
+
+    it('should fail loudly when the migration rejects a write', async () => {
+      const { service, validateBuildAndRunWorkspaceMigration } = setup();
+
+      validateBuildAndRunWorkspaceMigration.mockResolvedValueOnce({
+        status: 'fail',
+      });
+
+      await expect(
+        service.applyToAllNonAdminRoles({ workspaceId: LOCKDOWN_WORKSPACE_ID }),
+      ).rejects.toThrow('Validation errors occurred');
+    });
+  });
+
+  describe('applyToRole', () => {
+    it('should lock a single role under the workspace lock and from a fresh cache read', async () => {
+      const {
+        fixture,
+        service,
+        withLock,
+        evictWorkspaceFromLocalCache,
+        expectRoleLocked,
+        getReconciliationObjectPermissions,
+      } = setup();
+
+      await service.applyToRole({
+        workspaceId: LOCKDOWN_WORKSPACE_ID,
+        roleId: fixture.flatRoles.agent.id,
+      });
+
+      expectRoleLocked(fixture.flatRoles.agent.id);
       expect(
-        objectPermissionService.upsertObjectPermissions,
-      ).not.toHaveBeenCalled();
+        getReconciliationObjectPermissions(
+          fixture.flatRoles.relabelledAdmin.id,
+        ),
+      ).toEqual([]);
+      expect(withLock).toHaveBeenCalledWith(
+        expect.any(Function),
+        `reconciliation-object-lockdown:${LOCKDOWN_WORKSPACE_ID}`,
+        expect.any(Object),
+      );
+      expect(evictWorkspaceFromLocalCache).toHaveBeenCalledWith(
+        LOCKDOWN_WORKSPACE_ID,
+      );
+    });
+
+    it('should lock the grant copy when the source role of an application is locked', async () => {
+      const { fixture, service, upsertGrantRole, expectRoleLocked } = setup();
+
+      await service.applyToRole({
+        workspaceId: LOCKDOWN_WORKSPACE_ID,
+        roleId: fixture.flatRoles.complianceQa.id,
+      });
+
+      expect(upsertGrantRole).toHaveBeenCalledWith({
+        workspaceId: LOCKDOWN_WORKSPACE_ID,
+        applicationId: fixture.flatApplications.complianceQa.id,
+      });
+      expectRoleLocked(fixture.flatRoles.complianceQa.id);
+      expectRoleLocked(fixture.flatRoles.complianceQaGrant.id);
+    });
+
+    it('should lock the grant role in place when its re-sync fails', async () => {
+      const errorSpy = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+      const { fixture, service, upsertGrantRole, expectRoleLocked } = setup();
+
+      upsertGrantRole.mockRejectedValueOnce(new Error('re-sync failed'));
+
+      await service.applyToRole({
+        workspaceId: LOCKDOWN_WORKSPACE_ID,
+        roleId: fixture.flatRoles.complianceQaGrant.id,
+      });
+
+      expectRoleLocked(fixture.flatRoles.complianceQaGrant.id);
+      expect(errorSpy).toHaveBeenCalled();
+    });
+
+    it('should leave the standard admin alone', async () => {
+      const { fixture, service, validateBuildAndRunWorkspaceMigration } =
+        setup();
+
+      await service.applyToRole({
+        workspaceId: LOCKDOWN_WORKSPACE_ID,
+        roleId: fixture.flatRoles.admin.id,
+      });
+
+      expect(validateBuildAndRunWorkspaceMigration).not.toHaveBeenCalled();
+    });
+
+    it('should ignore a role that no longer exists', async () => {
+      const { service, validateBuildAndRunWorkspaceMigration } = setup();
+
+      await service.applyToRole({
+        workspaceId: LOCKDOWN_WORKSPACE_ID,
+        roleId: '20202020-0000-4000-8000-0000000000ff',
+      });
+
+      expect(validateBuildAndRunWorkspaceMigration).not.toHaveBeenCalled();
     });
   });
 });

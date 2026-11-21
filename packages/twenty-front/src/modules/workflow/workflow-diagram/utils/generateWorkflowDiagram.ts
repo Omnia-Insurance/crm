@@ -2,8 +2,6 @@ import {
   type WorkflowStep,
   type WorkflowTrigger,
 } from '@/workflow/types/Workflow';
-import { FIRST_NODE_POSITION } from '@/workflow/workflow-diagram/constants/FirstNodePosition';
-import { VERTICAL_DISTANCE_BETWEEN_TWO_NODES } from '@/workflow/workflow-diagram/constants/VerticalDistanceBetweenTwoNodes';
 import { WORKFLOW_DIAGRAM_EMPTY_TRIGGER_NODE_DEFINITION } from '@/workflow/workflow-diagram/constants/WorkflowDiagramEmptyTriggerNodeDefinition';
 import { type WorkflowContext } from '@/workflow/workflow-diagram/types/WorkflowContext';
 import {
@@ -16,6 +14,7 @@ import { generateNodesAndEdgesForIfElseNode } from '@/workflow/workflow-diagram/
 import { generateNodesAndEdgesForIteratorNode } from '@/workflow/workflow-diagram/utils/generateNodesAndEdgesForIteratorNode';
 import { getEdgeTypeBetweenTwoNodes } from '@/workflow/workflow-diagram/utils/getEdgeTypeBetweenTwoNodes';
 import { getWorkflowDiagramTriggerNode } from '@/workflow/workflow-diagram/utils/getWorkflowDiagramTriggerNode';
+import { separateParallelWorkflowEdges } from '@/workflow/workflow-diagram/utils/separateParallelWorkflowEdges';
 import { WORKFLOW_VISUALIZER_EDGE_DEFAULT_CONFIGURATION } from '@/workflow/workflow-diagram/workflow-edges/constants/WorkflowVisualizerEdgeDefaultConfiguration';
 import { WORKFLOW_DIAGRAM_NODE_DEFAULT_SOURCE_HANDLE_ID } from '@/workflow/workflow-diagram/workflow-nodes/constants/WorkflowDiagramNodeDefaultSourceHandleId';
 import { WORKFLOW_DIAGRAM_NODE_DEFAULT_TARGET_HANDLE_ID } from '@/workflow/workflow-diagram/workflow-nodes/constants/WorkflowDiagramNodeDefaultTargetHandleId';
@@ -64,20 +63,13 @@ export const generateWorkflowDiagram = ({
     });
   }
 
-  const xPos = FIRST_NODE_POSITION.x;
-  let levelYPos = FIRST_NODE_POSITION.y;
-
   for (const step of steps) {
-    levelYPos += VERTICAL_DISTANCE_BETWEEN_TWO_NODES;
-
     switch (step.type) {
       case 'ITERATOR': {
         const { nodes: iteratorNodes, edges: iteratorEdges } =
           generateNodesAndEdgesForIteratorNode({
             step,
             steps,
-            xPos,
-            yPos: levelYPos,
             nodes,
             edges,
             workflowContext,
@@ -93,8 +85,6 @@ export const generateWorkflowDiagram = ({
           generateNodesAndEdgesForIfElseNode({
             step,
             steps,
-            xPos,
-            yPos: levelYPos,
             nodes,
             edges,
             workflowContext,
@@ -110,8 +100,6 @@ export const generateWorkflowDiagram = ({
           generateNodesAndEdgesForDefaultNode({
             step,
             steps,
-            xPos,
-            yPos: levelYPos,
             nodes,
             edges,
             workflowContext,
@@ -125,8 +113,8 @@ export const generateWorkflowDiagram = ({
     }
   }
 
-  return {
+  return separateParallelWorkflowEdges({
     nodes,
     edges,
-  };
+  });
 };

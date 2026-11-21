@@ -1,0 +1,158 @@
+# Data Model
+
+Use this reference for Twenty app objects, fields, relations, roles, and permissions.
+
+## Objects And Fields
+
+Objects and fields define the records users will create, view, search, and automate. Model the user's workflow first, then add the smallest set of fields that makes the workflow usable.
+
+When adding or modifying data model entities:
+
+- Prefer generated app entity patterns from `twenty app add`.
+- Use clear object and field names that map to user-facing language.
+- Add relations only when users need to navigate or report across records.
+- Avoid duplicating data that already exists on core Twenty objects.
+- Keep field types specific enough to support filtering, views, and automation.
+
+### Usable Object Pattern
+
+When the user asks for a new object and does not explicitly restrict the request to schema only, make the object usable in the app by pairing data model work with the minimum layout/navigation surfaces:
+
+- Object file in `src/objects/<name>.ts`
+- Table view in `src/views/all-<plural>.ts`
+- Object navigation item in `src/navigation-menu-items/<name>.ts`
+- Record page layout in `src/page-layouts/<name>-record-page-layout.ts`
+- Fields-widget view for the record page in `src/views/<name>-record-page-fields.ts`
+
+Use `layout.md` for view, navigation, and page layout details.
+
+Objects support `icon`, but object color is not defined on `defineObject()`. Put color on the object navigation item:
+
+```ts
+import {
+  defineNavigationMenuItem,
+  NavigationMenuItemType,
+} from 'twenty-sdk/define';
+
+export default defineNavigationMenuItem({
+  universalIdentifier: '<uuid>',
+  name: '<name>',
+  icon: '<IconName>',
+  color: '<color>',
+  position: 0,
+  type: NavigationMenuItemType.OBJECT,
+  targetObjectUniversalIdentifier: '<object-uuid>',
+});
+```
+
+### Minimal Object Example
+
+```ts
+import { defineObject, FieldType } from 'twenty-sdk/define';
+
+export const OBJECT_UNIVERSAL_IDENTIFIER = '<uuid>';
+export const NAME_FIELD_UNIVERSAL_IDENTIFIER = '<uuid>';
+
+export default defineObject({
+  universalIdentifier: OBJECT_UNIVERSAL_IDENTIFIER,
+  nameSingular: '<name>',
+  namePlural: '<names>',
+  labelSingular: '<Name>',
+  labelPlural: '<Names>',
+  icon: '<IconName>',
+  labelIdentifierFieldMetadataUniversalIdentifier:
+    NAME_FIELD_UNIVERSAL_IDENTIFIER,
+  fields: [
+    {
+      universalIdentifier: NAME_FIELD_UNIVERSAL_IDENTIFIER,
+      type: FieldType.TEXT,
+      name: 'name',
+      label: 'Name',
+      icon: 'IconAbc',
+    },
+  ],
+});
+```
+
+### Select Fields
+
+Select and multi-select option `value` strings must be uppercase snake case:
+
+```ts
+{
+  type: FieldType.SELECT,
+  name: 'status',
+  label: 'Status',
+  defaultValue: "'PLANNED'",
+  options: [
+    { position: 0, label: 'Planned', value: 'PLANNED', color: 'sky' },
+    { position: 1, label: 'In build', value: 'IN_BUILD', color: 'orange' },
+  ],
+}
+```
+
+For select fields, default values must be quoted string expressions like `"'PLANNED'"`, not plain strings like `'planned'`.
+
+### Relations
+
+A relation is two `FieldType.RELATION` fields that point at each other through `relationTargetFieldMetadataUniversalIdentifier`, one on each object. The `MANY_TO_ONE` side must set `universalSettings.joinColumnName` (the convention is `<fieldName>Id`); the build rejects a `MANY_TO_ONE` relation without one. `twenty app add field` emits it, but the reverse `ONE_TO_MANY` field still has to be written by hand, including on a standard object such as Company:
+
+```ts
+// src/fields/company-on-contract.ts
+universalSettings: {
+  relationType: RelationType.MANY_TO_ONE,
+  onDelete: OnDeleteAction.SET_NULL,
+  joinColumnName: 'companyId',
+},
+
+// src/fields/contracts-on-company.ts
+universalSettings: { relationType: RelationType.ONE_TO_MANY },
+```
+
+Export each field's identifier as a named constant and import it from the other file, so the two sides reference each other without a circular import.
+
+## Roles And Permissions
+
+Roles should match operational responsibility, not implementation convenience.
+
+When adding permissions:
+
+- Grant the smallest useful scope.
+- Keep sensitive objects and fields out of broad roles.
+- Check whether the app introduces side effects through logic functions before granting write access.
+- To keep some permissions from being granted on an object, set `disabledObjectPermissionActions` on `defineObject()`, for example `['canDestroyObjectRecords']`. Allowed values are the object permission flags: `'canReadObjectRecords'`, `'canCreateObjectRecords'`, `'canUpdateObjectRecords'`, `'canSoftDeleteObjectRecords'` and `'canDestroyObjectRecords'`. Creating records still follows the update permission for now: disabling `'canUpdateObjectRecords'` also disables `'canCreateObjectRecords'`, and disabling `'canCreateObjectRecords'` alone has no effect yet. Users, API keys and agents never get these actions on that object, whatever their role grants; the app's own logic functions keep them. List the update, soft-delete and destroy flags to make an object only the app can write.
+- To do the same on one field, set `disabledFieldPermissionActions` on the field, with `'canReadFieldValue'` and/or `'canUpdateFieldValue'`. `['canUpdateFieldValue']` makes a field only the app can write, which suits values the app computes or syncs.
+- To extend access from a record to its related records, declare a related record path with `defineRelatedRecordPath()`: an `objectUniversalIdentifier`, then `firstFieldMetadataUniversalIdentifier` and optionally `secondFieldMetadataUniversalIdentifier` and `thirdFieldMetadataUniversalIdentifier`, each a relation field on the object the previous hop reached. Set `isInherent: true` for records that belong to their parent (attachments, timeline activities): those follow whenever the parent is readable. Leave it unset for paths that should apply only when the role grants the starting object directly. Convention: `src/related-record-paths/`. Paths are in preview: they sync, but record permissions don't use them yet, and once enforced they require the Organization plan or above, like row-level security.
+
+## Validation Rules
+
+Declare record validation with `defineValidationRule`. A record is rejected when the expression is false. `universalIdentifier`, `objectUniversalIdentifier`, `name`, `expression` and `message` are required; `errorFieldUniversalIdentifier`, `description` and `icon` are optional. Write the expression with the `ruleExpression` builder, or as a string using `and`, `or`, `not`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `+`, `-`, `*`, `/` and `in [...]` (not `&&`), and functions such as `isDefined`, `isEmpty`, `isNonEmptyString` and `includes`. Two date functions are available in both forms: `daysSince(date)` returns whole days since the date (negative for a future date), and `isInRelativeDateRange(date, direction, amount, unit)` checks a period, with direction `'PAST'`, `'NEXT'` or `'THIS'` and unit `'DAY'`, `'WEEK'`, `'MONTH'`, `'QUARTER'` or `'YEAR'`, such as `isInRelativeDateRange(closeDate, 'PAST', 30, 'DAY')`.
+
+```ts
+import { defineValidationRule, ruleExpression } from 'twenty-sdk/define';
+
+const { and, field, gt, isNonEmptyString } = ruleExpression;
+
+export default defineValidationRule({
+  universalIdentifier: '<uuid>',
+  objectUniversalIdentifier: '<object-uuid>',
+  name: 'Invoice has an amount',
+  expression: and(gt(field('amount'), 0), isNonEmptyString(field('reference'))),
+  message: 'An invoice needs an amount and a reference',
+});
+```
+
+To check a transition, read the value stored before the update with `previous('stage')` in the builder, or `previous.stage` in a string. On creation every previous value is empty. `previous` reads the object's own fields and their composite subfields, not relations.
+
+```ts
+const { eq, field, notEq, or, previous } = ruleExpression;
+
+// Won is final
+expression: or(eq(field('stage'), previous('stage')), notEq(previous('stage'), 'WON')),
+```
+
+A sync fails if the app removes a field one of its rules reads. If the field is deactivated outside the app, or deleted outside the app while the rule's expression is unchanged, the sync succeeds and the rule stays off. A new or edited rule that names a deleted field fails the sync. A sync keeps an existing rule's `isActive`.
+
+## Verification
+
+After data model changes, run the app and verify the objects, fields, and roles appear where the user will manage or use them.

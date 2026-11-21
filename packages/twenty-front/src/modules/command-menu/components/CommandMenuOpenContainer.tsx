@@ -1,8 +1,8 @@
 import { COMMAND_MENU_CLICK_OUTSIDE_ID } from '@/command-menu/constants/CommandMenuClickOutsideId';
-import { useCommandMenuCloseWithValidation } from '@/command-menu/hooks/useCommandMenuCloseWithValidation';
 import { RECORD_CHIP_CLICK_OUTSIDE_ID } from '@/object-record/record-table/constants/RecordChipClickOutsideId';
 import { SIDE_PANEL_ANIMATION_VARIANTS } from '@/side-panel/constants/SidePanelAnimationVariants';
 import { SIDE_PANEL_FOCUS_ID } from '@/side-panel/constants/SidePanelFocusId';
+import { useSidePanelMenu } from '@/side-panel/hooks/useSidePanelMenu';
 import { isSidePanelAnimatingState } from '@/side-panel/states/isSidePanelAnimatingState';
 import { type SidePanelAnimationVariant } from '@/side-panel/types/SidePanelAnimationVariant';
 import { MENTION_MENU_DROPDOWN_CLICK_OUTSIDE_ID } from '@/ui/input/constants/MentionMenuDropdownClickOutsideId';
@@ -18,11 +18,11 @@ import { WORKFLOW_DIAGRAM_STEP_NODE_BASE_CLICK_OUTSIDE_ID } from '@/workflow/wor
 import { WORKFLOW_DIAGRAM_EDGE_OPTIONS_CLICK_OUTSIDE_ID } from '@/workflow/workflow-diagram/workflow-edges/constants/WorkflowDiagramEdgeOptionsClickOutsideId';
 import { useStore } from 'jotai';
 
+import { LINK_CHIP_CLICK_OUTSIDE_ID } from '@/ui/navigation/link/constants/LinkChipClickOutsideId';
 import { styled } from '@linaria/react';
 import { motion } from 'framer-motion';
-import { useCallback, useContext, useRef } from 'react';
-import { LINK_CHIP_CLICK_OUTSIDE_ID } from 'twenty-ui/data-display';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { useCallback, useRef } from 'react';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
 import { useIsMobile } from 'twenty-ui/utilities';
 const StyledCommandMenuBase = styled.div`
   background: ${themeCssVariables.background.primary};
@@ -44,14 +44,13 @@ const StyledCommandMenu = motion.create(StyledCommandMenuBase);
 export const CommandMenuOpenContainer = ({
   children,
 }: React.PropsWithChildren) => {
-  const { theme } = useContext(ThemeContext);
+  const theme = useTheme();
   const isMobile = useIsMobile();
 
   const targetVariantForAnimation: SidePanelAnimationVariant = isMobile
     ? 'fullScreen'
     : 'normal';
-
-  const { closeWithValidation } = useCommandMenuCloseWithValidation();
+  const { closeSidePanelMenu } = useSidePanelMenu();
 
   const commandMenuRef = useRef<HTMLDivElement>(null);
   const setIsSidePanelAnimating = useSetAtomState(isSidePanelAnimatingState);
@@ -65,10 +64,10 @@ export const CommandMenuOpenContainer = ({
       if (currentFocusId === SIDE_PANEL_FOCUS_ID) {
         event.stopImmediatePropagation();
         event.preventDefault();
-        closeWithValidation();
+        closeSidePanelMenu();
       }
     },
-    [closeWithValidation, store],
+    [closeSidePanelMenu, store],
   );
 
   useListenClickOutside({

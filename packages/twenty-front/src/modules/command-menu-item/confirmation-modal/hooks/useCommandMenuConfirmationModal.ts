@@ -6,16 +6,17 @@ import {
   type CommandMenuItemConfirmationModalConfig,
   commandMenuItemConfirmationModalConfigState,
 } from '@/command-menu-item/confirmation-modal/states/commandMenuItemConfirmationModalState';
-import { useModal } from '@/ui/layout/modal/hooks/useModal';
-import { isModalOpenedComponentState } from '@/ui/layout/modal/states/isModalOpenedComponentState';
+import { useDialog } from '@/ui/layout/dialog/hooks/useDialog';
+import { isDialogOpenedComponentState } from '@/ui/layout/dialog/states/isDialogOpenedComponentState';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
+import { doNotTranslate } from 'twenty-shared/i18n';
 
 export const useCommandMenuConfirmationModal = () => {
   const store = useStore();
   const setCommandMenuItemConfirmationModalConfig = useSetAtomState(
     commandMenuItemConfirmationModalConfigState,
   );
-  const { openModal } = useModal();
+  const { openDialog } = useDialog();
 
   const openConfirmationModal = useCallback(
     (config: CommandMenuItemConfirmationModalConfig) => {
@@ -23,7 +24,7 @@ export const useCommandMenuConfirmationModal = () => {
         commandMenuItemConfirmationModalConfigState.atom,
       );
       const isCommandMenuItemConfirmationModalOpened = store.get(
-        isModalOpenedComponentState.atomFamily({
+        isDialogOpenedComponentState.atomFamily({
           instanceId: COMMAND_MENU_CONFIRMATION_MODAL_INSTANCE_ID,
         }),
       );
@@ -33,15 +34,17 @@ export const useCommandMenuConfirmationModal = () => {
         isCommandMenuItemConfirmationModalOpened
       ) {
         throw new Error(
-          'Command menu item confirmation modal is already active for another caller',
+          doNotTranslate(
+            'Command menu item confirmation modal is already active for another caller',
+          ),
         );
       }
 
       setCommandMenuItemConfirmationModalConfig(config);
 
-      openModal(COMMAND_MENU_CONFIRMATION_MODAL_INSTANCE_ID);
+      openDialog(COMMAND_MENU_CONFIRMATION_MODAL_INSTANCE_ID);
     },
-    [store, setCommandMenuItemConfirmationModalConfig, openModal],
+    [store, setCommandMenuItemConfirmationModalConfig, openDialog],
   );
 
   return { openConfirmationModal };

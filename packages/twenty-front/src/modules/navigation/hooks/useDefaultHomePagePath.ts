@@ -1,36 +1,32 @@
 import { currentUserState } from '@/auth/states/currentUserState';
 import { metadataStoreState } from '@/metadata-store/states/metadataStoreState';
 import { metadataStoreStatusFamilySelector } from '@/metadata-store/states/metadataStoreStatusFamilySelector';
+import { useMemberSidebarObjectMetadataItems } from '@/navigation-menu-item/display/hooks/useMemberSidebarObjectMetadataItems';
 import { useNavigationMenuItemSectionItems } from '@/navigation-menu-item/display/hooks/useNavigationMenuItemSectionItems';
-import { getObjectMetadataForNavigationMenuItem } from '@/navigation-menu-item/display/object/utils/getObjectMetadataForNavigationMenuItem';
-import { lastVisitedObjectMetadataItemIdState } from '@/navigation/states/lastVisitedObjectMetadataItemIdState';
+import { MEMBER_LANDING_OBJECT_ORDER } from '@/navigation/constants/MemberLandingObjectOrder';
 import { type ObjectPathInfo } from '@/navigation/types/ObjectPathInfo';
 import { getFirstNavigationMenuItemLink } from '@/navigation/utils/getFirstNavigationMenuItemLink';
+import { computeObjectViewTargetIds } from '@/views/utils/computeObjectViewTargetIds';
 import { useFilteredObjectMetadataItems } from '@/object-metadata/hooks/useFilteredObjectMetadataItems';
 import { objectMetadataItemsSelector } from '@/object-metadata/states/objectMetadataItemsSelector';
 import { filterReadableActiveObjectMetadataItems } from '@/object-metadata/utils/filterReadableActiveObjectMetadataItems';
 import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
-import { usePermissionFlagMap } from '@/settings/roles/hooks/usePermissionFlagMap';
-import { getObjectPermissionsFromMapByObjectMetadataId } from '@/settings/roles/role-permissions/objects-permissions/utils/getObjectPermissionsFromMapByObjectMetadataId';
+import { useHasPermissionFlag } from '@/settings/roles/hooks/useHasPermissionFlag';
+import { useIsMobile } from 'twenty-ui/utilities';
 import { useAtomFamilySelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilySelectorValue';
 import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { viewsSelector } from '@/views/states/selectors/viewsSelector';
-import { useStore } from 'jotai';
 import isEmpty from 'lodash.isempty';
 import { useCallback, useMemo } from 'react';
 import { AppPath, SettingsPath } from 'twenty-shared/types';
 import { getAppPath, getSettingsPath, isDefined } from 'twenty-shared/utils';
 import { PermissionFlagType } from '~/generated-metadata/graphql';
 
-// OMNIA-CUSTOM: member sidebar display order — person (Leads) first
-const SIDEBAR_ORDER = ['person', 'policy', 'note', 'task'];
-
 export const useDefaultHomePagePath = () => {
   const currentUser = useAtomStateValue(currentUserState);
+  const isMobile = useIsMobile();
   const { objectPermissionsByObjectMetadataId } = useObjectPermissions();
-  const permissionFlagMap = usePermissionFlagMap();
-  const isAdmin = permissionFlagMap[PermissionFlagType.LAYOUTS];
   const metadataStore = useAtomFamilyStateValue(
     metadataStoreState,
     'objectMetadataItems',
@@ -47,7 +43,12 @@ export const useDefaultHomePagePath = () => {
   const objectMetadataItems = useAtomStateValue(objectMetadataItemsSelector);
   const views = useAtomStateValue(viewsSelector);
   const navigationMenuItemsInDisplayOrder = useNavigationMenuItemSectionItems();
-  const store = useStore();
+  // OMNIA-CUSTOM: users without LAYOUTS land on their role's sidebar list, never on a hidden object.
+  const hasLayoutsPermission = useHasPermissionFlag(PermissionFlagType.LAYOUTS);
+  const {
+    isLoaded: isMemberSidebarLoaded,
+    objectMetadataItems: memberSidebarObjectMetadataItems,
+  } = useMemberSidebarObjectMetadataItems();
 
   const readableNonSystemObjectMetadataItems = useMemo(
     () =>
@@ -60,70 +61,20 @@ export const useDefaultHomePagePath = () => {
     [activeObjectMetadataItems, objectPermissionsByObjectMetadataId],
   );
 
-  // OMNIA-CUSTOM: For non-layout (member) users, restrict landing candidates to
-  // objects visible in the sidebar (showInSidebar permission) and order them to
-  // match the sidebar display order (SIDEBAR_ORDER — person/Leads first).
-  const sidebarVisibleObjectMetadataItems = useMemo(() => {
-    if (isAdmin) {
-      return readableNonSystemObjectMetadataItems;
-    }
-
-    return readableNonSystemObjectMetadataItems
-      .filter((item) => {
-        const objectPermissions = getObjectPermissionsFromMapByObjectMetadataId(
-          {
-            objectPermissionsByObjectMetadataId,
-            objectMetadataId: item.id,
-          },
-        );
-
-        return objectPermissions?.showInSidebar;
-      })
-      .sort((a, b) => {
-        const indexA = SIDEBAR_ORDER.indexOf(a.nameSingular);
-        const indexB = SIDEBAR_ORDER.indexOf(b.nameSingular);
-        if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-        if (indexA !== -1) return -1;
-        if (indexB !== -1) return 1;
-        return a.nameSingular.localeCompare(b.nameSingular);
-      });
-  }, [
-    isAdmin,
-    readableNonSystemObjectMetadataItems,
-    objectPermissionsByObjectMetadataId,
-  ]);
-
-  const getActiveObjectMetadataItemMatchingId = useCallback(
-    (objectMetadataId: string) =>
-      readableNonSystemObjectMetadataItems.find(
-        (item) => item.id === objectMetadataId,
-      ),
-    [readableNonSystemObjectMetadataItems],
-  );
-
-  const getFirstView = useCallback(
+  const getTargetViewId = useCallback(
     (objectMetadataItemId: string | undefined | null) => {
-      return views.find(
-        (view) => view.objectMetadataId === objectMetadataItemId,
+      const { firstSelectableViewId, indexViewId } = computeObjectViewTargetIds(
+        {
+          views,
+          objectMetadataId: objectMetadataItemId ?? undefined,
+        },
       );
+
+      return firstSelectableViewId ?? indexViewId;
     },
     [views],
   );
 
-  const buildRecordIndexPath = useCallback(
-    (objectPathInfo: ObjectPathInfo) =>
-      getAppPath(
-        AppPath.RecordIndexPage,
-        { objectNamePlural: objectPathInfo.objectMetadataItem?.namePlural },
-        objectPathInfo.view?.id
-          ? { viewId: objectPathInfo.view.id }
-          : undefined,
-      ),
-    [],
-  );
-
-  // Upstream helper: first workspace navigation-menu link, in display order and
-  // filtered by read permission. Used as the admin landing target.
   const firstNavigationMenuItemLink = useMemo(
     () =>
       getFirstNavigationMenuItemLink({
@@ -140,147 +91,92 @@ export const useDefaultHomePagePath = () => {
     ],
   );
 
-  // OMNIA-CUSTOM: object metadata ids present in the workspace sidebar, used to
-  // gate the admin "last visited" landing behaviour.
-  const sidebarObjectMetadataIds = useMemo(() => {
-    const ids: string[] = [];
-    for (const navigationMenuItem of navigationMenuItemsInDisplayOrder) {
-      const objectMetadataItem = getObjectMetadataForNavigationMenuItem(
-        navigationMenuItem,
-        objectMetadataItems,
-        views,
-      );
-      if (isDefined(objectMetadataItem)) {
-        ids.push(objectMetadataItem.id);
-      }
-    }
-    return ids;
-  }, [navigationMenuItemsInDisplayOrder, objectMetadataItems, views]);
-
-  // OMNIA-CUSTOM: members always land on their first sidebar-visible object.
-  const memberLandingPathInfo = useMemo<ObjectPathInfo | null>(() => {
-    const firstItem = sidebarVisibleObjectMetadataItems[0];
-
-    return isDefined(firstItem)
-      ? { objectMetadataItem: firstItem, view: getFirstView(firstItem.id) }
-      : null;
-  }, [sidebarVisibleObjectMetadataItems, getFirstView]);
-
-  // OMNIA-CUSTOM: admins return to their last-visited object when it is still
-  // part of the workspace sidebar.
-  const adminLastVisitedPathInfo = useMemo<ObjectPathInfo | null>(() => {
-    if (!isAdmin) {
-      return null;
-    }
-
-    const lastVisitedObjectMetadataItemId = store.get(
-      lastVisitedObjectMetadataItemIdState.atom,
-    );
-
-    if (!isDefined(lastVisitedObjectMetadataItemId)) {
-      return null;
-    }
-
-    const lastVisitedObjectMetadataItem = getActiveObjectMetadataItemMatchingId(
-      lastVisitedObjectMetadataItemId,
-    );
-
-    if (
-      !isDefined(lastVisitedObjectMetadataItem) ||
-      !sidebarObjectMetadataIds.includes(lastVisitedObjectMetadataItem.id)
-    ) {
-      return null;
-    }
-
-    return {
-      objectMetadataItem: lastVisitedObjectMetadataItem,
-      view: getFirstView(lastVisitedObjectMetadataItem.id),
-    };
-  }, [
-    isAdmin,
-    store,
-    getActiveObjectMetadataItemMatchingId,
-    sidebarObjectMetadataIds,
-    getFirstView,
-  ]);
-
-  // Fallback landing object (alphabetically-first readable object).
-  const fallbackObjectPathInfo = useMemo<ObjectPathInfo | null>(() => {
+  const firstObjectPathInfo = useMemo<ObjectPathInfo | null>(() => {
     const [firstObjectMetadataItem] = readableNonSystemObjectMetadataItems;
 
     if (!isDefined(firstObjectMetadataItem)) {
       return null;
     }
 
-    return {
-      objectMetadataItem: firstObjectMetadataItem,
-      view: getFirstView(firstObjectMetadataItem.id),
-    };
-  }, [getFirstView, readableNonSystemObjectMetadataItems]);
+    const viewId = getTargetViewId(firstObjectMetadataItem.id);
+
+    return { objectMetadataItem: firstObjectMetadataItem, viewId };
+  }, [getTargetViewId, readableNonSystemObjectMetadataItems]);
+
+  // OMNIA-CUSTOM: members land on Leads (then the next MEMBER_LANDING_OBJECT_ORDER object)
+  // even though their sidebar lists Dashboards first.
+  const memberLandingPath = useMemo(() => {
+    const memberLandingObjectMetadataItem =
+      MEMBER_LANDING_OBJECT_ORDER.map((nameSingular) =>
+        memberSidebarObjectMetadataItems.find(
+          (objectMetadataItem) =>
+            objectMetadataItem.nameSingular === nameSingular,
+        ),
+      ).find(isDefined) ?? memberSidebarObjectMetadataItems.at(0);
+
+    // Desktop /home redirects back to this path, so use upstream's landing for nothing readable
+    if (!isDefined(memberLandingObjectMetadataItem)) {
+      return getSettingsPath(SettingsPath.ProfilePage);
+    }
+
+    const viewId = getTargetViewId(memberLandingObjectMetadataItem.id);
+
+    return getAppPath(
+      AppPath.RecordIndexPage,
+      { objectNamePlural: memberLandingObjectMetadataItem.namePlural },
+      isDefined(viewId) ? { viewId } : undefined,
+    );
+  }, [getTargetViewId, memberSidebarObjectMetadataItems]);
 
   const defaultHomePagePath = useMemo(() => {
     if (!isDefined(currentUser)) {
       return AppPath.SignInUp;
     }
 
-    if (isEmpty(readableNonSystemObjectMetadataItems)) {
-      // Object metadata may legitimately be empty for a user with no readable
-      // objects, in which case /settings/profile is the intended fallback.
-      // It can also be transiently empty during the post-login window before
-      // workspace metadata has finished loading. Defer to AppPath.Index in
-      // that case so the user isn't stranded on /settings/profile once
-      // metadata becomes available.
-      if (!areObjectMetadataItemsLoaded) {
-        return AppPath.Index;
-      }
-      return getSettingsPath(SettingsPath.ProfilePage);
+    if (isMobile) {
+      return AppPath.Home;
     }
 
-    // The navigation menu drives the redirect and loads after the minimal-
-    // metadata fast path. Wait for it instead of falling back to the
-    // alphabetically-first object during the post-login window.
-    if (!areNavigationMenuItemsLoaded) {
+    // Both stores are empty right after login; deciding now would pick a wrong fallback.
+    if (!areObjectMetadataItemsLoaded || !areNavigationMenuItemsLoaded) {
       return AppPath.Index;
     }
 
-    // OMNIA-CUSTOM: members are pinned to their first sidebar-visible object and
-    // must never fall through to the workspace navigation link, which is only
-    // read-permission filtered (not showInSidebar filtered).
-    if (!isAdmin) {
-      if (!isDefined(memberLandingPathInfo)) {
-        // showInSidebar permissions may still be loading — return undefined to
-        // defer the redirect rather than landing on the wrong object.
-        return undefined;
-      }
-      return buildRecordIndexPath(memberLandingPathInfo);
+    // OMNIA-CUSTOM: members never get the nav-tree or alphabetical fallback; wait for their list.
+    if (!hasLayoutsPermission) {
+      return isMemberSidebarLoaded ? memberLandingPath : AppPath.Index;
     }
 
-    // OMNIA-CUSTOM: admins honour their last-visited object, then follow the
-    // workspace navigation menu, then fall back to the first readable object.
-    if (isDefined(adminLastVisitedPathInfo)) {
-      return buildRecordIndexPath(adminLastVisitedPathInfo);
+    if (isEmpty(readableNonSystemObjectMetadataItems)) {
+      return getSettingsPath(SettingsPath.ProfilePage);
     }
 
     if (isDefined(firstNavigationMenuItemLink)) {
       return firstNavigationMenuItemLink;
     }
 
-    if (!isDefined(fallbackObjectPathInfo)) {
+    if (!isDefined(firstObjectPathInfo)) {
       return AppPath.NotFound;
     }
 
-    return buildRecordIndexPath(fallbackObjectPathInfo);
+    return getAppPath(
+      AppPath.RecordIndexPage,
+      { objectNamePlural: firstObjectPathInfo.objectMetadataItem?.namePlural },
+      isDefined(firstObjectPathInfo.viewId)
+        ? { viewId: firstObjectPathInfo.viewId }
+        : undefined,
+    );
   }, [
     currentUser,
+    isMobile,
     readableNonSystemObjectMetadataItems,
     areObjectMetadataItemsLoaded,
     areNavigationMenuItemsLoaded,
-    isAdmin,
-    memberLandingPathInfo,
-    adminLastVisitedPathInfo,
+    hasLayoutsPermission,
+    isMemberSidebarLoaded,
+    memberLandingPath,
     firstNavigationMenuItemLink,
-    fallbackObjectPathInfo,
-    buildRecordIndexPath,
+    firstObjectPathInfo,
   ]);
 
   return { defaultHomePagePath };

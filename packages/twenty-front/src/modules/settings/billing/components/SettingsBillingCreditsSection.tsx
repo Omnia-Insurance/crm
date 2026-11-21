@@ -1,146 +1,356 @@
+import { NavigationButton } from '@/ui/input/components/NavigationButton';
+
 import { type CurrentWorkspace } from '@/auth/states/currentWorkspaceState';
 import { useNumberFormat } from '@/localization/hooks/useNumberFormat';
 import { ResourceCreditPriceSelector } from '@/settings/billing/components/internal/ResourceCreditPriceSelector';
-import { SettingsBillingLabelValueItem } from '@/settings/billing/components/internal/SettingsBillingLabelValueItem';
-import { SubscriptionInfoContainer } from '@/settings/billing/components/SubscriptionInfoContainer';
+import {
+  StyledSettingsBillingCard,
+  StyledSettingsBillingCardHeader,
+} from '@/settings/billing/components/internal/SettingsBillingCard';
+import { BILLING_MODAL_IDS } from '@/settings/billing/constants/BillingModalIds';
 import { useBillingWording } from '@/settings/billing/hooks/useBillingWording';
 import { useCurrentBillingFlags } from '@/settings/billing/hooks/useCurrentBillingFlags';
 import { useCurrentResourceCredit } from '@/settings/billing/hooks/useCurrentResourceCredit';
 import { useGetResourceCreditUsage } from '@/settings/billing/hooks/useGetResourceCreditUsage';
+import { useSplitPhaseItemsInPrices } from '@/settings/billing/hooks/useSplitPhaseItemsInPrices';
+import { useHasPermissionFlag } from '@/settings/roles/hooks/useHasPermissionFlag';
 import { getDocumentationUrl } from '@/support/utils/getDocumentationUrl';
+import { useDialog } from '@/ui/layout/dialog/hooks/useDialog';
+import { isSubscriptionPaymentOverdue } from '@/settings/billing/utils/isSubscriptionPaymentOverdue';
 import { useSubscriptionStatus } from '@/workspace/hooks/useSubscriptionStatus';
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
-import { useContext } from 'react';
 import { DOCUMENTATION_PATHS } from 'twenty-shared/constants';
 import { SettingsPath } from 'twenty-shared/types';
-import { getSettingsPath } from 'twenty-shared/utils';
-import { IconChartBar, IconExternalLink } from 'twenty-ui/icon';
-import { HorizontalSeparator, Section } from 'twenty-ui/layout';
-import { H2Title } from 'twenty-ui/typography';
-import { Info, ProgressBar } from 'twenty-ui/feedback';
-import { Button } from 'twenty-ui/input';
-import { UndecoratedLink } from 'twenty-ui/navigation';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
-import { SubscriptionStatus } from '~/generated-metadata/graphql';
+import { getSettingsPath, isDefined } from 'twenty-shared/utils';
+import { Section } from 'twenty-ui/components/layout';
+import {
+  IconChartBar,
+  IconCoins,
+  IconExternalLink,
+  IconInfoCircle,
+} from 'twenty-ui/icon';
+import { ProgressBar } from 'twenty-ui/primitives/feedback';
+import { Button } from 'twenty-ui/primitives/input';
+import { themeCssVariables, useTheme } from 'twenty-ui/theme';
+import {
+  PermissionFlagType,
+  SubscriptionStatus,
+} from '~/generated-metadata/graphql';
+import { openUrlInNewTab } from '~/utils/openUrlInNewTab';
+import { useLingui } from '@lingui/react/macro';
+
+const StyledSettingsBillingCardBody = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: ${themeCssVariables.spacing[3]};
+  padding: ${themeCssVariables.spacing[3]};
+`;
+
+const StyledCreditsHeading = styled.div`
+  align-items: baseline;
+  display: flex;
+  gap: ${themeCssVariables.spacing[1]};
+  min-width: 0;
+`;
+
+const StyledCreditsHeadingLeft = styled.div`
+  align-items: center;
+  display: flex;
+  gap: ${themeCssVariables.spacing[2]};
+`;
+
+const StyledCreditsAmount = styled.span`
+  color: ${themeCssVariables.font.color.primary};
+  font-size: ${themeCssVariables.font.size.md};
+  font-weight: ${themeCssVariables.font.weight.medium};
+  white-space: nowrap;
+`;
+
+const StyledCreditsInterval = styled.span`
+  color: ${themeCssVariables.font.color.light};
+  font-size: ${themeCssVariables.font.size.md};
+  font-weight: ${themeCssVariables.font.weight.regular};
+  white-space: nowrap;
+`;
+
+const StyledCreditsFooter = styled.div`
+  align-items: center;
+  color: ${themeCssVariables.font.color.tertiary};
+  display: flex;
+  flex-wrap: wrap;
+  font-size: ${themeCssVariables.font.size.sm};
+  gap: ${themeCssVariables.spacing[2]};
+  justify-content: flex-end;
+`;
+
+const StyledCreditsCardBody = styled(StyledSettingsBillingCardBody)`
+  padding: ${themeCssVariables.spacing[4]} ${themeCssVariables.spacing[3]}
+    ${themeCssVariables.spacing[3]};
+`;
+
+const StyledRolloverText = styled.div`
+  align-items: center;
+  display: flex;
+  flex: 1 1 280px;
+  gap: ${themeCssVariables.spacing[1]};
+  min-width: 0;
+`;
+
+const StyledSeatCreditsText = styled.div`
+  color: ${themeCssVariables.font.color.tertiary};
+  font-size: ${themeCssVariables.font.size.sm};
+`;
+
+const StyledUsageMetrics = styled.div`
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: ${themeCssVariables.spacing[2]};
+  white-space: nowrap;
+`;
+
+const StyledMetricValue = styled.span`
+  color: ${themeCssVariables.font.color.secondary};
+  font-size: ${themeCssVariables.font.size.md};
+  font-weight: ${themeCssVariables.font.weight.medium};
+`;
 
 const StyledCreditUsageFooterActions = styled.div`
   display: flex;
-  gap: ${themeCssVariables.spacing[2]};
-  margin-top: ${themeCssVariables.spacing[4]};
+  gap: ${themeCssVariables.spacing[3]};
+  margin-top: ${themeCssVariables.spacing[3]};
 `;
 
 export const SettingsBillingCreditsSection = ({
   currentBillingSubscription,
+  onManageBilling,
+  isManageBillingDisabled,
+  onUpdatePayment,
+  isUpdatePaymentDisabled,
 }: {
   currentBillingSubscription: NonNullable<
     CurrentWorkspace['currentBillingSubscription']
   >;
+  onManageBilling: () => void;
+  isManageBillingDisabled: boolean;
+  onUpdatePayment: () => void;
+  isUpdatePaymentDisabled: boolean;
 }) => {
-  const { theme } = useContext(ThemeContext);
+  const { t } = useLingui();
+  const theme = useTheme();
   const subscriptionStatus = useSubscriptionStatus();
+  const { openDialog } = useDialog();
   const { formatNumber } = useNumberFormat();
 
   const { isMonthlyPlan } = useCurrentBillingFlags();
+  const { splitedPhaseItemsInPrices } = useSplitPhaseItemsInPrices();
+  const nextResourceCreditPrice =
+    splitedPhaseItemsInPrices.nextResourceCreditPrice;
 
-  const { getResourceCreditPricesByInterval } = useCurrentResourceCredit();
+  const isCancellationScheduled =
+    currentBillingSubscription.status !== SubscriptionStatus.Canceled &&
+    isDefined(currentBillingSubscription.cancelAt);
+
+  const {
+    currentResourceCreditBillingPrice,
+    getResourceCreditPricesByInterval,
+  } = useCurrentResourceCredit();
 
   const { getIntervalLabel } = useBillingWording();
 
   const isTrialing = subscriptionStatus === SubscriptionStatus.Trialing;
+  const shouldUpdatePayment = isSubscriptionPaymentOverdue(subscriptionStatus);
+  const hasPermissionToEndTrialPeriod = useHasPermissionFlag(
+    PermissionFlagType.WORKSPACE,
+  );
 
   const { getResourceCreditUsage } = useGetResourceCreditUsage();
 
-  const { usedCredits, grantedCredits, totalGrantedCredits, rolloverCredits } =
-    getResourceCreditUsage();
-
-  const progressBarValue = (usedCredits / totalGrantedCredits) * 100;
+  const {
+    workspaceCreditsUsed,
+    workspaceCreditsGranted,
+    workspaceCreditsTotalGranted,
+    workspaceCreditsExtraGranted,
+    workspaceCreditsGrantedForSeats,
+  } = getResourceCreditUsage();
 
   const intervalLabel = getIntervalLabel(isMonthlyPlan);
+  const packageCredits = currentResourceCreditBillingPrice?.creditAmount;
+  const nextCreditsByPeriod = nextResourceCreditPrice?.creditAmount;
+  const hasSeatCredits = workspaceCreditsGrantedForSeats > 0;
+  const displayedPackageCredits =
+    packageCredits ?? workspaceCreditsGranted - workspaceCreditsGrantedForSeats;
+  const displayedGrantedCredits =
+    displayedPackageCredits + workspaceCreditsGrantedForSeats;
+  const canCancelCreditPackSwitch =
+    !isCancellationScheduled &&
+    !shouldUpdatePayment &&
+    isDefined(nextResourceCreditPrice) &&
+    packageCredits !== nextCreditsByPeriod;
 
-  const usedCreditsDisplay = formatNumber(usedCredits, { decimals: 2 });
-  const totalGrantedCreditsDisplay = formatNumber(totalGrantedCredits, {
+  const remainingCreditsPercentage =
+    workspaceCreditsTotalGranted > 0
+      ? ((workspaceCreditsTotalGranted - workspaceCreditsUsed) /
+          workspaceCreditsTotalGranted) *
+        100
+      : 0;
+  const clampedRemainingCreditsPercentage = Math.min(
+    100,
+    Math.max(0, remainingCreditsPercentage),
+  );
+
+  const hasExtraCredits = workspaceCreditsExtraGranted > 0;
+
+  const workspaceCreditsUsedDisplay = formatNumber(workspaceCreditsUsed, {
     decimals: 2,
   });
-  const grantedCreditsDisplay = formatNumber(grantedCredits, { decimals: 2 });
-  const rolloverCreditsDisplay = formatNumber(rolloverCredits, { decimals: 2 });
-  const rolloverCapDisplay = formatNumber(grantedCredits * 2, { decimals: 2 });
+  const grantedCreditsDisplay = formatNumber(displayedGrantedCredits, {
+    decimals: 2,
+  });
+  const workspaceCreditsTotalGrantedDisplay = formatNumber(
+    workspaceCreditsTotalGranted,
+    {
+      decimals: 2,
+    },
+  );
+  const extraCreditsDisplay = formatNumber(workspaceCreditsExtraGranted, {
+    decimals: 2,
+  });
+  const rolloverCapDisplay = formatNumber(displayedPackageCredits * 2, {
+    decimals: 2,
+  });
+  const seatCreditsDisplay = formatNumber(workspaceCreditsGrantedForSeats, {
+    decimals: 2,
+  });
+  const packageCreditsDisplay = formatNumber(displayedPackageCredits, {
+    decimals: 2,
+  });
+  const seatCreditsLabel =
+    displayedPackageCredits > 0
+      ? isMonthlyPlan
+        ? t`${seatCreditsDisplay} from seats, reset each month · ${packageCreditsDisplay} from your credit pack, roll over`
+        : t`${seatCreditsDisplay} from seats, reset each year · ${packageCreditsDisplay} from your credit pack, roll over`
+      : isMonthlyPlan
+        ? t`${seatCreditsDisplay} from seats, reset each month`
+        : t`${seatCreditsDisplay} from seats, reset each year`;
+  const remainingCreditsPercentageDisplay = formatNumber(
+    clampedRemainingCreditsPercentage,
+    { decimals: 0 },
+  );
 
   const resourceCreditPrices = getResourceCreditPricesByInterval(
     currentBillingSubscription.interval,
   );
+  const creditsDocumentationUrl = getDocumentationUrl({
+    path: DOCUMENTATION_PATHS.USER_GUIDE_BILLING_CAPABILITIES_CREDITS,
+  });
 
   return (
-    <>
-      <Section>
-        <H2Title
-          title={t`Credit Usage`}
-          description={t`Track your ${intervalLabel} workflow credit consumption.`}
-        />
-        <SubscriptionInfoContainer>
-          <SettingsBillingLabelValueItem
-            label={t`Credits Used`}
-            value={t`${usedCreditsDisplay} / ${totalGrantedCreditsDisplay} available`}
-          />
-          <ProgressBar
-            value={progressBarValue}
-            barColor={
-              progressBarValue > 100 ? theme.color.red8 : theme.color.blue
-            }
-            backgroundColor={theme.background.tertiary}
-            withBorderRadius={true}
-          />
-
-          {!isTrialing && (
-            <>
-              <HorizontalSeparator noMargin color={theme.background.tertiary} />
-              <SettingsBillingLabelValueItem
-                label={t`This ${intervalLabel}'s credits`}
-                value={grantedCreditsDisplay}
-              />
-              {rolloverCredits > 0 && (
-                <SettingsBillingLabelValueItem
-                  label={t`Rolled over`}
-                  value={`+${rolloverCreditsDisplay}`}
-                />
-              )}
-              <Info
-                accent="blue"
-                text={t`Unused credits roll over, up to 2× your plan's credits (max ${rolloverCapDisplay}).`}
-              />
-            </>
-          )}
-        </SubscriptionInfoContainer>
-
-        <StyledCreditUsageFooterActions>
-          <UndecoratedLink to={getSettingsPath(SettingsPath.Usage)}>
-            <Button
-              Icon={IconChartBar}
-              title={t`View usage`}
-              variant="secondary"
+    <Section.Root>
+      <Section.Header
+        title={t`Credits`}
+        description={t`Credits are used by workflows, AI chats, agents, and approved apps`}
+      />
+      <StyledSettingsBillingCard>
+        <StyledSettingsBillingCardHeader>
+          <StyledCreditsHeadingLeft>
+            <IconCoins
+              size={theme.icon.size.md}
+              color={themeCssVariables.color.green9}
             />
-          </UndecoratedLink>
-          <Button
-            Icon={IconExternalLink}
-            title={t`How credits work`}
-            variant="secondary"
-            onClick={() =>
-              window.open(
-                getDocumentationUrl({
-                  path: DOCUMENTATION_PATHS.USER_GUIDE_BILLING_CAPABILITIES_CREDITS,
-                }),
-                '_blank',
-              )
+            <StyledCreditsHeading>
+              <StyledCreditsAmount>
+                {t`${grantedCreditsDisplay} credits`}
+              </StyledCreditsAmount>
+              <StyledCreditsInterval>
+                {isTrialing
+                  ? t`/${intervalLabel} after trial`
+                  : t`/${intervalLabel}`}
+              </StyledCreditsInterval>
+            </StyledCreditsHeading>
+          </StyledCreditsHeadingLeft>
+          <ResourceCreditPriceSelector
+            resourceCreditPrices={resourceCreditPrices}
+            isTrialing={isTrialing}
+            shouldRedirectToManageBilling={isCancellationScheduled}
+            shouldRedirectToUpdatePayment={shouldUpdatePayment}
+            canEndTrialPeriod={hasPermissionToEndTrialPeriod}
+            onManageBilling={onManageBilling}
+            isManageBillingDisabled={isManageBillingDisabled}
+            onUpdatePayment={onUpdatePayment}
+            isUpdatePaymentDisabled={isUpdatePaymentDisabled}
+            canCancelCreditPackSwitch={canCancelCreditPackSwitch}
+            onCancelCreditPackSwitch={() =>
+              openDialog(BILLING_MODAL_IDS.cancelSwitchMeteredPrice)
             }
           />
-        </StyledCreditUsageFooterActions>
-      </Section>
-      <Section>
-        <ResourceCreditPriceSelector
-          resourceCreditPrices={resourceCreditPrices}
-          isTrialing={isTrialing}
-        />
-      </Section>
-    </>
+        </StyledSettingsBillingCardHeader>
+        <StyledCreditsCardBody>
+          {hasSeatCredits && (
+            <StyledSeatCreditsText>{seatCreditsLabel}</StyledSeatCreditsText>
+          )}
+          <ProgressBar
+            value={clampedRemainingCreditsPercentage}
+            aria-label={t`Remaining credits`}
+            backgroundColor={themeCssVariables.background.tertiary}
+            barColor={themeCssVariables.color.green9}
+            withBorderRadius
+          />
+          <StyledCreditsFooter>
+            {isTrialing ? (
+              <StyledRolloverText>
+                <StyledMetricValue>
+                  {workspaceCreditsTotalGrantedDisplay}
+                </StyledMetricValue>
+                {t`credits available during the trial period`}
+              </StyledRolloverText>
+            ) : hasExtraCredits ? (
+              <StyledRolloverText>
+                <StyledMetricValue>
+                  {workspaceCreditsTotalGrantedDisplay}
+                </StyledMetricValue>
+                {t`credits available (including ${extraCreditsDisplay} on top of your plan)`}
+              </StyledRolloverText>
+            ) : (
+              <StyledRolloverText>
+                <IconInfoCircle size={theme.icon.size.sm} />
+                {hasSeatCredits
+                  ? t`Unused credits from your credit pack roll over, up to 2× the pack (max ${rolloverCapDisplay}).`
+                  : t`Unused credits roll over, up to 2× your plan's credits (max ${rolloverCapDisplay}).`}
+              </StyledRolloverText>
+            )}
+            <StyledUsageMetrics>
+              <span>
+                <StyledMetricValue>
+                  {workspaceCreditsUsedDisplay}
+                </StyledMetricValue>{' '}
+                {t`credits used`}
+              </span>
+              <span>·</span>
+              <span>
+                <StyledMetricValue>
+                  {remainingCreditsPercentageDisplay}
+                </StyledMetricValue>{' '}
+                {t`% left`}
+              </span>
+            </StyledUsageMetrics>
+          </StyledCreditsFooter>
+        </StyledCreditsCardBody>
+      </StyledSettingsBillingCard>
+      <StyledCreditUsageFooterActions>
+        <NavigationButton
+          to={getSettingsPath(SettingsPath.Usage)}
+          startIcon={<IconChartBar />}
+          size="sm"
+          variant="outline"
+        >{t`View usage`}</NavigationButton>
+        <Button
+          startIcon={<IconExternalLink />}
+          size="sm"
+          onClick={() => openUrlInNewTab(creditsDocumentationUrl)}
+          variant="outline"
+        >{t`How credits work`}</Button>
+      </StyledCreditUsageFooterActions>
+    </Section.Root>
   );
 };

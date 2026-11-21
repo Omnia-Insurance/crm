@@ -1,14 +1,9 @@
 import { styled } from '@linaria/react';
 import { motion } from 'framer-motion';
-import { useContext } from 'react';
 
-import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
-import { AnimatedCheckmark } from 'twenty-ui/data-display';
-import {
-  MOBILE_VIEWPORT,
-  ThemeContext,
-  themeCssVariables,
-} from 'twenty-ui/theme-constants';
+import { AnimatedCheckmark } from '@/ui/navigation/step-bar/components/internal/AnimatedCheckmark/AnimatedCheckmark';
+import { useIsMobile } from 'twenty-ui/utilities';
+import { MOBILE_VIEWPORT, useTheme, themeCssVariables } from 'twenty-ui/theme';
 
 const StyledContainer = styled.div<{ isLast: boolean }>`
   align-items: center;
@@ -28,6 +23,7 @@ const StyledStepCircleBase = styled.div<{ isInNextSteps: boolean }>`
   border-radius: 50%;
   border-style: solid;
   border-width: 1px;
+  corner-shape: round;
   display: flex;
   flex-basis: auto;
   flex-shrink: 0;
@@ -86,7 +82,7 @@ export const Step = ({
   activeStep = 0,
 }: StepProps) => {
   const isMobile = useIsMobile();
-  const { theme } = useContext(ThemeContext);
+  const theme = useTheme();
 
   const variantsLine = {
     previous: {

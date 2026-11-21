@@ -5,7 +5,7 @@ export type {
   LeafType,
   Node,
   NodeType,
-} from './types/base-output-schema.type';
+} from './types/BaseOutputSchema';
 export { collectOutputSchemaPaths } from './utils/collect-output-schema-paths';
 export {
   getCurrentItemSchemaFromFlattenedArrayOutputSchema,
@@ -27,9 +27,9 @@ export type {
   FindRecordsOutputSchema,
   FormFieldLeaf,
   FormFieldNode,
+  FormSelectFieldLeaf,
   FormOutputSchema,
   IteratorOutputSchema,
-  LinkOutputSchema,
   ManualTriggerOutputSchema,
   OutputSchemaV2,
   RecordFieldLeaf,
@@ -38,7 +38,7 @@ export type {
   RecordNode,
   RecordOutputSchemaV2,
   VariableSearchResult,
-} from './types/output-schema.type';
+} from './types/OutputSchema';
 export {
   searchRecordOutputSchema,
   searchVariableInOutputSchema,

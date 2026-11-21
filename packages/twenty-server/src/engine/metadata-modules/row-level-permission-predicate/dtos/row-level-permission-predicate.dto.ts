@@ -5,15 +5,11 @@ import { Field, ObjectType, registerEnumType } from '@nestjs/graphql';
 import GraphQLJSON from 'graphql-type-json';
 import {
   RowLevelPermissionPredicateOperand,
-  RowLevelPermissionPredicateScope,
   RowLevelPermissionPredicateValue,
 } from 'twenty-shared/types';
 
 registerEnumType(RowLevelPermissionPredicateOperand, {
   name: 'RowLevelPermissionPredicateOperand',
-});
-registerEnumType(RowLevelPermissionPredicateScope, {
-  name: 'RowLevelPermissionPredicateScope',
 });
 @ObjectType('RowLevelPermissionPredicate')
 export class RowLevelPermissionPredicateDTO {
@@ -23,14 +19,14 @@ export class RowLevelPermissionPredicateDTO {
   @Field(() => String)
   fieldMetadataId: string;
 
+  @Field(() => String, { nullable: true })
+  relationFieldMetadataId?: string | null;
+
   @Field(() => String)
   objectMetadataId: string;
 
   @Field(() => RowLevelPermissionPredicateOperand)
   operand: RowLevelPermissionPredicateOperand;
-
-  @Field(() => RowLevelPermissionPredicateScope)
-  scope: RowLevelPermissionPredicateScope;
 
   @Field(() => String, { nullable: true })
   subFieldName?: string | null;

@@ -1,7 +1,7 @@
 import type { WorkflowRunStepStatus } from '@/workflow/types/Workflow';
 import { getWorkflowDiagramColors } from '@/workflow/workflow-diagram/utils/getWorkflowDiagramColors';
 import { styled } from '@linaria/react';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 const StyledNodeTitle = styled.div<{
   highlight?: boolean;
@@ -14,7 +14,9 @@ const StyledNodeTitle = styled.div<{
   box-sizing: border-box;
   color: ${({ highlight, runStatus, selected }) => {
     const colors = getWorkflowDiagramColors({ runStatus });
-    if (highlight === true) return colors.selected.titleColor;
+    if (highlight === true) {
+      return colors.selected.titleColor;
+    }
     return selected ? colors.selected.titleColor : colors.unselected.titleColor;
   }};
   display: -webkit-box;

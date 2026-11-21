@@ -1,17 +1,25 @@
 import { computeDeterministicUuid } from '@/application/deterministic-identifier/compute-deterministic-uuid.util';
+import { isDefined } from '@/utils/validation/isDefined';
 
-// A field permission is identified by its field (which implies its object), within its role.
 export const getFieldPermissionUniversalIdentifier = ({
   applicationUniversalIdentifier,
   roleUniversalIdentifier,
   fieldUniversalIdentifier,
+  rowLevelPermissionPredicateGroupUniversalIdentifier,
 }: {
   applicationUniversalIdentifier: string;
   roleUniversalIdentifier: string;
   fieldUniversalIdentifier: string;
+  rowLevelPermissionPredicateGroupUniversalIdentifier?: string | null;
 }): string =>
   computeDeterministicUuid({
     entityNamespace: 'fieldPermission',
-    value: `${roleUniversalIdentifier}:${fieldUniversalIdentifier}`,
+    value: [
+      roleUniversalIdentifier,
+      fieldUniversalIdentifier,
+      ...(isDefined(rowLevelPermissionPredicateGroupUniversalIdentifier)
+        ? [rowLevelPermissionPredicateGroupUniversalIdentifier]
+        : []),
+    ].join(':'),
     applicationUniversalIdentifier,
   });

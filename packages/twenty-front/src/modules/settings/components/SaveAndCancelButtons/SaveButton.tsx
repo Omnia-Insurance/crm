@@ -1,12 +1,12 @@
-import { t } from '@lingui/core/macro';
 import { type IconComponent, IconDeviceFloppy } from 'twenty-ui/icon';
-import { Button } from 'twenty-ui/input';
+import { Button, type ButtonColor } from 'twenty-ui/primitives/input';
+import { useLingui } from '@lingui/react/macro';
 
 type SaveButtonProps = {
   onSave?: () => void;
   disabled?: boolean;
   isLoading?: boolean;
-  inverted?: boolean;
+  color?: ButtonColor;
   saveIcon?: IconComponent;
 };
 
@@ -14,21 +14,20 @@ export const SaveButton = ({
   onSave,
   disabled,
   isLoading,
-  inverted = false,
-  saveIcon,
+  color = 'accent',
+  saveIcon: SaveIcon = IconDeviceFloppy,
 }: SaveButtonProps) => {
+  const { t } = useLingui();
   return (
     <Button
-      title={t`Save`}
-      variant={inverted ? 'secondary' : 'primary'}
-      size="small"
-      accent={inverted ? 'default' : 'blue'}
-      inverted={inverted}
+      size="sm"
       disabled={disabled}
       onClick={onSave}
       type="submit"
-      Icon={saveIcon ?? IconDeviceFloppy}
-      isLoading={isLoading}
-    />
+      startIcon={<SaveIcon />}
+      loading={isLoading}
+      variant={color === 'inherit' ? 'outline' : 'solid'}
+      color={color}
+    >{t`Save`}</Button>
   );
 };

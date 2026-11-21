@@ -1,24 +1,12 @@
 import fs from 'fs';
 import path from 'path';
 
-type BasePage = string | BaseGroup;
+import { isNonEmptyString } from '@sniptt/guards';
 
-type BaseGroup = {
-  key: string;
-  label: string;
-  icon?: string;
-  pages: BasePage[];
-};
-
-type BaseTab = {
-  key: string;
-  label: string;
-  groups: BaseGroup[];
-};
-
-type BaseStructure = {
-  tabs: BaseTab[];
-};
+import {
+  type BasePage,
+  type BaseStructure,
+} from '../navigation/base-structure-types';
 
 const baseStructurePath = path.resolve(
   __dirname,
@@ -38,6 +26,9 @@ const extractPaths = (pages: BasePage[]): string[] => {
     if (typeof page === 'string') {
       paths.push(page);
     } else {
+      if (isNonEmptyString(page.root)) {
+        paths.push(page.root);
+      }
       paths.push(...extractPaths(page.pages));
     }
   }
@@ -52,9 +43,7 @@ const pathToConstantName = (docPath: string): string => {
 const allPaths: string[] = [];
 
 for (const tab of baseStructure.tabs) {
-  for (const group of tab.groups) {
-    allPaths.push(...extractPaths(group.pages));
-  }
+  allPaths.push(...extractPaths(tab.groups));
 }
 
 const sortedPaths = [...allPaths].sort();
@@ -74,12 +63,10 @@ const AUTO_GENERATED_HEADER = `/*
 
 `;
 
-// Generate DocumentationPaths.ts
 const pathEntries = sortedPaths
   .map((docPath) => {
     const constName = pathToConstantName(docPath);
     const value = `'/${docPath}'`;
-    // Check if line would be too long (80 char limit)
     if (`  ${constName}: ${value},`.length > 80) {
       return `  ${constName}:\n    ${value},`;
     }

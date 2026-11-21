@@ -1,6 +1,9 @@
 import {
+  GetFunctionCommand,
+  type GetFunctionCommandOutput,
   Lambda,
   ListLayerVersionsCommand,
+  ResourceNotFoundException,
   waitUntilFunctionActiveV2,
   waitUntilFunctionUpdatedV2,
 } from '@aws-sdk/client-lambda';
@@ -11,18 +14,35 @@ import { isDefined } from 'twenty-shared/utils';
 
 import {
   CREDENTIALS_DURATION_IN_SECONDS,
+  LAMBDA_FUNCTION_CACHE_TTL_MS,
+  LAMBDA_CLIENT_CONNECTION_TIMEOUT_MS,
+  LAMBDA_CLIENT_MAX_ATTEMPTS,
+  LAMBDA_CLIENT_MAX_SOCKETS,
+  LAMBDA_CLIENT_REQUEST_TIMEOUT_MS,
+  LAMBDA_CLIENT_RETRY_MODE,
   UPDATE_FUNCTION_DURATION_TIMEOUT_IN_SECONDS,
 } from 'src/engine/core-modules/logic-function/logic-function-drivers/drivers/lambda/constants/lambda-driver.constant';
-import { type LambdaDriverOptions } from 'src/engine/core-modules/logic-function/logic-function-drivers/drivers/lambda/types/lambda-driver.type';
+import {
+  type LambdaConnectionOptions,
+  type LambdaDriverOptions,
+} from 'src/engine/core-modules/logic-function/logic-function-drivers/drivers/lambda/types/lambda-driver.type';
+import { addLambdaRateLimitErrorMiddleware } from 'src/engine/core-modules/logic-function/logic-function-drivers/drivers/lambda/utils/add-lambda-rate-limit-error-middleware.util';
+import { buildAwsRequestHandlerOptions } from 'src/utils/aws-request-handler.util';
 
 export class LambdaAwsClientService {
   private lambdaClient: Lambda | undefined;
+  private s3Client: S3Client | undefined;
+  private stsClient: STSClient | undefined;
   private assumeRoleCredentials:
     | { accessKeyId: string; secretAccessKey: string; sessionToken: string }
     | undefined;
   private credentialsExpiry: Date | null = null;
 
-  constructor(private readonly options: LambdaDriverOptions) {}
+  constructor(
+    private readonly options: LambdaConnectionOptions &
+      Pick<LambdaDriverOptions, 'cacheStorageService'>,
+    private readonly maxAttempts: number = LAMBDA_CLIENT_MAX_ATTEMPTS,
+  ) {}
 
   async getLambdaClient() {
     if (
@@ -30,27 +50,51 @@ export class LambdaAwsClientService {
       (isDefined(this.options.subhostingRole) &&
         this.areAssumeRoleCredentialsExpired())
     ) {
-      this.lambdaClient = new Lambda({
+      const lambdaClient = new Lambda({
         ...this.options,
         ...(isDefined(this.options.subhostingRole) && {
           credentials: await this.getAssumeRoleCredentials(),
         }),
+        maxAttempts: this.maxAttempts,
+        retryMode: LAMBDA_CLIENT_RETRY_MODE,
+        requestHandler: buildAwsRequestHandlerOptions({
+          requestTimeoutMs: LAMBDA_CLIENT_REQUEST_TIMEOUT_MS,
+          connectionTimeoutMs: LAMBDA_CLIENT_CONNECTION_TIMEOUT_MS,
+          maxSockets: LAMBDA_CLIENT_MAX_SOCKETS,
+        }),
       });
+
+      addLambdaRateLimitErrorMiddleware(lambdaClient);
+
+      this.lambdaClient = lambdaClient;
     }
 
     return this.lambdaClient;
+  }
+
+  private async getS3Client(): Promise<S3Client> {
+    if (
+      !isDefined(this.s3Client) ||
+      (isDefined(this.options.subhostingRole) &&
+        this.areAssumeRoleCredentialsExpired())
+    ) {
+      this.s3Client = new S3Client({
+        region: this.options.layerBucketRegion,
+        credentials: isDefined(this.options.subhostingRole)
+          ? await this.getAssumeRoleCredentials()
+          : this.options.credentials,
+        requestHandler: buildAwsRequestHandlerOptions(),
+      });
+    }
+
+    return this.s3Client;
   }
 
   async generatePresignedUploadUrl(
     s3Key: string,
     expiresIn: number = 300,
   ): Promise<string> {
-    const s3Client = new S3Client({
-      region: this.options.layerBucketRegion,
-      credentials: isDefined(this.options.subhostingRole)
-        ? await this.getAssumeRoleCredentials()
-        : this.options.credentials,
-    });
+    const s3Client = await this.getS3Client();
 
     const putCommand = new PutObjectCommand({
       Bucket: this.options.layerBucket,
@@ -81,6 +125,56 @@ export class LambdaAwsClientService {
     );
   }
 
+  async getFunction(
+    functionName: string,
+  ): Promise<GetFunctionCommandOutput | undefined> {
+    const cacheKey = this.getFunctionCacheKey(functionName);
+    const cachedFunction =
+      await this.options.cacheStorageService.get<GetFunctionCommandOutput>(
+        cacheKey,
+      );
+
+    if (isDefined(cachedFunction)) {
+      return cachedFunction;
+    }
+
+    const lambdaClient = await this.getLambdaClient();
+
+    let getFunctionResult: GetFunctionCommandOutput;
+
+    try {
+      getFunctionResult = await lambdaClient.send(
+        new GetFunctionCommand({ FunctionName: functionName }),
+      );
+    } catch (error) {
+      if (error instanceof ResourceNotFoundException) {
+        return undefined;
+      }
+
+      throw error;
+    }
+
+    if (getFunctionResult.Configuration?.State === 'Active') {
+      await this.options.cacheStorageService.set(
+        cacheKey,
+        getFunctionResult,
+        LAMBDA_FUNCTION_CACHE_TTL_MS,
+      );
+    }
+
+    return getFunctionResult;
+  }
+
+  async clearFunctionCache(functionName: string): Promise<void> {
+    await this.options.cacheStorageService.del(
+      this.getFunctionCacheKey(functionName),
+    );
+  }
+
+  private getFunctionCacheKey(functionName: string): string {
+    return `lambda-function:${functionName}`;
+  }
+
   async getExistingLayerArn(layerName: string): Promise<string | undefined> {
     const lambdaClient = await this.getLambdaClient();
 
@@ -103,7 +197,12 @@ export class LambdaAwsClientService {
   }
 
   private async refreshAssumeRoleCredentials() {
-    const stsClient = new STSClient({ region: this.options.region });
+    this.stsClient ??= new STSClient({
+      region: this.options.region,
+      requestHandler: buildAwsRequestHandlerOptions(),
+    });
+
+    const stsClient = this.stsClient;
 
     const assumeRoleCommand = new AssumeRoleCommand({
       RoleArn: this.options.subhostingRole,
@@ -133,6 +232,7 @@ export class LambdaAwsClientService {
     );
 
     this.lambdaClient = undefined;
+    this.s3Client = undefined;
   }
 
   private async getAssumeRoleCredentials() {

@@ -53,10 +53,12 @@ export class ObjectPermissionInput {
   @Field({ nullable: true })
   canDestroyObjectRecords?: boolean;
 
+  // OMNIA-CUSTOM: per-object sidebar visibility and edit window overrides;
+  // omitted means unchanged, null clears the override (C3, C4)
   @IsBoolean()
   @IsOptional()
-  @Field({ nullable: true })
-  showInSidebar?: boolean;
+  @Field(() => Boolean, { nullable: true })
+  showInSidebar?: boolean | null;
 
   @IsInt()
   @IsOptional()

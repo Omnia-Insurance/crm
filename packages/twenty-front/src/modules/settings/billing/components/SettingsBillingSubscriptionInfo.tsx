@@ -1,16 +1,14 @@
-import { SubscriptionInfoContainer } from '@/settings/billing/components/SubscriptionInfoContainer';
-import {
-  SubscriptionInfoHeaderRow,
-  SubscriptionInfoRowContainer,
-} from '@/settings/billing/components/internal/SubscriptionInfoRowContainer';
-
-import {
-  type CurrentWorkspace,
-  currentWorkspaceState,
-} from '@/auth/states/currentWorkspaceState';
-
+import { currentWorkspaceMembersState } from '@/auth/states/currentWorkspaceMembersState';
+import { type CurrentWorkspace } from '@/auth/states/currentWorkspaceState';
 import { useNumberFormat } from '@/localization/hooks/useNumberFormat';
-import { PlansTags } from '@/settings/billing/components/internal/PlansTags';
+import { SettingsBillingSubscriptionInfoCard } from '@/settings/billing/components/internal/SettingsBillingSubscriptionInfoCard';
+import { SettingsBillingSubscriptionInfoCardHeaderActions } from '@/settings/billing/components/internal/SettingsBillingSubscriptionInfoCardHeaderActions';
+import { SettingsBillingSubscriptionInfoModals } from '@/settings/billing/components/internal/SettingsBillingSubscriptionInfoModals';
+import { BILLING_MODAL_IDS } from '@/settings/billing/constants/BillingModalIds';
+import { SETTINGS_BILLING_PERSONAL_AI_USAGE_COMPARISON_ROW } from '@/settings/billing/constants/SettingsBillingPersonalAiUsageComparisonRow';
+import { useApplyBillingSubscriptionChange } from '@/settings/billing/hooks/useApplyBillingSubscriptionChange';
+import { useApplyCurrentWorkspaceBillingUpdate } from '@/settings/billing/hooks/useApplyCurrentWorkspaceBillingUpdate';
+import { useBillingSubscriptionChangeWording } from '@/settings/billing/hooks/useBillingSubscriptionChangeWording';
 import { useBillingSubscriptionCost } from '@/settings/billing/hooks/useBillingSubscriptionCost';
 import { useBillingWording } from '@/settings/billing/hooks/useBillingWording';
 import { useCurrentBillingFlags } from '@/settings/billing/hooks/useCurrentBillingFlags';
@@ -18,115 +16,80 @@ import { useCurrentPlan } from '@/settings/billing/hooks/useCurrentPlan';
 import { useCurrentResourceCredit } from '@/settings/billing/hooks/useCurrentResourceCredit';
 import { useEndSubscriptionTrialPeriod } from '@/settings/billing/hooks/useEndSubscriptionTrialPeriod';
 import { useGetResourceCreditUsage } from '@/settings/billing/hooks/useGetResourceCreditUsage';
-import { useHasNextBillingPhase } from '@/settings/billing/hooks/useHasNextBillingPhase';
 import { useNextBillingPhase } from '@/settings/billing/hooks/useNextBillingPhase';
-import { useNextBillingSeats } from '@/settings/billing/hooks/useNextBillingSeats';
+import { useNextInterval } from '@/settings/billing/hooks/useNextInterval';
 import { useNextPlan } from '@/settings/billing/hooks/useNextPlan';
 import { useSplitPhaseItemsInPrices } from '@/settings/billing/hooks/useSplitPhaseItemsInPrices';
-import { usePermissionFlagMap } from '@/settings/roles/hooks/usePermissionFlagMap';
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
-import { ConfirmationModal } from '@/ui/layout/modal/components/ConfirmationModal';
-import { useModal } from '@/ui/layout/modal/hooks/useModal';
-import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
+import { billingHasPaymentMethodSelector } from '@/settings/billing/states/billingHasPaymentMethodSelector';
+import { isSendInvoiceBillingSubscription } from '@/settings/billing/utils/isSendInvoiceBillingSubscription';
+import { isSubscriptionPaymentOverdue } from '@/settings/billing/utils/isSubscriptionPaymentOverdue';
+import { useHasPermissionFlag } from '@/settings/roles/hooks/useHasPermissionFlag';
+import { useDialog } from '@/ui/layout/dialog/hooks/useDialog';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useSubscriptionStatus } from '@/workspace/hooks/useSubscriptionStatus';
+import { CombinedGraphQLErrors } from '@apollo/client/errors';
 import { useMutation } from '@apollo/client/react';
-import { styled } from '@linaria/react';
+import { plural } from '@lingui/core/macro';
 import { useLingui } from '@lingui/react/macro';
-import { useMemo, useState } from 'react';
-import { isDefined } from 'twenty-shared/utils';
+import { useState } from 'react';
+import { isDefined, isNonEmptyArray } from 'twenty-shared/utils';
+import { useToast } from 'twenty-ui/components/feedback';
+import { Section } from 'twenty-ui/components/layout';
 import {
-  IconArrowDown,
-  IconArrowUp,
-  IconCalendarEvent,
-  IconCalendarRepeat,
-  IconCircleX,
+  IconClockPlay,
   IconCoins,
-  IconSum,
+  IconSparkles,
   IconTag,
-  IconUsers,
 } from 'twenty-ui/icon';
-import { H2Title, Label } from 'twenty-ui/typography';
-import { Button } from 'twenty-ui/input';
-import { HorizontalSeparator, Section } from 'twenty-ui/layout';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
 import {
-  BillingPlanKey,
-  CancelSwitchBillingIntervalDocument,
-  CancelSwitchBillingPlanDocument,
   CancelSwitchResourceCreditPriceDocument,
   PermissionFlagType,
   SubscriptionInterval,
   SubscriptionStatus,
-  SwitchBillingPlanDocument,
-  SwitchSubscriptionIntervalDocument,
 } from '~/generated-metadata/graphql';
 import { beautifyExactDate } from '~/utils/date-utils';
-
-const SWITCH_BILLING_INTERVAL_TO_MONTHLY_MODAL_ID =
-  'switch-billing-interval-to-monthly-modal';
-
-const SWITCH_BILLING_INTERVAL_TO_YEARLY_MODAL_ID =
-  'switch-billing-interval-to-yearly-modal';
-
-const SWITCH_BILLING_PLAN_TO_ENTERPRISE_MODAL_ID =
-  'switch-billing-plan-to-enterprise-modal';
-
-const SWITCH_BILLING_PLAN_TO_PRO_MODAL_ID = 'switch-billing-plan-to-pro-modal';
-
-const END_TRIAL_PERIOD_MODAL_ID = 'end-trial-period-modal';
-
-const CANCEL_SWITCH_BILLING_PLAN_MODAL_ID = 'cancel-switch-billing-plan-modal';
-
-const CANCEL_SWITCH_BILLING_INTERVAL_MODAL_ID =
-  'cancel-switch-billing-interval-modal';
-
-const CANCEL_SWITCH_METERED_PRICE_MODAL_ID =
-  'cancel-switch-metered-price-modal';
-
-const StyledSwitchButtonContainer = styled.div`
-  align-items: center;
-  display: flex;
-  gap: ${themeCssVariables.spacing[2]};
-  margin-top: ${themeCssVariables.spacing[4]};
-`;
-
-const StyledTotalGroup = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: ${themeCssVariables.spacing[1]};
-`;
 
 export const SettingsBillingSubscriptionInfo = ({
   currentWorkspace,
   currentBillingSubscription,
+  onManageBilling,
+  isManageBillingDisabled,
+  onUpdatePayment,
+  isUpdatePaymentDisabled,
 }: {
   currentWorkspace: CurrentWorkspace;
   currentBillingSubscription: NonNullable<
     CurrentWorkspace['currentBillingSubscription']
   >;
+  onManageBilling: () => void;
+  isManageBillingDisabled: boolean;
+  onUpdatePayment: () => void;
+  isUpdatePaymentDisabled: boolean;
 }) => {
-  const { t } = useLingui();
+  const { i18n, t } = useLingui();
   const { formatNumber } = useNumberFormat();
 
-  const { openModal } = useModal();
+  const { openDialog } = useDialog();
 
-  const { refetchResourceCreditUsage } = useGetResourceCreditUsage();
+  const { enqueueToast } = useToast();
 
-  const { enqueueSuccessSnackBar, enqueueErrorSnackBar } = useSnackBar();
+  const { applyCurrentWorkspaceBillingUpdate } =
+    useApplyCurrentWorkspaceBillingUpdate();
+  const {
+    refetchResourceCreditUsage,
+    isGetResourceCreditUsageQueryLoaded,
+    getResourceCreditUsage,
+  } = useGetResourceCreditUsage();
 
   const { currentResourceCreditBillingPrice } = useCurrentResourceCredit();
 
-  const { currentPlan, oppositPlan } = useCurrentPlan();
-  const { isEnterprisePlan, isYearlyPlan, isMonthlyPlan, isProPlan } =
-    useCurrentBillingFlags();
+  const { currentPlan } = useCurrentPlan();
+  const { isYearlyPlan, isMonthlyPlan } = useCurrentBillingFlags();
   const { splitedPhaseItemsInPrices } = useSplitPhaseItemsInPrices();
 
-  const { hasNextBillingPhase } = useHasNextBillingPhase();
-  const { nextPlan } = useNextPlan();
-  const { nextBillingSeats } = useNextBillingSeats();
   const { nextBillingPhase } = useNextBillingPhase();
-  const nextInterval =
-    splitedPhaseItemsInPrices?.nextBasePrice?.recurringInterval;
+  const { nextPlan } = useNextPlan();
+  const { nextInterval } = useNextInterval();
   const nextResourceCreditPrice =
     splitedPhaseItemsInPrices.nextResourceCreditPrice;
   const subscriptionStatus = useSubscriptionStatus();
@@ -139,48 +102,54 @@ export const SettingsBillingSubscriptionInfo = ({
   const nextCreditsByPeriod = nextResourceCreditPrice?.creditAmount ?? null;
 
   const {
-    getIntervalLabel,
-    getIntervalLabelAsAdjectiveCapitalize,
-    getYearlyDiscountPercent,
-    confirmationModalSwitchToProMessage,
-    confirmationModalSwitchToOrganizationMessage,
-    confirmationModalSwitchToMonthlyMessage,
-    confirmationModalSwitchToYearlyMessage,
-    confirmationModalCancelPlanSwitchingMessage,
-    confirmationModalCancelIntervalSwitchingMessage,
     getBeautifiedRenewDate,
+    getBillingPlanLabel,
+    getIntervalLabelAsAdjectiveCapitalize,
   } = useBillingWording();
-
-  const [switchSubscriptionIntervalMutation] = useMutation(
-    SwitchSubscriptionIntervalDocument,
-  );
-
-  const [switchBillingPlan] = useMutation(SwitchBillingPlanDocument);
-
-  const [cancelSwitchBillingInterval] = useMutation(
-    CancelSwitchBillingIntervalDocument,
-  );
-
-  const [cancelSwitchBillingPlan] = useMutation(
-    CancelSwitchBillingPlanDocument,
-  );
+  const { getBillingSubscriptionChangeWording } =
+    useBillingSubscriptionChangeWording();
+  const {
+    applyBillingSubscriptionChange,
+    isApplyingBillingSubscriptionChange,
+  } = useApplyBillingSubscriptionChange();
 
   const [cancelSwitchResourceCreditPrice] = useMutation(
     CancelSwitchResourceCreditPriceDocument,
   );
 
-  const setCurrentWorkspace = useSetAtomState(currentWorkspaceState);
+  const currentWorkspaceMembers = useAtomStateValue(
+    currentWorkspaceMembersState,
+  );
 
   const isTrialPeriod = subscriptionStatus === SubscriptionStatus.Trialing;
+  const shouldUpdatePayment = isSubscriptionPaymentOverdue(subscriptionStatus);
+
+  const scheduledCancellationDate = currentBillingSubscription.cancelAt;
+  const isCancellationScheduled =
+    currentBillingSubscription.status !== SubscriptionStatus.Canceled &&
+    isDefined(scheduledCancellationDate);
+  const scheduledCancellationDateLabel = isDefined(scheduledCancellationDate)
+    ? beautifyExactDate(scheduledCancellationDate)
+    : undefined;
 
   const canSwitchSubscription =
-    subscriptionStatus !== SubscriptionStatus.PastDue;
+    subscriptionStatus !== SubscriptionStatus.PastDue &&
+    !isCancellationScheduled;
 
   const { endTrialPeriod, isLoading: isEndTrialPeriodLoading } =
     useEndSubscriptionTrialPeriod();
 
-  const { [PermissionFlagType.WORKSPACE]: hasPermissionToEndTrialPeriod } =
-    usePermissionFlagMap();
+  const billingHasPaymentMethod = useAtomStateValue(
+    billingHasPaymentMethodSelector,
+  );
+
+  const startSubscriptionAfterPaymentMethodAdded = async () => {
+    await endTrialPeriod({ skipPaymentMethodRedirect: true });
+  };
+
+  const hasPermissionToEndTrialPeriod = useHasPermissionFlag(
+    PermissionFlagType.WORKSPACE,
+  );
 
   const {
     seats,
@@ -193,466 +162,401 @@ export const SettingsBillingSubscriptionInfo = ({
   const formatCentsToDisplay = (cents: number | null | undefined) =>
     isDefined(cents) ? formatNumber(cents / 100, { decimals: 2 }) : undefined;
 
-  const perSeatUnit = isMonthlyPlan ? t`mo` : t`yr`;
-  const totalIntervalWord = getIntervalLabel(isMonthlyPlan);
-  const creditsIntervalAdjective =
-    getIntervalLabelAsAdjectiveCapitalize(isMonthlyPlan);
-
-  const perSeatPriceDisplay = formatCentsToDisplay(perSeatAmountCents);
-
-  const seatsInlinePrice =
-    isDefined(seats) && isDefined(perSeatPriceDisplay)
-      ? t`${seats} × $${perSeatPriceDisplay} / seat / ${perSeatUnit}`
+  const formatBillingPeriodCentsToMonthlyDisplay = (
+    cents: number | null | undefined,
+  ) =>
+    isDefined(cents)
+      ? formatNumber(
+          (currentInterval === SubscriptionInterval.Year ? cents / 12 : cents) /
+            100,
+          { decimals: 2 },
+        )
       : undefined;
 
-  const totalDisplay = formatCentsToDisplay(totalCents);
-  const seatsSubtotalDisplay = formatCentsToDisplay(seatsSubtotalCents);
-  const creditsSubtotalDisplay = formatCentsToDisplay(creditsSubtotalCents);
+  const perSeatPriceDisplay = formatCentsToDisplay(perSeatAmountCents);
+  const displayedPerSeatPrice =
+    formatBillingPeriodCentsToMonthlyDisplay(perSeatAmountCents);
+
+  const totalDisplay = formatBillingPeriodCentsToMonthlyDisplay(totalCents);
+  const seatsSubtotalDisplay =
+    formatBillingPeriodCentsToMonthlyDisplay(seatsSubtotalCents);
+  const creditsSubtotalDisplay =
+    formatBillingPeriodCentsToMonthlyDisplay(creditsSubtotalCents);
 
   const totalRenewDate = isDefined(currentBillingSubscription.currentPeriodEnd)
     ? getBeautifiedRenewDate()
     : undefined;
+  const displayedSubscriptionDate = isCancellationScheduled
+    ? scheduledCancellationDateLabel
+    : totalRenewDate;
+  const subscriptionDateLabel = isCancellationScheduled
+    ? t`End date`
+    : t`Renewal date`;
 
-  const totalBreakdownText =
-    isDefined(seatsSubtotalDisplay) && isDefined(creditsSubtotalDisplay)
-      ? t`$${seatsSubtotalDisplay} seats + $${creditsSubtotalDisplay} credits`
+  const isSendInvoice = isSendInvoiceBillingSubscription(
+    currentBillingSubscription.collectionMethod,
+  );
+
+  const subscriptionDescription =
+    isCancellationScheduled && isDefined(scheduledCancellationDateLabel)
+      ? t`Your subscription is scheduled to end on ${scheduledCancellationDateLabel}. You will keep access until then`
+      : isDefined(totalRenewDate)
+        ? isSendInvoice
+          ? t`Next invoice ${totalRenewDate}. Invoice amount may vary if you add members or credits between periods`
+          : t`Next charge ${totalRenewDate}. Invoice amount may vary if you add members or credits between periods`
+        : t`Invoice amount may vary if you add members or credits between periods`;
+
+  const billingPlanLabel = getBillingPlanLabel(currentPlan.planKey);
+  const planLabel = t`${billingPlanLabel} plan`;
+  const intervalUnit =
+    currentInterval === SubscriptionInterval.Month ? t`month` : t`year`;
+  const startSubscriptionSubtitle = isSendInvoice
+    ? t`We will activate your ${planLabel} and email your invoice now. Do you want to proceed?`
+    : isDefined(perSeatPriceDisplay)
+      ? t`We will activate your $${perSeatPriceDisplay}/user/${intervalUnit} ${planLabel}. Do you want to proceed?`
+      : t`We will activate your ${planLabel}. Do you want to proceed?`;
+
+  const statusDescriptor = (() => {
+    if (isCancellationScheduled) {
+      return {
+        label: t`Ending`,
+        tone: 'orange' as const,
+      };
+    }
+
+    switch (currentBillingSubscription.status) {
+      case SubscriptionStatus.Active:
+        return { label: t`Active`, tone: 'blue' as const };
+      case SubscriptionStatus.Trialing:
+        return { label: t`Trial`, tone: 'sky' as const };
+      case SubscriptionStatus.PastDue:
+        return { label: t`Past due`, tone: 'red' as const };
+      case SubscriptionStatus.Canceled:
+        return { label: t`Canceled`, tone: 'gray' as const };
+      case SubscriptionStatus.Incomplete:
+        return { label: t`Incomplete`, tone: 'orange' as const };
+      case SubscriptionStatus.IncompleteExpired:
+        return { label: t`Incomplete expired`, tone: 'gray' as const };
+      case SubscriptionStatus.Paused:
+        return { label: t`Paused`, tone: 'gray' as const };
+      case SubscriptionStatus.Unpaid:
+        return { label: t`Unpaid`, tone: 'red' as const };
+      default:
+        return { label: t`Unknown`, tone: 'gray' as const };
+    }
+  })();
+
+  const currentIntervalLabel = getIntervalLabelAsAdjectiveCapitalize(
+    currentInterval === SubscriptionInterval.Month,
+  );
+
+  const seatsSubtotalValue = isDefined(seatsSubtotalDisplay)
+    ? `$${seatsSubtotalDisplay}`
+    : '-';
+  const seatCountLabel = seats === 1 ? t`seat` : t`seats`;
+  const seatsSubtotalDetails =
+    isDefined(seats) && isDefined(displayedPerSeatPrice)
+      ? t`(${seats} ${seatCountLabel} × $${displayedPerSeatPrice})`
       : undefined;
-  const totalNextChargeText = isDefined(totalRenewDate)
-    ? t`next charge ${totalRenewDate}`
+
+  const creditsSubtotalValue = isDefined(creditsSubtotalDisplay)
+    ? `$${creditsSubtotalDisplay}`
+    : '-';
+  const currentCreditsByPeriodDisplay = isDefined(currentCreditsByPeriod)
+    ? formatNumber(currentCreditsByPeriod, { decimals: 2 })
     : undefined;
-  const totalHelperText = isDefined(totalBreakdownText)
-    ? [totalBreakdownText, totalNextChargeText].filter(isDefined).join(' · ')
+  const creditsSubtotalDetails = isDefined(currentCreditsByPeriodDisplay)
+    ? currentInterval === SubscriptionInterval.Month
+      ? t`(${currentCreditsByPeriodDisplay} credits/month)`
+      : t`(${currentCreditsByPeriodDisplay} credits/year)`
+    : undefined;
+  const totalValue = isDefined(totalDisplay) ? `$${totalDisplay}` : '-';
+  const totalIntervalSubtitle = isDefined(totalDisplay)
+    ? currentInterval === SubscriptionInterval.Month
+      ? t`/month`
+      : t`/month billed annually`
+    : undefined;
+  const scheduledChangeStartDate = isDefined(nextBillingPhase?.start_date)
+    ? beautifyExactDate(nextBillingPhase.start_date * 1000)
     : undefined;
 
-  const yearlyDiscountPercent = getYearlyDiscountPercent();
+  const canDisplaySwitchToYearlyAction =
+    !isCancellationScheduled &&
+    !shouldUpdatePayment &&
+    isMonthlyPlan &&
+    (!nextInterval || currentInterval === nextInterval);
+  const canDisplaySwitchToMonthlyAction =
+    !isCancellationScheduled &&
+    !shouldUpdatePayment &&
+    isYearlyPlan &&
+    (!nextInterval || currentInterval === nextInterval);
+  const hasPlanUpgrade = isNonEmptyArray(currentPlan.upgradePlanKeys);
+  const hasPlanSwitch =
+    hasPlanUpgrade || isNonEmptyArray(currentPlan.downgradePlanKeys);
+  const canComparePlans =
+    hasPlanSwitch && (!nextPlan || currentPlan.planKey === nextPlan.planKey);
+  const canCancelIntervalSwitch =
+    isDefined(nextInterval) && currentInterval !== nextInterval;
+  const canStartSubscription = isTrialPeriod && hasPermissionToEndTrialPeriod;
+  const canCancelPlanSwitch =
+    isDefined(nextPlan) && currentPlan.planKey !== nextPlan.planKey;
 
-  const switchToYearlyTitle =
-    yearlyDiscountPercent > 0
-      ? t`Switch to Yearly · save ${yearlyDiscountPercent}%`
-      : t`Switch to Yearly`;
+  const scheduledChangeItems = [
+    ...(nextPlan && currentPlan.planKey !== nextPlan.planKey
+      ? [
+          {
+            Icon: IconTag,
+            label: t`Plan`,
+            value: getBillingPlanLabel(nextPlan.planKey),
+          },
+        ]
+      : []),
+    ...(nextInterval && currentInterval !== nextInterval
+      ? [
+          {
+            Icon: IconClockPlay,
+            label: t`Billing interval`,
+            value: getIntervalLabelAsAdjectiveCapitalize(
+              nextInterval === SubscriptionInterval.Month,
+            ),
+          },
+        ]
+      : []),
+    ...(isDefined(nextCreditsByPeriod) &&
+    currentCreditsByPeriod !== nextCreditsByPeriod
+      ? [
+          {
+            Icon: IconCoins,
+            label: t`Credits`,
+            value: t`${formatNumber(nextCreditsByPeriod, {
+              decimals: 2,
+            })} credits`,
+          },
+        ]
+      : []),
+  ];
 
-  // Loading states to avoid race conditions on actions
-  const [isSwitchingInterval, setIsSwitchingInterval] = useState(false);
-  const [isSwitchingPlan, setIsSwitchingPlan] = useState(false);
-  const [isCancellingPlanSwitch, setIsCancellingPlanSwitch] = useState(false);
-  const [isCancellingIntervalSwitch, setIsCancellingIntervalSwitch] =
-    useState(false);
+  const personalAiUsageCell =
+    SETTINGS_BILLING_PERSONAL_AI_USAGE_COMPARISON_ROW.plans[
+      currentPlan.planKey
+    ];
+
+  const resourceCreditUsage = isGetResourceCreditUsageQueryLoaded
+    ? getResourceCreditUsage()
+    : undefined;
+  const workspaceCreditsPerSeatPerMonth =
+    isDefined(resourceCreditUsage) &&
+    resourceCreditUsage.workspaceCreditsSeats > 0
+      ? resourceCreditUsage.workspaceCreditsGrantedForSeats /
+        resourceCreditUsage.workspaceCreditsSeats /
+        (currentInterval === SubscriptionInterval.Year ? 12 : 1)
+      : 0;
+  const workspaceCreditsPerSeatPerMonthDisplay = formatNumber(
+    workspaceCreditsPerSeatPerMonth,
+    { decimals: 2 },
+  );
+
+  const includedPerSeatItems = [
+    ...(currentBillingSubscription.hasUserCredits &&
+    personalAiUsageCell.kind === 'text'
+      ? [
+          {
+            Icon: IconSparkles,
+            label: t`Personal AI usage`,
+            value: i18n._(personalAiUsageCell.text),
+          },
+        ]
+      : []),
+    ...(workspaceCreditsPerSeatPerMonth > 0
+      ? [
+          {
+            Icon: IconCoins,
+            label: t`Workspace credits`,
+            value: plural(workspaceCreditsPerSeatPerMonth, {
+              one: `${workspaceCreditsPerSeatPerMonthDisplay} credit/month`,
+              other: `${workspaceCreditsPerSeatPerMonthDisplay} credits/month`,
+            }),
+          },
+        ]
+      : []),
+  ];
+
   const [isCancellingMeteredSwitch, setIsCancellingMeteredSwitch] =
     useState(false);
 
-  const isAnyActionLoading = useMemo(
-    () =>
-      isSwitchingInterval ||
-      isSwitchingPlan ||
-      isCancellingPlanSwitch ||
-      isCancellingIntervalSwitch ||
-      isCancellingMeteredSwitch ||
-      isEndTrialPeriodLoading,
-    [
-      isSwitchingInterval,
-      isSwitchingPlan,
-      isCancellingPlanSwitch,
-      isCancellingIntervalSwitch,
-      isCancellingMeteredSwitch,
-      isEndTrialPeriodLoading,
-    ],
-  );
+  const isAnyActionLoading =
+    isApplyingBillingSubscriptionChange ||
+    isCancellingMeteredSwitch ||
+    isEndTrialPeriodLoading;
 
-  const refreshWorkspace = ({
-    currentBillingSubscription,
-    billingSubscriptions,
-  }: Pick<
-    CurrentWorkspace,
-    'currentBillingSubscription' | 'billingSubscriptions'
-  >) => {
-    setCurrentWorkspace({
-      ...currentWorkspace,
-      currentBillingSubscription,
-      billingSubscriptions,
+  const isSubscriptionActionDisabled =
+    !canSwitchSubscription || isAnyActionLoading;
+
+  const applyBillingUpdate = (
+    billingUpdate: Parameters<typeof applyCurrentWorkspaceBillingUpdate>[0],
+  ) => {
+    applyCurrentWorkspaceBillingUpdate(billingUpdate, {
+      onBillingUpdateApplied: refetchResourceCreditUsage,
     });
-    refetchResourceCreditUsage();
   };
 
-  const switchInterval = async () => {
-    if (isAnyActionLoading || isSwitchingInterval) return;
-    setIsSwitchingInterval(true);
-    try {
-      const { success } = await endTrialPeriodIfNeeded();
-      if (success === false) {
-        return;
-      }
-      const { data } = await switchSubscriptionIntervalMutation();
-
-      const beautifiedRenewDate = getBeautifiedRenewDate();
-      const isCurrentMonth =
-        currentBillingSubscription.interval === SubscriptionInterval.Month;
-      const message = isCurrentMonth
-        ? t`Subscription has been switched to Yearly.`
-        : t`Subscription will be switch to Monthly the ${beautifiedRenewDate}.`;
-
-      if (
-        isDefined(data?.switchSubscriptionInterval.currentBillingSubscription)
-      ) {
-        refreshWorkspace(data.switchSubscriptionInterval);
-      }
-      enqueueSuccessSnackBar({ message });
-    } catch {
-      enqueueErrorSnackBar({
-        message: t`Error while switching subscription.`,
-      });
-    } finally {
-      setIsSwitchingInterval(false);
+  const runBillingAction = async ({
+    action,
+    getErrorMessage,
+    getSuccessMessage,
+    isLoading,
+    setIsLoading,
+  }: {
+    action: () => Promise<void>;
+    getErrorMessage: () => string;
+    getSuccessMessage: () => string;
+    isLoading: boolean;
+    setIsLoading: (isLoading: boolean) => void;
+  }) => {
+    if (isAnyActionLoading || isLoading) {
+      return;
     }
-  };
 
-  const endTrialPeriodIfNeeded = async () => {
-    if (currentBillingSubscription.status === SubscriptionStatus.Trialing) {
-      return await endTrialPeriod();
-    }
-    return { success: true };
-  };
-
-  const switchPlan = async () => {
-    if (isAnyActionLoading || isSwitchingPlan) return;
-    setIsSwitchingPlan(true);
+    setIsLoading(true);
     try {
-      const { success } = await endTrialPeriodIfNeeded();
-      if (success === false) {
-        return;
+      await action();
+
+      enqueueToast({ status: 'success', children: getSuccessMessage() });
+    } catch (error) {
+      enqueueToast({ status: 'error', children: getErrorMessage() });
+
+      if (!CombinedGraphQLErrors.is(error)) {
+        throw error;
       }
-      const { data } = await switchBillingPlan();
-      if (isDefined(data?.switchBillingPlan.currentBillingSubscription)) {
-        refreshWorkspace(data.switchBillingPlan);
-      }
-      const beautifiedRenewDate = getBeautifiedRenewDate();
-      enqueueSuccessSnackBar({
-        message:
-          oppositPlan === BillingPlanKey.ENTERPRISE
-            ? t`Subscription has been switched to ${oppositPlan} Plan.`
-            : t`Subscription will be switched to ${oppositPlan} Plan the ${beautifiedRenewDate}.`,
-      });
-    } catch {
-      enqueueErrorSnackBar({
-        message: t`Error while switching subscription to ${oppositPlan} Plan.`,
-      });
     } finally {
-      setIsSwitchingPlan(false);
-    }
-  };
-
-  const cancelPlanSwitching = async () => {
-    if (isAnyActionLoading || isCancellingPlanSwitch) return;
-    setIsCancellingPlanSwitch(true);
-    try {
-      const { data } = await cancelSwitchBillingPlan();
-
-      if (isDefined(data?.cancelSwitchBillingPlan.currentBillingSubscription)) {
-        refreshWorkspace(data.cancelSwitchBillingPlan);
-      }
-
-      enqueueSuccessSnackBar({
-        message: t`Plan switching has been cancelled.`,
-      });
-    } catch {
-      enqueueErrorSnackBar({
-        message: t`Error while cancelling plan switching.`,
-      });
-    } finally {
-      setIsCancellingPlanSwitch(false);
-    }
-  };
-
-  const cancelIntervalSwitching = async () => {
-    if (isAnyActionLoading || isCancellingIntervalSwitch) return;
-    setIsCancellingIntervalSwitch(true);
-    try {
-      const { data } = await cancelSwitchBillingInterval();
-      if (
-        isDefined(data?.cancelSwitchBillingInterval.currentBillingSubscription)
-      ) {
-        refreshWorkspace(data.cancelSwitchBillingInterval);
-      }
-      enqueueSuccessSnackBar({
-        message: t`Interval switching has been cancelled.`,
-      });
-    } catch {
-      enqueueErrorSnackBar({
-        message: t`Error while cancelling interval switching.`,
-      });
-    } finally {
-      setIsCancellingIntervalSwitch(false);
+      setIsLoading(false);
     }
   };
 
   const cancelResourceCreditSwitching = async () => {
-    if (isAnyActionLoading || isCancellingMeteredSwitch) return;
-    setIsCancellingMeteredSwitch(true);
-    try {
-      const { data } = await cancelSwitchResourceCreditPrice();
+    await runBillingAction({
+      action: async () => {
+        const { data } = await cancelSwitchResourceCreditPrice();
 
-      if (
-        isDefined(
-          data?.cancelSwitchResourceCreditPrice?.currentBillingSubscription,
-        )
-      ) {
-        refreshWorkspace(data.cancelSwitchResourceCreditPrice);
-      }
-
-      enqueueSuccessSnackBar({
-        message: t`Credit pack switching has been cancelled.`,
-      });
-    } catch {
-      enqueueErrorSnackBar({
-        message: t`Error while cancelling credit pack switching.`,
-      });
-    } finally {
-      setIsCancellingMeteredSwitch(false);
-    }
+        if (
+          isDefined(
+            data?.cancelSwitchResourceCreditPrice?.currentBillingSubscription,
+          )
+        ) {
+          applyBillingUpdate(data.cancelSwitchResourceCreditPrice);
+        }
+      },
+      getErrorMessage: () => t`Error while cancelling credit pack switching.`,
+      getSuccessMessage: () => t`Credit pack switching has been cancelled.`,
+      isLoading: isCancellingMeteredSwitch,
+      setIsLoading: setIsCancellingMeteredSwitch,
+    });
   };
 
   return (
-    <Section>
-      <H2Title title={t`Subscription`} description={t`About my subscription`} />
-      <SubscriptionInfoContainer>
-        <SubscriptionInfoHeaderRow show={hasNextBillingPhase} />
-        <SubscriptionInfoRowContainer
-          label={t`Plan`}
-          Icon={IconTag}
-          currentValue={
-            <PlansTags
-              plan={currentPlan.planKey}
-              isTrialPeriod={isTrialPeriod}
-            />
-          }
-          nextValue={
-            nextPlan ? (
-              <PlansTags
-                plan={nextPlan.planKey}
-                isTrialPeriod={isTrialPeriod}
-              />
-            ) : undefined
-          }
-        />
-        <SubscriptionInfoRowContainer
-          label={t`Billing interval`}
-          Icon={IconCalendarEvent}
-          currentValue={getIntervalLabelAsAdjectiveCapitalize(
-            currentInterval === SubscriptionInterval.Month,
-          )}
-          nextValue={
-            nextInterval
-              ? getIntervalLabelAsAdjectiveCapitalize(
-                  nextInterval === SubscriptionInterval.Month,
-                )
-              : undefined
-          }
-        />
-        {currentBillingSubscription.currentPeriodEnd && (
-          <SubscriptionInfoRowContainer
-            label={t`Renewal date`}
-            Icon={IconCalendarRepeat}
-            currentValue={getBeautifiedRenewDate()}
-            nextValue={
-              nextBillingPhase
-                ? beautifyExactDate(nextBillingPhase.end_date * 1000)
-                : undefined
+    <Section.Root>
+      <Section.Header
+        title={t`Subscription`}
+        description={subscriptionDescription}
+      />
+      <SettingsBillingSubscriptionInfoCard
+        canDisplaySwitchToMonthlyAction={canDisplaySwitchToMonthlyAction}
+        canDisplaySwitchToYearlyAction={canDisplaySwitchToYearlyAction}
+        creditsSubtotalDetails={creditsSubtotalDetails}
+        creditsSubtotalValue={creditsSubtotalValue}
+        currentIntervalLabel={currentIntervalLabel}
+        displayedSubscriptionDate={displayedSubscriptionDate}
+        headerActions={
+          <SettingsBillingSubscriptionInfoCardHeaderActions
+            canCancelIntervalSwitch={canCancelIntervalSwitch}
+            canCancelPlanSwitch={canCancelPlanSwitch}
+            canComparePlans={canComparePlans}
+            canStartSubscription={canStartSubscription}
+            isComparePlansActionPrimary={hasPlanUpgrade && !isTrialPeriod}
+            isCancellationScheduled={isCancellationScheduled}
+            isEndTrialPeriodDisabled={
+              isEndTrialPeriodLoading || isAnyActionLoading
             }
+            isSubscriptionActionDisabled={isSubscriptionActionDisabled}
+            isManageBillingDisabled={isManageBillingDisabled}
+            isUpdatePaymentDisabled={isUpdatePaymentDisabled}
+            onCancelIntervalSwitch={() =>
+              openDialog(BILLING_MODAL_IDS.cancelSwitchBillingInterval)
+            }
+            onCancelPlanSwitch={() =>
+              openDialog(BILLING_MODAL_IDS.cancelSwitchBillingPlan)
+            }
+            onEndTrialPeriod={() =>
+              openDialog(BILLING_MODAL_IDS.endTrialPeriod)
+            }
+            onManageBilling={onManageBilling}
+            onUpdatePayment={onUpdatePayment}
+            shouldUpdatePayment={shouldUpdatePayment}
           />
-        )}
-        <SubscriptionInfoRowContainer
-          label={t`Seats`}
-          Icon={IconUsers}
-          currentValue={seatsInlinePrice ?? seats}
-          nextValue={nextBillingSeats}
-        />
-        <SubscriptionInfoRowContainer
-          label={t`${creditsIntervalAdjective} credits`}
-          Icon={IconCoins}
-          currentValue={
-            isDefined(currentCreditsByPeriod)
-              ? formatNumber(currentCreditsByPeriod, { decimals: 2 })
-              : undefined
-          }
-          nextValue={
-            isDefined(nextCreditsByPeriod)
-              ? formatNumber(nextCreditsByPeriod, { decimals: 2 })
-              : undefined
-          }
-        />
-        {isDefined(totalCents) && (
-          <>
-            <HorizontalSeparator
-              noMargin
-              color={themeCssVariables.background.tertiary}
-            />
-            <StyledTotalGroup>
-              <SubscriptionInfoRowContainer
-                label={t`Total per ${totalIntervalWord}`}
-                Icon={IconSum}
-                currentValue={`$${totalDisplay}`}
-              />
-              {isDefined(totalHelperText) && <Label>{totalHelperText}</Label>}
-            </StyledTotalGroup>
-          </>
-        )}
-      </SubscriptionInfoContainer>
-      <StyledSwitchButtonContainer>
-        {isTrialPeriod && hasPermissionToEndTrialPeriod && (
-          <Button
-            Icon={IconArrowUp}
-            title={t`Subscribe Now`}
-            variant="secondary"
-            onClick={() => openModal(END_TRIAL_PERIOD_MODAL_ID)}
-            disabled={isEndTrialPeriodLoading || isAnyActionLoading}
-          />
-        )}
-        {nextInterval && currentInterval !== nextInterval && (
-          <Button
-            Icon={IconCircleX}
-            title={t`Cancel interval switching`}
-            variant="secondary"
-            onClick={() => openModal(CANCEL_SWITCH_BILLING_INTERVAL_MODAL_ID)}
-            disabled={!canSwitchSubscription || isAnyActionLoading}
-          />
-        )}
-        {isMonthlyPlan &&
-          (!nextInterval || currentInterval === nextInterval) && (
-            <Button
-              Icon={IconArrowUp}
-              title={switchToYearlyTitle}
-              variant="secondary"
-              onClick={() =>
-                openModal(SWITCH_BILLING_INTERVAL_TO_YEARLY_MODAL_ID)
-              }
-              disabled={!canSwitchSubscription || isAnyActionLoading}
-            />
-          )}
-        {isYearlyPlan &&
-          (!nextInterval || currentInterval === nextInterval) && (
-            <Button
-              Icon={IconArrowUp}
-              title={t`Switch to Monthly`}
-              variant="secondary"
-              onClick={() =>
-                openModal(SWITCH_BILLING_INTERVAL_TO_MONTHLY_MODAL_ID)
-              }
-              disabled={!canSwitchSubscription || isAnyActionLoading}
-            />
-          )}
-        {isProPlan &&
-          (!nextPlan || currentPlan.planKey === nextPlan.planKey) && (
-            <Button
-              Icon={IconArrowUp}
-              title={t`Switch to Organization`}
-              variant="secondary"
-              onClick={() =>
-                openModal(SWITCH_BILLING_PLAN_TO_ENTERPRISE_MODAL_ID)
-              }
-              disabled={!canSwitchSubscription || isAnyActionLoading}
-            />
-          )}
-        {isEnterprisePlan &&
-          (!nextPlan || currentPlan.planKey === nextPlan.planKey) && (
-            <Button
-              Icon={IconArrowDown}
-              title={t`Switch to Pro`}
-              variant="secondary"
-              onClick={() => openModal(SWITCH_BILLING_PLAN_TO_PRO_MODAL_ID)}
-              disabled={!canSwitchSubscription || isAnyActionLoading}
-            />
-          )}
-        {nextPlan && currentPlan.planKey !== nextPlan.planKey && (
-          <Button
-            Icon={IconCircleX}
-            title={t`Cancel plan switching`}
-            variant="secondary"
-            onClick={() => openModal(CANCEL_SWITCH_BILLING_PLAN_MODAL_ID)}
-            disabled={!canSwitchSubscription || isAnyActionLoading}
-          />
-        )}
-        {nextResourceCreditPrice &&
-          currentCreditsByPeriod !== nextCreditsByPeriod && (
-            <Button
-              Icon={IconCircleX}
-              title={t`Cancel credit pack switching`}
-              variant="secondary"
-              onClick={() => openModal(CANCEL_SWITCH_METERED_PRICE_MODAL_ID)}
-              disabled={!canSwitchSubscription || isAnyActionLoading}
-            />
-          )}
-      </StyledSwitchButtonContainer>
-      <ConfirmationModal
-        modalInstanceId={SWITCH_BILLING_INTERVAL_TO_YEARLY_MODAL_ID}
-        title={t`Change to Yearly?`}
-        subtitle={confirmationModalSwitchToYearlyMessage()}
-        onConfirmClick={switchInterval}
-        confirmButtonText={t`Confirm`}
-        confirmButtonAccent={'blue'}
-        loading={isSwitchingInterval}
+        }
+        includedPerSeatItems={includedPerSeatItems}
+        isSubscriptionActionDisabled={isSubscriptionActionDisabled}
+        onSwitchToMonthly={() =>
+          openDialog(BILLING_MODAL_IDS.switchBillingIntervalToMonthly)
+        }
+        onSwitchToYearly={() =>
+          openDialog(BILLING_MODAL_IDS.switchBillingIntervalToYearly)
+        }
+        planLabel={planLabel}
+        scheduledChangeItems={scheduledChangeItems}
+        scheduledChangeStartDate={scheduledChangeStartDate}
+        seatsSubtotalDetails={seatsSubtotalDetails}
+        seatsSubtotalValue={seatsSubtotalValue}
+        statusDescriptor={statusDescriptor}
+        subscriptionDateLabel={subscriptionDateLabel}
+        totalIntervalSubtitle={totalIntervalSubtitle}
+        totalValue={totalValue}
+        totalWorkspaceMembersCount={currentWorkspace.workspaceMembersCount}
+        workspaceMemberDefaultName={t`Workspace member`}
+        workspaceMembers={currentWorkspaceMembers}
       />
-      <ConfirmationModal
-        modalInstanceId={SWITCH_BILLING_INTERVAL_TO_MONTHLY_MODAL_ID}
-        title={t`Change to Monthly?`}
-        subtitle={confirmationModalSwitchToMonthlyMessage()}
-        onConfirmClick={switchInterval}
-        confirmButtonText={t`Confirm`}
-        confirmButtonAccent="blue"
-        loading={isSwitchingInterval}
+      <SettingsBillingSubscriptionInfoModals
+        billingHasPaymentMethod={billingHasPaymentMethod}
+        cancelIntervalSwitchingWording={getBillingSubscriptionChangeWording({
+          change: { type: 'CANCEL_INTERVAL_SWITCH' },
+        })}
+        cancelPlanSwitchingWording={getBillingSubscriptionChangeWording({
+          change: { type: 'CANCEL_PLAN_SWITCH' },
+        })}
+        isApplyingSubscriptionChange={isApplyingBillingSubscriptionChange}
+        isCancellingMeteredSwitch={isCancellingMeteredSwitch}
+        isEndTrialPeriodLoading={isEndTrialPeriodLoading}
+        onCancelIntervalSwitching={() =>
+          applyBillingSubscriptionChange({ type: 'CANCEL_INTERVAL_SWITCH' })
+        }
+        onCancelPlanSwitching={() =>
+          applyBillingSubscriptionChange({ type: 'CANCEL_PLAN_SWITCH' })
+        }
+        onCancelResourceCreditSwitching={cancelResourceCreditSwitching}
+        onEndTrialPeriod={endTrialPeriod}
+        onPaymentMethodAdded={startSubscriptionAfterPaymentMethodAdded}
+        onSwitchInterval={() =>
+          applyBillingSubscriptionChange({
+            type: 'SWITCH_INTERVAL',
+            targetInterval: isMonthlyPlan
+              ? SubscriptionInterval.Year
+              : SubscriptionInterval.Month,
+          })
+        }
+        startSubscriptionSubtitle={startSubscriptionSubtitle}
+        switchToMonthlyWording={getBillingSubscriptionChangeWording({
+          change: {
+            type: 'SWITCH_INTERVAL',
+            targetInterval: SubscriptionInterval.Month,
+          },
+        })}
+        switchToYearlyWording={getBillingSubscriptionChangeWording({
+          change: {
+            type: 'SWITCH_INTERVAL',
+            targetInterval: SubscriptionInterval.Year,
+          },
+        })}
       />
-      <ConfirmationModal
-        modalInstanceId={CANCEL_SWITCH_BILLING_INTERVAL_MODAL_ID}
-        title={t`Cancel interval switching?`}
-        subtitle={confirmationModalCancelIntervalSwitchingMessage()}
-        onConfirmClick={cancelIntervalSwitching}
-        confirmButtonText={t`Confirm`}
-        confirmButtonAccent="blue"
-        loading={isCancellingIntervalSwitch}
-      />
-      <ConfirmationModal
-        modalInstanceId={SWITCH_BILLING_PLAN_TO_ENTERPRISE_MODAL_ID}
-        title={t`Change to Organization Plan?`}
-        subtitle={confirmationModalSwitchToOrganizationMessage()}
-        onConfirmClick={switchPlan}
-        confirmButtonText={t`Confirm`}
-        confirmButtonAccent="blue"
-        loading={isSwitchingPlan}
-      />
-      <ConfirmationModal
-        modalInstanceId={SWITCH_BILLING_PLAN_TO_PRO_MODAL_ID}
-        title={t`Change to Pro Plan?`}
-        subtitle={confirmationModalSwitchToProMessage()}
-        onConfirmClick={switchPlan}
-        confirmButtonText={t`Confirm`}
-        confirmButtonAccent="blue"
-        loading={isSwitchingPlan}
-      />
-      <ConfirmationModal
-        modalInstanceId={CANCEL_SWITCH_BILLING_PLAN_MODAL_ID}
-        title={t`Cancel plan switching?`}
-        subtitle={confirmationModalCancelPlanSwitchingMessage()}
-        onConfirmClick={cancelPlanSwitching}
-        confirmButtonText={t`Confirm`}
-        confirmButtonAccent="blue"
-        loading={isCancellingPlanSwitch}
-      />
-      <ConfirmationModal
-        modalInstanceId={END_TRIAL_PERIOD_MODAL_ID}
-        title={t`Start Your Subscription`}
-        subtitle={t`We will activate your paid plan. Do you want to proceed?`}
-        onConfirmClick={endTrialPeriod}
-        confirmButtonText={t`Confirm`}
-        confirmButtonAccent="blue"
-        loading={isEndTrialPeriodLoading}
-      />
-      <ConfirmationModal
-        modalInstanceId={CANCEL_SWITCH_METERED_PRICE_MODAL_ID}
-        title={t`Cancel credit pack switching?`}
-        subtitle={t`You have scheduled a credit pack change. Do you want to cancel it?`}
-        onConfirmClick={cancelResourceCreditSwitching}
-        confirmButtonText={t`Confirm`}
-        confirmButtonAccent="blue"
-        loading={isCancellingMeteredSwitch}
-      />
-    </Section>
+    </Section.Root>
   );
 };

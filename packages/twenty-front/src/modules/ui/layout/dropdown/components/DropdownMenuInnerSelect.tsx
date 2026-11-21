@@ -1,17 +1,15 @@
-import { Dropdown } from '@/ui/layout/dropdown/components/Dropdown';
+import { DropdownRoot } from '@/ui/layout/dropdown/components/DropdownRoot';
 import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
-import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
-import { useCloseDropdown } from '@/ui/layout/dropdown/hooks/useCloseDropdown';
-
 import { styled } from '@linaria/react';
-import { useContext } from 'react';
+import { isDefined } from 'twenty-shared/utils';
+import { Dropdown } from 'twenty-ui/components/navigation';
 import { IconChevronDown } from 'twenty-ui/icon';
-import { type SelectOption } from 'twenty-ui/input';
-import { MenuItemSelect } from 'twenty-ui/navigation';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { type SelectOption } from 'twenty-ui/primitives/input';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
 
 const StyledDropdownMenuInnerSelectDropdownButton = styled.div`
   align-items: center;
+  border-radius: ${themeCssVariables.border.radius.sm};
   box-sizing: border-box;
   color: ${themeCssVariables.font.color.secondary};
   cursor: pointer;
@@ -26,15 +24,26 @@ const StyledDropdownMenuInnerSelectDropdownButton = styled.div`
   padding-left: ${themeCssVariables.spacing[2]};
 
   padding-right: ${themeCssVariables.spacing[2]};
-  width: 100%;
+
+  @media (hover: hover) {
+    &:hover {
+      background: ${themeCssVariables.background.transparent.light};
+    }
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${themeCssVariables.color.blue};
+    outline-offset: -2px;
+  }
 `;
 
-export type DropdownMenuInnerSelectProps = {
+type DropdownMenuInnerSelectProps = {
   selectedOption: SelectOption;
   onChange: (value: SelectOption) => void;
   options: SelectOption[];
   dropdownId: string;
   widthInPixels?: number;
+  'aria-label': string;
 };
 
 export const DropdownMenuInnerSelect = ({
@@ -43,44 +52,59 @@ export const DropdownMenuInnerSelect = ({
   options,
   dropdownId,
   widthInPixels,
+  'aria-label': ariaLabel,
 }: DropdownMenuInnerSelectProps) => {
-  const { theme } = useContext(ThemeContext);
-  const { closeDropdown } = useCloseDropdown();
+  const theme = useTheme();
 
   return (
-    <Dropdown
-      clickableComponent={
-        <StyledDropdownMenuInnerSelectDropdownButton>
-          <span>{selectedOption.label}</span>
-          <IconChevronDown size={theme.icon.size.sm} />
-        </StyledDropdownMenuInnerSelectDropdownButton>
-      }
-      dropdownComponents={
-        <DropdownContent widthInPixels={widthInPixels}>
-          <DropdownMenuItemsContainer>
-            {options.map((selectOption) => (
-              <MenuItemSelect
-                key={`dropdown-menu-inner-select-item-${selectOption.value}`}
-                onClick={() => {
-                  onChange(selectOption);
-                  closeDropdown(dropdownId);
-                }}
-                text={selectOption.label}
-                disabled={selectOption.disabled}
-                selected={selectOption.value === selectedOption.value}
-              />
-            ))}
-          </DropdownMenuItemsContainer>
-        </DropdownContent>
-      }
+    <DropdownRoot
+      dropdownId={dropdownId}
+      type="picker"
       globalHotkeysConfig={{
         enableGlobalHotkeysWithModifiers: false,
         enableGlobalHotkeysConflictingWithKeyboard: false,
       }}
-      dropdownId={dropdownId}
-      dropdownOffset={{
-        x: 8,
-      }}
-    />
+    >
+      <Dropdown.Trigger
+        render={<StyledDropdownMenuInnerSelectDropdownButton />}
+        nativeButton={false}
+      >
+        <span>{selectedOption.label}</span>
+        <IconChevronDown size={theme.icon.size.sm} />
+      </Dropdown.Trigger>
+      <DropdownContent
+        width={widthInPixels}
+        side="bottom"
+        align="end"
+        alignOffset={-8}
+        aria-label={ariaLabel}
+      >
+        <Dropdown.SelectionGroup
+          aria-label={ariaLabel}
+          value={selectedOption.value}
+          onValueChange={(selectedValue) => {
+            const option = options.find(
+              (option) => option.value === selectedValue,
+            );
+
+            if (isDefined(option)) {
+              onChange(option);
+            }
+          }}
+        >
+          <Dropdown.Section>
+            {options.map((selectOption) => (
+              <Dropdown.OptionItem
+                key={`dropdown-menu-inner-select-item-${selectOption.value}`}
+                value={selectOption.value}
+                disabled={selectOption.disabled}
+              >
+                {selectOption.label}
+              </Dropdown.OptionItem>
+            ))}
+          </Dropdown.Section>
+        </Dropdown.SelectionGroup>
+      </DropdownContent>
+    </DropdownRoot>
   );
 };

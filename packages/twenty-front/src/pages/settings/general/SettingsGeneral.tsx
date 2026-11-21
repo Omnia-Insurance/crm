@@ -1,6 +1,7 @@
 import { useLingui } from '@lingui/react/macro';
 
 import { isMultiWorkspaceEnabledState } from '@/client-config/states/isMultiWorkspaceEnabledState';
+import { useIsLogConsoleAllowed } from '@/log-console/hooks/useIsLogConsoleAllowed';
 import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
 import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
 import { SettingsTabBar } from '@/settings/components/layout/SettingsTabBar';
@@ -9,19 +10,26 @@ import { SettingsWorkspaceDomainCard } from '@/settings/domains/components/Setti
 import { SettingsLogs } from '@/settings/event-logs/components/SettingsLogs';
 import { DeleteWorkspace } from '@/settings/profile/components/DeleteWorkspace';
 import { useHasPermissionFlag } from '@/settings/roles/hooks/useHasPermissionFlag';
+import { SettingsPrivacy } from '@/settings/privacy/components/SettingsPrivacy';
+import { useHasPrivacySettings } from '@/settings/privacy/hooks/useHasPrivacySettings';
 import { SettingsSecuritySettings } from '@/settings/security/components/SettingsSecuritySettings';
 import { NameField } from '@/settings/workspace/components/NameField';
 import { WorkspaceLogoUploader } from '@/settings/workspace/components/WorkspaceLogoUploader';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
-import { IconHistory, IconKey, IconSettings } from 'twenty-ui/icon';
-import { H2Title } from 'twenty-ui/typography';
-import { Section } from 'twenty-ui/layout';
+import { Section } from 'twenty-ui/components/layout';
+import {
+  IconHistory,
+  IconKey,
+  IconSettings2,
+  IconShield,
+} from 'twenty-ui/icon';
 import { PermissionFlagType } from '~/generated-metadata/graphql';
 
 const SETTINGS_GENERAL_TABS_INSTANCE_ID = 'settings-general-tabs';
 
 const GENERAL_TAB_GENERAL = 'general';
 const GENERAL_TAB_SECURITY = 'security';
+const GENERAL_TAB_PRIVACY = 'privacy';
 const GENERAL_TAB_LOGS = 'logs';
 
 export const SettingsGeneral = () => {
@@ -35,12 +43,26 @@ export const SettingsGeneral = () => {
     PermissionFlagType.SECURITY,
   );
 
+  const isLogConsoleAllowed = useIsLogConsoleAllowed();
+  const hasPrivacySettings = useHasPrivacySettings();
+
+  const privacyTabs = hasPrivacySettings
+    ? [{ id: GENERAL_TAB_PRIVACY, title: t`Privacy`, Icon: IconShield }]
+    : [];
+
   const tabs = [
-    { id: GENERAL_TAB_GENERAL, title: t`General`, Icon: IconSettings },
+    {
+      id: GENERAL_TAB_GENERAL,
+      title: t`General`,
+      Icon: IconSettings2,
+    },
     ...(hasSecurityPermission
       ? [
           { id: GENERAL_TAB_SECURITY, title: t`Security`, Icon: IconKey },
-          { id: GENERAL_TAB_LOGS, title: t`Logs`, Icon: IconHistory },
+          ...privacyTabs,
+          ...(isLogConsoleAllowed
+            ? []
+            : [{ id: GENERAL_TAB_LOGS, title: t`Logs`, Icon: IconHistory }]),
         ]
       : []),
   ];
@@ -55,28 +77,35 @@ export const SettingsGeneral = () => {
       return <SettingsSecuritySettings />;
     }
 
+    if (activeTabId === GENERAL_TAB_PRIVACY) {
+      return <SettingsPrivacy />;
+    }
+
     return (
       <>
-        <Section>
-          <H2Title title={t`Picture`} />
+        <Section.Root>
+          <Section.Header title={t`Picture`} />
           <WorkspaceLogoUploader />
-        </Section>
-        <Section>
-          <H2Title title={t`Name`} description={t`Name of your workspace`} />
+        </Section.Root>
+        <Section.Root>
+          <Section.Header
+            title={t`Name`}
+            description={t`Name of your workspace`}
+          />
           <NameField />
-        </Section>
+        </Section.Root>
         {isMultiWorkspaceEnabled && (
-          <Section>
-            <H2Title
+          <Section.Root>
+            <Section.Header
               title={t`Workspace domain`}
               description={t`Edit your subdomain name or set a custom domain.`}
             />
             <SettingsWorkspaceDomainCard />
-          </Section>
+          </Section.Root>
         )}
-        <Section>
+        <Section.Root>
           <DeleteWorkspace />
-        </Section>
+        </Section.Root>
       </>
     );
   };
@@ -87,6 +116,7 @@ export const SettingsGeneral = () => {
       secondaryBar={
         hasSecurityPermission ? (
           <SettingsTabBar
+            aria-label={t`General settings`}
             tabs={tabs}
             componentInstanceId={SETTINGS_GENERAL_TABS_INSTANCE_ID}
           />

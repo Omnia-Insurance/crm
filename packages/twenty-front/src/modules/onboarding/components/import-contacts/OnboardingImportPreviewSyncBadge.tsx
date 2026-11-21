@@ -1,6 +1,6 @@
 import { styled } from '@linaria/react';
 import { IconArrowRight, IconGoogle, IconMicrosoft } from 'twenty-ui/icon';
-import { themeCssVariables, useTheme } from 'twenty-ui/theme-constants';
+import { themeCssVariables, useTheme } from 'twenty-ui/theme';
 
 const SYNC_BADGE_LOGO_SIZE = 16;
 
@@ -9,8 +9,8 @@ const StyledBadge = styled.div`
   backdrop-filter: blur(20px);
   background-color: ${themeCssVariables.background.transparent.secondary};
   border: 1px solid ${themeCssVariables.background.transparent.lighter};
-  border-radius: 0 ${themeCssVariables.border.radius.md}
-    ${themeCssVariables.border.radius.md} 0;
+  border-left: none;
+  border-radius: ${themeCssVariables.border.radius.md};
   box-shadow: ${themeCssVariables.boxShadow.strong};
   box-sizing: border-box;
   display: flex;
@@ -18,8 +18,29 @@ const StyledBadge = styled.div`
   left: 50%;
   padding: ${themeCssVariables.spacing[2]};
   position: absolute;
-  top: 84px;
+  top: 83px;
   transform: translateX(-50%);
+`;
+
+const StyledArrow = styled.span`
+  animation: onboardingImportPreviewArrowIn 800ms cubic-bezier(0.22, 1, 0.36, 1)
+    450ms both;
+  display: flex;
+
+  @keyframes onboardingImportPreviewArrowIn {
+    from {
+      opacity: 0.3;
+      transform: translateX(-6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
 `;
 
 const StyledDivider = styled.div`
@@ -29,6 +50,7 @@ const StyledDivider = styled.div`
 `;
 
 const StyledTwentyLogo = styled.img`
+  border-radius: ${themeCssVariables.border.radius.xs};
   height: ${SYNC_BADGE_LOGO_SIZE}px;
   width: ${SYNC_BADGE_LOGO_SIZE}px;
 `;
@@ -41,10 +63,12 @@ export const OnboardingImportPreviewSyncBadge = () => {
       <IconGoogle size={theme.icon.size.md} />
       <IconMicrosoft size={theme.icon.size.md} />
       <StyledDivider />
-      <IconArrowRight
-        size={theme.icon.size.md}
-        color={themeCssVariables.font.color.tertiary}
-      />
+      <StyledArrow>
+        <IconArrowRight
+          size={theme.icon.size.md}
+          color={themeCssVariables.font.color.tertiary}
+        />
+      </StyledArrow>
       <StyledTwentyLogo src="/images/integrations/twenty-logo.svg" alt="" />
     </StyledBadge>
   );

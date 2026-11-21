@@ -6,7 +6,7 @@ import { type MetadataFlatEntity } from 'src/engine/metadata-modules/flat-entity
 import { findFlatEntityByIdInFlatEntityMapsOrThrow } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps-or-throw.util';
 import { getMetadataFlatEntityMapsKey } from 'src/engine/metadata-modules/flat-entity/utils/get-metadata-flat-entity-maps-key.util';
 import { type MetadataUniversalFlatEntityPropertiesToCompare } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/types/metadata-universal-flat-entity-properties-to-compare.type';
-import { type AllFlatWorkspaceMigrationAction } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/types/workspace-migration-action-common';
+import { type AllFlatWorkspaceMigrationAction } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/types/workspace-migration-action-common.type';
 import { METADATA_EVENTS_TO_EMIT } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/constants/metadata-event-to-emit.constant';
 import {
   type CreateMetadataEvent,
@@ -14,7 +14,7 @@ import {
   type MetadataEvent,
   type UpdateMetadataEvent,
   type UpdateMetadataEventDiff,
-} from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/types/metadata-event';
+} from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/types/metadata-event.type';
 import { flatEntityToScalarFlatEntity } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/utils/flat-entity-to-scalar-flat-entity.util';
 
 export type DeriveMetadataEventsFromUpdateActionArgs = {
@@ -121,6 +121,7 @@ const deriveAllMetadataEventsFromUpdateAction = ({
     case 'viewFieldGroup':
     case 'rowLevelPermissionPredicate':
     case 'rowLevelPermissionPredicateGroup':
+    case 'rowLevelPermissionRule':
     case 'viewFilterGroup':
     case 'logicFunction':
     case 'viewFilter':
@@ -140,7 +141,18 @@ const deriveAllMetadataEventsFromUpdateAction = ({
     case 'fieldPermission':
     case 'viewSort':
     case 'webhook':
+    case 'mcpServer':
+    case 'workflow':
+    case 'workflowVersion':
     case 'connectionProvider':
+    case 'messagingProvider':
+    case 'timelineActivityType':
+    case 'agentChatChannel':
+    case 'agentChatChannelRole':
+    case 'settingsMenuItem':
+    case 'fieldMetadataOption':
+    case 'relatedRecordPath':
+    case 'validationRule':
     case 'searchFieldMetadata': {
       const flatEntityMapsKey = getMetadataFlatEntityMapsKey(
         flatAction.metadataName,

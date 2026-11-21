@@ -3,10 +3,11 @@ import { useHeadlessCommandContextApi } from '@/command-menu-item/engine-command
 import { useSidePanelMenu } from '@/side-panel/hooks/useSidePanelMenu';
 import { useOpenDropdown } from '@/ui/layout/dropdown/hooks/useOpenDropdown';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
-import { VIEW_PICKER_DROPDOWN_ID } from '@/views/view-picker/constants/ViewPickerDropdownId';
+import { getViewPickerDropdownId } from '@/views/view-picker/utils/getViewPickerDropdownId';
 import { useViewPickerMode } from '@/views/view-picker/hooks/useViewPickerMode';
 import { viewPickerReferenceViewIdComponentState } from '@/views/view-picker/states/viewPickerReferenceViewIdComponentState';
 import { isDefined } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
 
 export const CreateNewViewNoSelectionRecordCommand = () => {
   const { currentViewId, recordIndexId } = useHeadlessCommandContextApi();
@@ -16,7 +17,9 @@ export const CreateNewViewNoSelectionRecordCommand = () => {
 
   if (!isDefined(currentViewId) || !isDefined(recordIndexId)) {
     throw new Error(
-      'Current view ID and record index ID are required to create new view',
+      doNotTranslate(
+        'Current view ID and record index ID are required to create new view',
+      ),
     );
   }
 
@@ -35,7 +38,8 @@ export const CreateNewViewNoSelectionRecordCommand = () => {
     }
     setViewPickerMode('create-empty');
     openDropdown({
-      dropdownComponentInstanceIdFromProps: VIEW_PICKER_DROPDOWN_ID,
+      dropdownComponentInstanceIdFromProps:
+        getViewPickerDropdownId(recordIndexId),
     });
   };
 

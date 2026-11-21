@@ -7,11 +7,6 @@ import { useCallback } from 'react';
 import { isDefined } from 'twenty-shared/utils';
 import { type ObjectRecordEventWithQueryIds } from '~/generated-metadata/graphql';
 
-// OMNIA-CUSTOM: Use store.get() snapshot instead of useObjectMetadataItems()
-// reactive hook. The hook made objectMetadataItems a useCallback dependency,
-// causing the dispatch function (and therefore the SSE subscription) to
-// re-create every time metadata changed. store.get() reads the current value
-// inside the callback without creating a reactive subscription.
 export const useDispatchObjectRecordEventsFromSseToBrowserEvents = () => {
   const store = useStore();
 

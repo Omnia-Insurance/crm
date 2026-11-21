@@ -16,10 +16,8 @@ export const DashboardPageLayoutEditModeProvider = ({
   const isInEditModeFromState =
     useIsDashboardPageLayoutInEditMode(pageLayoutId);
 
-  // OMNIA-CUSTOM: editing a dashboard requires the LAYOUTS permission flag — the
-  // same flag the backend page-layout-widget mutations enforce. Without it,
-  // force read-only so view-only roles never see (non-functional) edit
-  // affordances like "Add Widget", the edit grid, or widget action menus.
+  // OMNIA-CUSTOM: widget writes require LAYOUTS server-side, so without it the
+  // dashboard stays read-only instead of showing edit controls that fail
   const hasLayoutsPermission = useHasPermissionFlag(PermissionFlagType.LAYOUTS);
 
   const isInEditMode = isInEditModeFromState && hasLayoutsPermission;

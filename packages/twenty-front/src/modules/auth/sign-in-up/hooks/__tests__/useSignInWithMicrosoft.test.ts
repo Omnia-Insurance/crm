@@ -20,7 +20,6 @@ describe('useSignInWithMicrosoft', () => {
   });
 
   const mockBillingCheckoutSession = {
-    plan: 'PRO',
     interval: 'Month',
     requirePaymentMethod: true,
   };
@@ -80,5 +79,34 @@ describe('useSignInWithMicrosoft', () => {
       workspaceInviteHash: workspaceInviteHashMock,
       workspacePersonalInviteToken: undefined,
     });
+  });
+
+  // OMNIA-CUSTOM: trusted sibling URL (omniaagent.com dashboard)
+  it('should forward a trusted sibling URL from the query as returnToPath', () => {
+    const signInWithMicrosoftMock = jest.fn();
+
+    window.history.replaceState(
+      {},
+      '',
+      `/welcome?returnToPath=${encodeURIComponent('https://localhost/retention')}`,
+    );
+    (useParams as jest.Mock).mockReturnValue({});
+    (useSearchParams as jest.Mock).mockReturnValue([new URLSearchParams('')]);
+    (useAuth as jest.Mock).mockReturnValue({
+      signInWithMicrosoft: signInWithMicrosoftMock,
+    });
+
+    const { result } = renderHook(() => useSignInWithMicrosoft(), {
+      wrapper: Wrapper,
+    });
+    result.current.signInWithMicrosoft({
+      action: 'join-workspace',
+    });
+
+    expect(signInWithMicrosoftMock).toHaveBeenCalledWith(
+      expect.objectContaining({ returnToPath: 'https://localhost/retention' }),
+    );
+
+    window.history.replaceState({}, '', '/');
   });
 });

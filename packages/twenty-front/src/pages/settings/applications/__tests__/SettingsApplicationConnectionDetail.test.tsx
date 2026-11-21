@@ -5,9 +5,10 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { type ReactNode } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
+import { ConnectedAccountScope } from '~/generated-metadata/graphql';
 import { SettingsApplicationConnectionDetail } from '~/pages/settings/applications/SettingsApplicationConnectionDetail';
 import { useFindApplicationConnectionProviders } from '~/pages/settings/applications/hooks/useFindApplicationConnectionProviders';
-import { useMyAppConnectedAccounts } from '~/pages/settings/applications/hooks/useMyAppConnectedAccounts';
+import { useApplicationConnectedAccounts } from '~/pages/settings/applications/hooks/useApplicationConnectedAccounts';
 
 const mockTriggerAppOAuth = jest.fn();
 const mockDeleteConnectedAccount = jest.fn();
@@ -27,13 +28,20 @@ jest.mock(
 );
 
 jest.mock(
-  '~/pages/settings/applications/hooks/useMyAppConnectedAccounts',
+  '~/pages/settings/applications/hooks/useApplicationConnectedAccounts',
   () => ({
-    useMyAppConnectedAccounts: jest.fn(),
+    useApplicationConnectedAccounts: jest.fn(),
   }),
 );
 
-jest.mock('~/pages/settings/applications/hooks/useTriggerAppOAuth', () => ({
+jest.mock(
+  '~/pages/settings/applications/components/SettingsApplicationConnectionMessageFolders',
+  () => ({
+    SettingsApplicationConnectionMessageFolders: () => null,
+  }),
+);
+
+jest.mock('@/settings/applications/hooks/useTriggerAppOAuth', () => ({
   useTriggerAppOAuth: jest.fn(() => ({
     triggerAppOAuth: mockTriggerAppOAuth,
   })),
@@ -43,14 +51,14 @@ jest.mock('~/hooks/useNavigateSettings', () => ({
   useNavigateSettings: jest.fn(() => jest.fn()),
 }));
 
-jest.mock('@/ui/layout/modal/hooks/useModal', () => ({
-  useModal: jest.fn(() => ({
-    openModal: mockOpenModal,
+jest.mock('@/ui/layout/dialog/hooks/useDialog', () => ({
+  useDialog: jest.fn(() => ({
+    openDialog: mockOpenModal,
   })),
 }));
 
-jest.mock('@/ui/layout/modal/components/ConfirmationModal', () => ({
-  ConfirmationModal: ({
+jest.mock('@/ui/layout/dialog/components/ConfirmationDialog', () => ({
+  ConfirmationDialog: ({
     confirmButtonText,
     onConfirmClick,
   }: {
@@ -79,9 +87,9 @@ const mockedUseFindApplicationConnectionProviders =
   useFindApplicationConnectionProviders as jest.MockedFunction<
     typeof useFindApplicationConnectionProviders
   >;
-const mockedUseMyAppConnectedAccounts =
-  useMyAppConnectedAccounts as jest.MockedFunction<
-    typeof useMyAppConnectedAccounts
+const mockedUseApplicationConnectedAccounts =
+  useApplicationConnectedAccounts as jest.MockedFunction<
+    typeof useApplicationConnectedAccounts
   >;
 
 const renderDetailPage = () =>
@@ -125,6 +133,8 @@ describe('SettingsApplicationConnectionDetail', () => {
           type: 'oauth',
           name: 'google-calendar',
           displayName: 'Google Calendar',
+          scope: 'WORKSPACE',
+          logoUrl: null,
           oauth: {
             scopes: ['calendar.readonly'],
             isClientCredentialsConfigured: true,
@@ -134,25 +144,23 @@ describe('SettingsApplicationConnectionDetail', () => {
       loading: false,
       refetch: jest.fn(),
     });
-    mockedUseMyAppConnectedAccounts.mockReturnValue({
+    mockedUseApplicationConnectedAccounts.mockReturnValue({
       accounts: [
         {
-          __typename: 'ConnectedAccountPublicDTO',
+          __typename: 'ApplicationConnectedAccountDTO',
           id: 'account-1',
           handle: 'workspace@example.com',
-          provider: 'app',
-          authFailedAt: null,
+          authFailedAt: '2026-05-01T00:00:00.000Z',
           scopes: ['calendar.readonly'],
-          handleAliases: [],
           lastSignedInAt: null,
-          userWorkspaceId: 'user-workspace-1',
           connectionProviderId: 'provider-1',
           name: 'Original name',
-          visibility: 'user',
+          scope: ConnectedAccountScope.WORKSPACE,
           lastCredentialsRefreshedAt: null,
-          connectionParameters: null,
           createdAt: '2026-05-01T00:00:00.000Z',
           updatedAt: '2026-05-01T00:00:00.000Z',
+          authFailedReason: null,
+          archivedAt: null,
         },
       ],
       loading: false,
@@ -160,31 +168,51 @@ describe('SettingsApplicationConnectionDetail', () => {
     });
   });
 
-  it('changes visibility by reconnecting with the opposite visibility', () => {
+  it('offers reconnect and remove on a failed workspace shared connection', () => {
+    mockedUseApplicationConnectedAccounts.mockReturnValue({
+      accounts: [
+        {
+          __typename: 'ApplicationConnectedAccountDTO',
+          id: 'account-1',
+          handle: 'workspace@example.com',
+          authFailedAt: '2026-05-01T00:00:00.000Z',
+          scopes: ['calendar.readonly'],
+          lastSignedInAt: null,
+          connectionProviderId: 'provider-1',
+          name: 'Shared connection',
+          scope: ConnectedAccountScope.WORKSPACE,
+          lastCredentialsRefreshedAt: null,
+          createdAt: '2026-05-01T00:00:00.000Z',
+          updatedAt: '2026-05-01T00:00:00.000Z',
+          authFailedReason: null,
+          archivedAt: null,
+        },
+      ],
+      loading: false,
+      refetch: jest.fn(),
+    });
+
     renderDetailPage();
 
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: /Share with workspace/,
-      }),
-    );
+    expect(screen.getByText('Sync failed')).toBeVisible();
 
-    expect(mockOpenModal).toHaveBeenCalledWith(
-      'change-application-connection-visibility-modal-account-1',
-    );
+    fireEvent.click(screen.getByText('Reconnect'));
 
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: 'Reconnect and change visibility',
-      }),
-    );
-
+    expect(mockTriggerAppOAuth).toHaveBeenCalledTimes(1);
     expect(mockTriggerAppOAuth).toHaveBeenCalledWith({
       applicationId: 'app-1',
       providerName: 'google-calendar',
-      visibility: 'workspace',
       reconnectingConnectedAccountId: 'account-1',
       redirectLocation: '/settings/applications/app-1/connections/account-1',
     });
+
+    const [removeButton] = screen.getAllByRole('button', { name: 'Remove' });
+
+    fireEvent.click(removeButton);
+
+    expect(mockOpenModal).toHaveBeenCalledTimes(1);
+    expect(mockOpenModal).toHaveBeenCalledWith(
+      'remove-application-connection-modal-account-1',
+    );
   });
 });

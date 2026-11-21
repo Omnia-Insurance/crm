@@ -1,0 +1,107 @@
+---
+title: Gestión de Miembros
+description: Invita a los miembros del equipo y administra el acceso al espacio de trabajo en Ajustes → Miembros.
+---
+
+import { PageBanner } from "/snippets/page-banner.mdx"
+
+## Invitar Nuevos Miembros
+
+### Usando la Invitación por Correo Electrónico
+
+1. Ve a **Ajustes → Miembros → Invitar**
+2. Haz clic en **+ Invitar**
+3. Introduce la dirección de correo electrónico de la persona
+4. Selecciona un rol para el nuevo miembro
+5. Haz clic en **Enviar invitación**
+
+La persona invitada recibirá un correo electrónico con un enlace para unirse a tu espacio de trabajo.
+
+### Usando el Enlace de Invitación
+
+1. Ve a **Ajustes → Miembros → Invitar**
+2. Copiar el enlace de invitación a la área de trabajo
+3. Compartir el enlace con nuevos miembros del equipo
+4. Obtendrán acceso una vez que se registren
+
+## Ver y gestionar miembros
+
+### Ver todos los miembros
+
+Ve a **Ajustes → Miembros → Equipo** para ver a todos los miembros activos
+
+Ve a **Ajustes → Miembros → Invitar** para ver las invitaciones pendientes
+
+### Editar el perfil de un miembro
+
+Haz clic en un miembro para abrir su página de perfil. Como administrador, puedes:
+
+* Editar su **nombre**
+* Actualizar su **foto de perfil**
+* **Iniciar sesión como** su cuenta (útil para la resolución de problemas)
+* **Eliminar** su cuenta
+
+### Cambiar el rol de un miembro
+
+En la página de perfil del miembro:
+
+1. Abre la pestaña **Permisos**
+2. Consulta el rol asignado actualmente
+3. Selecciona un rol diferente en el menú desplegable
+4. El cambio surte efecto de inmediato
+
+→ [Más información sobre roles y permisos](/es/user-guide/permissions-access/capabilities/permissions)
+
+### Eliminar un miembro
+
+1. Haz clic en el miembro para abrir su perfil
+2. Haga clic en **Eliminar cuenta** para eliminarlos del área de trabajo
+
+<Warning>
+Los miembros eliminados pierden el acceso de inmediato. Sus datos (registros, notas, tareas) permanecen en el espacio de trabajo.
+</Warning>
+
+<Note>
+Los correos electrónicos y eventos del calendario del miembro eliminado están archivados y disponibles para otros miembros.
+</Note>
+
+### Restablecer la autenticación de dos factores de un miembro
+
+Si un miembro perdió el acceso a su aplicación de autenticación, un administrador puede proporcionarle un código de recuperación de un solo uso.
+
+Necesitas el permiso de **Seguridad** y tener configurada la autenticación de dos factores en tu propia cuenta.
+
+1. Haz clic en el miembro para abrir su perfil
+2. En la sección **Autenticación de dos factores**, haz clic en **Generar código de recuperación**
+3. Introduce el código de tu propia aplicación de autenticación para confirmar
+4. Copia el código y compártelo con el miembro a través de un canal de confianza
+
+El código funciona una vez y caduca después de 1 hora de forma predeterminada. Solo se muestra una vez. Generar un código nuevo reemplaza el anterior, y puedes hacer clic en **Revocar** para cancelar un código pendiente. El miembro recibe un correo electrónico cuando se emite un código.
+
+Cuando el miembro usa el código, se elimina su autenticador para este espacio de trabajo y se cierra la sesión en sus otras sesiones. Si el espacio de trabajo exige la autenticación de dos factores, se le pide que configure un autenticador nuevo de inmediato. Si se va antes de terminar, genera un código nuevo para esa persona: hasta que complete la configuración, el miembro solo puede configurar un autenticador mediante un código de recuperación.
+
+<Note>
+No puedes generar un código de recuperación para ti mismo. Solo un administrador del servidor puede generar uno para otro administrador del servidor.
+</Note>
+
+## Invitaciones pendientes
+
+Gestiona las invitaciones que no se han aceptado:
+
+* **Reenviar**: enviar nuevamente el correo electrónico de invitación
+* **Cancelar**: revocar la invitación antes de que sea aceptada
+
+## Dominios de Acceso Aprobado
+
+Permite que los miembros del equipo se unan automáticamente según su dominio de correo electrónico:
+
+1. Ve a **Ajustes → Miembros → Invitar**
+2. Introduce el dominio de tu empresa (p. ej., `yourcompany.com`)
+3. Cualquiera con ese dominio de correo electrónico puede unirse sin invitación
+
+## Relacionado
+
+* [Permisos](/es/user-guide/permissions-access/capabilities/permissions) — configura lo que cada rol puede hacer
+* [Configuración del dominio](/es/user-guide/settings/capabilities/domains-settings) — configurar los dominios aprobados
+
+<PageBanner illustration="page-cover-users" />

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
 import { isNonEmptyString } from '@sniptt/guards';
@@ -10,6 +10,8 @@ import {
 import { isDefined } from 'twenty-shared/utils';
 import { In, Repository } from 'typeorm';
 
+import { MetricsService } from 'src/engine/core-modules/metrics/metrics.service';
+import { MetricsKeys } from 'src/engine/core-modules/metrics/types/metrics-keys.type';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
@@ -31,8 +33,12 @@ export type GoogleMessagingNotificationRequest = {
 
 @Injectable()
 export class GoogleMessagingNotificationHandler implements WebhookNotificationHandler<GoogleMessagingNotificationRequest> {
+  private readonly logger = new Logger(GoogleMessagingNotificationHandler.name);
+  private readonly oauth2Client = new OAuth2Client();
+
   constructor(
     private readonly twentyConfigService: TwentyConfigService,
+    private readonly metricsService: MetricsService,
     @InjectRepository(ConnectedAccountEntity)
     private readonly connectedAccountRepository: Repository<ConnectedAccountEntity>,
     @InjectRepository(MessageChannelEntity)
@@ -42,6 +48,11 @@ export class GoogleMessagingNotificationHandler implements WebhookNotificationHa
 
   async handle(request: GoogleMessagingNotificationRequest): Promise<void> {
     await this.verify(request.authorizationHeader);
+
+    this.metricsService.incrementCounterBy({
+      key: MetricsKeys.ConnectedAccountSyncWebhookReceivedMessaging,
+      amount: 1,
+    });
 
     const decodedData = this.decodeMessageData(request.body);
 
@@ -61,6 +72,10 @@ export class GoogleMessagingNotificationHandler implements WebhookNotificationHa
     );
 
     if (connectedAccountIds.length === 0) {
+      this.logger.warn(
+        'No Google connected account matches Gmail notification',
+      );
+
       return;
     }
 
@@ -71,12 +86,20 @@ export class GoogleMessagingNotificationHandler implements WebhookNotificationHa
       },
     });
 
+    if (messageChannels.length === 0) {
+      return;
+    }
+
     for (const messageChannel of messageChannels) {
       await this.webhookSyncTriggerService.triggerMessagingSync(
         messageChannel.id,
         messageChannel.workspaceId,
       );
     }
+
+    this.logger.log(
+      `Triggered messaging sync for ${messageChannels.length} message channels from Gmail notification`,
+    );
   }
 
   private async verify(authorizationHeader: string | undefined): Promise<void> {
@@ -103,7 +126,7 @@ export class GoogleMessagingNotificationHandler implements WebhookNotificationHa
     const expectedAudience = `${this.twentyConfigService.get('SERVER_URL')}/webhooks/google/messaging`;
 
     try {
-      const ticket = await new OAuth2Client().verifyIdToken({
+      const ticket = await this.oauth2Client.verifyIdToken({
         idToken,
         audience: expectedAudience,
       });

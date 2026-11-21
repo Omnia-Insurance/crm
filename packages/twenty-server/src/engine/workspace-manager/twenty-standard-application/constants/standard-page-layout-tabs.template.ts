@@ -1,13 +1,13 @@
+import { msg } from '@lingui/core/macro';
 import {
   PageLayoutTabLayoutMode,
-  type GridPosition,
-  type PageLayoutWidgetCanvasPosition,
   type PageLayoutWidgetConditionalDisplay,
   type PageLayoutWidgetGridPosition,
   type PageLayoutWidgetVerticalListPosition,
+  WidgetType,
 } from 'twenty-shared/types';
 
-import { WidgetType } from 'src/engine/metadata-modules/page-layout-widget/enums/widget-type.enum';
+import { i18nLabel } from 'src/engine/workspace-manager/twenty-standard-application/utils/i18n-label.util';
 
 export const CONDITIONAL_DISPLAY_DEVICE_MOBILE = {
   and: [{ '===': [{ var: 'device' }, 'MOBILE'] }],
@@ -22,27 +22,6 @@ export const CONDITIONAL_AVAILABILITY_EXPRESSION_DEVICE_MOBILE =
 
 export const CONDITIONAL_AVAILABILITY_EXPRESSION_DEVICE_DESKTOP =
   'device == "DESKTOP"';
-
-export const GRID_POSITIONS = {
-  FULL_WIDTH: {
-    row: 0,
-    column: 0,
-    rowSpan: 12,
-    columnSpan: 12,
-  },
-  HALF_HEIGHT: {
-    row: 0,
-    column: 0,
-    rowSpan: 6,
-    columnSpan: 12,
-  },
-  RICH_TEXT: {
-    row: 12,
-    column: 0,
-    rowSpan: 6,
-    columnSpan: 12,
-  },
-} as const satisfies Record<string, GridPosition>;
 
 export const GRID_LAYOUT_POSITIONS = {
   FULL_WIDTH: {
@@ -91,152 +70,208 @@ export const VERTICAL_LIST_LAYOUT_POSITIONS = {
   },
 } as const satisfies Record<string, PageLayoutWidgetVerticalListPosition>;
 
-export const CANVAS_LAYOUT_POSITIONS = {
-  DEFAULT: {
-    layoutMode: PageLayoutTabLayoutMode.CANVAS,
-  },
-} as const satisfies Record<string, PageLayoutWidgetCanvasPosition>;
-
 export const TAB_PROPS = {
   home: {
-    title: 'Home',
+    title: i18nLabel(msg({ message: `Home`, context: 'pageLayoutTab.title' })),
     position: 10,
     icon: 'IconHome',
     layoutMode: PageLayoutTabLayoutMode.VERTICAL_LIST,
   },
   timeline: {
-    title: 'Timeline',
+    title: i18nLabel(
+      msg({ message: `Timeline`, context: 'pageLayoutTab.title' }),
+    ),
     position: 20,
     icon: 'IconTimelineEvent',
-    layoutMode: PageLayoutTabLayoutMode.CANVAS,
+    layoutMode: PageLayoutTabLayoutMode.VERTICAL_LIST,
   },
   tasks: {
-    title: 'Tasks',
+    title: i18nLabel(msg({ message: `Tasks`, context: 'pageLayoutTab.title' })),
     position: 30,
     icon: 'IconCheckbox',
-    layoutMode: PageLayoutTabLayoutMode.CANVAS,
+    layoutMode: PageLayoutTabLayoutMode.VERTICAL_LIST,
   },
   notes: {
-    title: 'Notes',
+    title: i18nLabel(msg({ message: `Notes`, context: 'pageLayoutTab.title' })),
     position: 40,
     icon: 'IconNotes',
-    layoutMode: PageLayoutTabLayoutMode.CANVAS,
+    layoutMode: PageLayoutTabLayoutMode.VERTICAL_LIST,
   },
   files: {
-    title: 'Files',
+    title: i18nLabel(msg({ message: `Files`, context: 'pageLayoutTab.title' })),
     position: 50,
-    icon: 'IconPaperclip',
-    layoutMode: PageLayoutTabLayoutMode.CANVAS,
+    icon: 'IconFiles',
+    layoutMode: PageLayoutTabLayoutMode.VERTICAL_LIST,
   },
   emails: {
-    title: 'Emails',
+    title: i18nLabel(
+      msg({ message: `Messages`, context: 'pageLayoutTab.title' }),
+    ),
     position: 60,
-    icon: 'IconMail',
-    layoutMode: PageLayoutTabLayoutMode.CANVAS,
+    icon: 'IconMessage',
+    layoutMode: PageLayoutTabLayoutMode.VERTICAL_LIST,
+  },
+  conversations: {
+    title: i18nLabel(
+      msg({ message: `Conversations`, context: 'pageLayoutTab.title' }),
+    ),
+    position: 65,
+    icon: 'IconInbox',
+    layoutMode: PageLayoutTabLayoutMode.VERTICAL_LIST,
+  },
+  chat: {
+    title: i18nLabel(msg({ message: `Chat`, context: 'pageLayoutTab.title' })),
+    position: 10,
+    icon: 'IconMessage',
+    layoutMode: PageLayoutTabLayoutMode.VERTICAL_LIST,
   },
   calendar: {
-    title: 'Calendar',
+    title: i18nLabel(
+      msg({ message: `Calendar`, context: 'pageLayoutTab.title' }),
+    ),
     position: 70,
     icon: 'IconCalendarEvent',
-    layoutMode: PageLayoutTabLayoutMode.CANVAS,
+    layoutMode: PageLayoutTabLayoutMode.VERTICAL_LIST,
   },
   note: {
-    title: 'Note',
+    title: i18nLabel(msg({ message: `Note`, context: 'pageLayoutTab.title' })),
     position: 15,
     icon: 'IconNotes',
     layoutMode: PageLayoutTabLayoutMode.VERTICAL_LIST,
   },
+  members: {
+    title: i18nLabel(
+      msg({ message: `Members`, context: 'pageLayoutTab.title' }),
+    ),
+    position: 15,
+    icon: 'IconUsers',
+    layoutMode: PageLayoutTabLayoutMode.VERTICAL_LIST,
+  },
   flow: {
-    title: 'Flow',
+    title: i18nLabel(msg({ message: `Flow`, context: 'pageLayoutTab.title' })),
     position: 10,
     icon: 'IconSettings',
-    layoutMode: PageLayoutTabLayoutMode.CANVAS,
+    layoutMode: PageLayoutTabLayoutMode.VERTICAL_LIST,
+  },
+  composer: {
+    title: i18nLabel(msg({ message: `Email`, context: 'pageLayoutTab.title' })),
+    position: 15,
+    icon: 'IconMail',
+    layoutMode: PageLayoutTabLayoutMode.VERTICAL_LIST,
   },
   flowSecondary: {
-    title: 'Flow',
+    title: i18nLabel(msg({ message: `Flow`, context: 'pageLayoutTab.title' })),
     position: 20,
     icon: 'IconSettings',
-    layoutMode: PageLayoutTabLayoutMode.CANVAS,
+    layoutMode: PageLayoutTabLayoutMode.VERTICAL_LIST,
   },
 } as const;
 
 export const WIDGET_PROPS = {
   fields: {
-    title: 'Fields',
+    title: i18nLabel(
+      msg({ message: `Fields`, context: 'pageLayoutWidget.title' }),
+    ),
     type: WidgetType.FIELDS,
-    gridPosition: GRID_POSITIONS.FULL_WIDTH,
     position: VERTICAL_LIST_LAYOUT_POSITIONS.FIRST,
   },
   timeline: {
-    title: 'Timeline',
+    title: i18nLabel(
+      msg({ message: `Timeline`, context: 'pageLayoutWidget.title' }),
+    ),
     type: WidgetType.TIMELINE,
-    gridPosition: GRID_POSITIONS.HALF_HEIGHT,
-    position: CANVAS_LAYOUT_POSITIONS.DEFAULT,
+    position: VERTICAL_LIST_LAYOUT_POSITIONS.FIRST,
   },
   tasks: {
-    title: 'Tasks',
+    title: i18nLabel(
+      msg({ message: `Tasks`, context: 'pageLayoutWidget.title' }),
+    ),
     type: WidgetType.TASKS,
-    gridPosition: GRID_POSITIONS.HALF_HEIGHT,
-    position: CANVAS_LAYOUT_POSITIONS.DEFAULT,
+    position: VERTICAL_LIST_LAYOUT_POSITIONS.FIRST,
   },
   notes: {
-    title: 'Notes',
+    title: i18nLabel(
+      msg({ message: `Notes`, context: 'pageLayoutWidget.title' }),
+    ),
     type: WidgetType.NOTES,
-    gridPosition: GRID_POSITIONS.HALF_HEIGHT,
-    position: CANVAS_LAYOUT_POSITIONS.DEFAULT,
+    position: VERTICAL_LIST_LAYOUT_POSITIONS.FIRST,
   },
   files: {
-    title: 'Files',
+    title: i18nLabel(
+      msg({ message: `Files`, context: 'pageLayoutWidget.title' }),
+    ),
     type: WidgetType.FILES,
-    gridPosition: GRID_POSITIONS.HALF_HEIGHT,
-    position: CANVAS_LAYOUT_POSITIONS.DEFAULT,
+    position: VERTICAL_LIST_LAYOUT_POSITIONS.FIRST,
   },
   emails: {
-    title: 'Emails',
+    title: i18nLabel(
+      msg({ message: `Messages`, context: 'pageLayoutWidget.title' }),
+    ),
     type: WidgetType.EMAILS,
-    gridPosition: GRID_POSITIONS.HALF_HEIGHT,
-    position: CANVAS_LAYOUT_POSITIONS.DEFAULT,
+    position: VERTICAL_LIST_LAYOUT_POSITIONS.FIRST,
+  },
+  conversations: {
+    title: i18nLabel(
+      msg({ message: `Conversations`, context: 'pageLayoutWidget.title' }),
+    ),
+    type: WidgetType.CHAT_THREADS,
+    position: VERTICAL_LIST_LAYOUT_POSITIONS.FIRST,
+    conditionalAvailabilityExpression: 'featureFlags.IS_AI_CHAT_INBOX_ENABLED',
   },
   calendar: {
-    title: 'Calendar',
+    title: i18nLabel(
+      msg({ message: `Calendar`, context: 'pageLayoutWidget.title' }),
+    ),
     type: WidgetType.CALENDAR,
-    gridPosition: GRID_POSITIONS.HALF_HEIGHT,
-    position: CANVAS_LAYOUT_POSITIONS.DEFAULT,
+    position: VERTICAL_LIST_LAYOUT_POSITIONS.FIRST,
   },
   noteRichText: {
-    title: 'Note',
+    title: i18nLabel(
+      msg({ message: `Note`, context: 'pageLayoutWidget.title' }),
+    ),
     type: WidgetType.FIELD_RICH_TEXT,
-    gridPosition: GRID_POSITIONS.RICH_TEXT,
     position: VERTICAL_LIST_LAYOUT_POSITIONS.FIRST,
   },
   taskRichText: {
-    title: 'Task',
+    title: i18nLabel(
+      msg({ message: `Task`, context: 'pageLayoutWidget.title' }),
+    ),
     type: WidgetType.FIELD_RICH_TEXT,
-    gridPosition: GRID_POSITIONS.RICH_TEXT,
     position: VERTICAL_LIST_LAYOUT_POSITIONS.FIRST,
   },
-  workflow: {
-    title: 'Flow',
-    type: WidgetType.WORKFLOW,
-    gridPosition: GRID_POSITIONS.FULL_WIDTH,
-    position: CANVAS_LAYOUT_POSITIONS.DEFAULT,
+  messageCampaign: {
+    title: i18nLabel(
+      msg({ message: `Email`, context: 'pageLayoutWidget.title' }),
+    ),
+    type: WidgetType.MESSAGE_CAMPAIGN_BODY,
+    position: VERTICAL_LIST_LAYOUT_POSITIONS.FIRST,
   },
   workflowVersion: {
-    title: 'Flow',
+    title: i18nLabel(
+      msg({ message: `Flow`, context: 'pageLayoutWidget.title' }),
+    ),
     type: WidgetType.WORKFLOW_VERSION,
-    gridPosition: GRID_POSITIONS.FULL_WIDTH,
-    position: CANVAS_LAYOUT_POSITIONS.DEFAULT,
+    position: VERTICAL_LIST_LAYOUT_POSITIONS.FIRST,
   },
   workflowRun: {
-    title: 'Flow',
+    title: i18nLabel(
+      msg({ message: `Flow`, context: 'pageLayoutWidget.title' }),
+    ),
     type: WidgetType.WORKFLOW_RUN,
-    gridPosition: GRID_POSITIONS.FULL_WIDTH,
-    position: CANVAS_LAYOUT_POSITIONS.DEFAULT,
+    position: VERTICAL_LIST_LAYOUT_POSITIONS.FIRST,
+  },
+  chat: {
+    title: i18nLabel(
+      msg({ message: `Chat`, context: 'pageLayoutWidget.title' }),
+    ),
+    type: WidgetType.CHAT,
+    position: VERTICAL_LIST_LAYOUT_POSITIONS.FIRST,
   },
   emailThread: {
-    title: 'Thread',
+    title: i18nLabel(
+      msg({ message: `Thread`, context: 'pageLayoutWidget.title' }),
+    ),
     type: WidgetType.EMAIL_THREAD,
-    gridPosition: GRID_POSITIONS.FULL_WIDTH,
     position: VERTICAL_LIST_LAYOUT_POSITIONS.SECOND,
   },
 } as const;

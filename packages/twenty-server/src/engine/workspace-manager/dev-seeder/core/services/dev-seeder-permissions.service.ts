@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { InjectDataSource } from '@nestjs/typeorm';
 
 import { PermissionFlagType } from 'twenty-shared/constants';
 import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource } from 'typeorm';
 
 import { FlatApplication } from 'src/engine/core-modules/application/types/flat-application.type';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
@@ -15,7 +15,7 @@ import { RoleTargetService } from 'src/engine/metadata-modules/role-target/servi
 import { RoleDTO } from 'src/engine/metadata-modules/role/dtos/role.dto';
 import { RoleEntity } from 'src/engine/metadata-modules/role/role.entity';
 import { RoleService } from 'src/engine/metadata-modules/role/role.service';
-import { UserRoleService } from 'src/engine/metadata-modules/user-role/user-role.service';
+import { RoleAssignmentWriteService } from 'src/engine/permissions/role-assignment/role-assignment-write.service';
 import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
 import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 import {
@@ -35,10 +35,10 @@ export class DevSeederPermissionsService {
 
   constructor(
     private readonly roleService: RoleService,
-    private readonly userRoleService: UserRoleService,
+    private readonly roleAssignmentWriteService: RoleAssignmentWriteService,
     private readonly objectPermissionService: ObjectPermissionService,
-    @InjectRepository(ObjectMetadataEntity)
-    private readonly objectMetadataRepository: Repository<ObjectMetadataEntity>,
+    @InjectWorkspaceScopedRepository(ObjectMetadataEntity)
+    private readonly objectMetadataRepository: WorkspaceScopedRepository<ObjectMetadataEntity>,
     @InjectWorkspaceScopedRepository(RoleEntity)
     private readonly roleRepository: WorkspaceScopedRepository<RoleEntity>,
     private readonly fieldPermissionService: FieldPermissionService,
@@ -111,7 +111,7 @@ export class DevSeederPermissionsService {
           ownerFlatApplication: workspaceCustomFlatApplication,
         });
 
-        await this.userRoleService.assignRoleToManyUserWorkspace({
+        await this.roleAssignmentWriteService.assignRoleToUserWorkspaces({
           workspaceId,
           userWorkspaceIds: [guestUserWorkspaceId],
           roleId: guestRole.id,
@@ -124,7 +124,7 @@ export class DevSeederPermissionsService {
           ownerFlatApplication: workspaceCustomFlatApplication,
         });
 
-        await this.userRoleService.assignRoleToManyUserWorkspace({
+        await this.roleAssignmentWriteService.assignRoleToUserWorkspaces({
           workspaceId,
           userWorkspaceIds: [limitedUserWorkspaceId],
           roleId: limitedRole.id,
@@ -136,7 +136,7 @@ export class DevSeederPermissionsService {
             ownerFlatApplication: workspaceCustomFlatApplication,
           });
 
-        await this.userRoleService.assignRoleToManyUserWorkspace({
+        await this.roleAssignmentWriteService.assignRoleToUserWorkspaces({
           workspaceId,
           userWorkspaceIds: [USER_WORKSPACE_DATA_SEED_IDS.SCOTT],
           roleId: impersonateOnlyRole.id,
@@ -157,7 +157,7 @@ export class DevSeederPermissionsService {
       );
     }
 
-    await this.userRoleService.assignRoleToManyUserWorkspace({
+    await this.roleAssignmentWriteService.assignRoleToUserWorkspaces({
       workspaceId,
       userWorkspaceIds: [adminUserWorkspaceId],
       roleId: adminRole.id,
@@ -169,7 +169,7 @@ export class DevSeederPermissionsService {
     });
 
     if (memberUserWorkspaceIds.length > 0) {
-      await this.userRoleService.assignRoleToManyUserWorkspace({
+      await this.roleAssignmentWriteService.assignRoleToUserWorkspaces({
         workspaceId,
         userWorkspaceIds: memberUserWorkspaceIds,
         roleId: memberRole.id,
@@ -184,6 +184,11 @@ export class DevSeederPermissionsService {
     workspaceId: string;
     workspaceCustomFlatApplication: FlatApplication;
   }): Promise<RoleDTO> {
+    await this.roleService.createWorkspaceCustomApplicationRole({
+      workspaceId,
+      workspaceCustomFlatApplication,
+    });
+
     const memberRole = await this.roleService.createMemberRole({
       workspaceId,
       ownerFlatApplication: workspaceCustomFlatApplication,
@@ -219,6 +224,7 @@ export class DevSeederPermissionsService {
         icon: 'IconSpy',
         canUpdateAllSettings: false,
         canAccessAllTools: false,
+        canAccessAllAgentChatChannels: false,
         canReadAllObjectRecords: true,
         canUpdateAllObjectRecords: false,
         canSoftDeleteAllObjectRecords: false,
@@ -254,6 +260,7 @@ export class DevSeederPermissionsService {
         icon: 'custom',
         canUpdateAllSettings: true,
         canAccessAllTools: true,
+        canAccessAllAgentChatChannels: true,
         canReadAllObjectRecords: true,
         canUpdateAllObjectRecords: true,
         canSoftDeleteAllObjectRecords: true,
@@ -262,39 +269,26 @@ export class DevSeederPermissionsService {
     });
 
     const petObjectMetadata = await this.objectMetadataRepository.findOneOrFail(
-      {
-        where: {
-          nameSingular: 'pet',
-          workspaceId,
-        },
-      },
+      workspaceId,
+      { where: { nameSingular: 'pet' } },
     );
 
     const rocketObjectMetadata =
-      await this.objectMetadataRepository.findOneOrFail({
-        where: {
-          nameSingular: 'rocket',
-          workspaceId,
-        },
+      await this.objectMetadataRepository.findOneOrFail(workspaceId, {
+        where: { nameSingular: 'rocket' },
       });
 
     const personObjectMetadata =
-      await this.objectMetadataRepository.findOneOrFail({
-        where: {
-          nameSingular: 'person',
-          workspaceId,
-        },
+      await this.objectMetadataRepository.findOneOrFail(workspaceId, {
+        where: { nameSingular: 'person' },
         relations: {
           fields: true,
         },
       });
 
     const companyObjectMetadata =
-      await this.objectMetadataRepository.findOneOrFail({
-        where: {
-          nameSingular: 'company',
-          workspaceId,
-        },
+      await this.objectMetadataRepository.findOneOrFail(workspaceId, {
+        where: { nameSingular: 'company' },
         relations: {
           fields: true,
         },

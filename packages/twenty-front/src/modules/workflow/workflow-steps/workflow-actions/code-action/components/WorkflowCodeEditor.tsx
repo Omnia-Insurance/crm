@@ -1,11 +1,13 @@
 import { getWrongExportedFunctionMarkers } from '@/workflow/workflow-steps/workflow-actions/code-action/utils/getWrongExportedFunctionMarkers';
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
-import { type Monaco } from '@monaco-editor/react';
-import { type editor } from 'monaco-editor';
+import { LightIconButton } from 'twenty-ui/components/input';
+import {
+  CodeEditor,
+  type CodeEditorProps,
+} from 'twenty-ui/components/code-editor';
 import { IconMaximize } from 'twenty-ui/icon';
-import { CodeEditor, LightIconButton } from 'twenty-ui/input';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 const CODE_EDITOR_MIN_HEIGHT = 343;
 
@@ -27,9 +29,9 @@ const StyledFullScreenButtonContainer = styled.div`
 
 type WorkflowCodeEditorProps = {
   value?: string;
-  onChange: (value: string) => void;
-  onMount: (editor: editor.IStandaloneCodeEditor, monaco: Monaco) => void;
-  options: editor.IStandaloneEditorConstructionOptions;
+  onChange: NonNullable<CodeEditorProps['onChange']>;
+  onMount: NonNullable<CodeEditorProps['onMount']>;
+  options: NonNullable<CodeEditorProps['options']>;
   readonly?: boolean;
   fullScreenMode?: boolean;
   onEnterFullScreen?: () => void;
@@ -51,12 +53,14 @@ export const WorkflowCodeEditor = ({
       {!readonly && !fullScreenMode && onEnterFullScreen && (
         <StyledFullScreenButtonContainer>
           <LightIconButton
-            Icon={IconMaximize}
             onClick={onEnterFullScreen}
             title={t`Expand to Full Screen`}
-            size="small"
-            accent="tertiary"
-          />
+            size="sm"
+            emphasis="subtle"
+            aria-label={t`Expand to Full Screen`}
+          >
+            <IconMaximize />
+          </LightIconButton>
         </StyledFullScreenButtonContainer>
       )}
       <CodeEditor

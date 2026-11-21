@@ -3,12 +3,13 @@ import { type Meta, type StoryObj } from '@storybook/react-vite';
 import { FilesDisplay } from '@/ui/field/display/components/FilesDisplay';
 import { ComponentDecorator } from 'twenty-ui/testing';
 import { MemoryRouterDecorator } from '~/testing/decorators/MemoryRouterDecorator';
-import { SnackBarDecorator } from '~/testing/decorators/SnackBarDecorator';
+import { ToastDecorator } from '~/testing/decorators/ToastDecorator';
 import { getProfilingStory } from '~/testing/profiling/utils/getProfilingStory';
+import { IMAGE_URL_MOCK } from '~/testing/mock-data/image-url';
 
 const meta: Meta<typeof FilesDisplay> = {
   title: 'UI/Data/Field/Display/FilesFieldDisplay',
-  decorators: [MemoryRouterDecorator, ComponentDecorator, SnackBarDecorator],
+  decorators: [MemoryRouterDecorator, ComponentDecorator, ToastDecorator],
   component: FilesDisplay,
   args: {
     value: [
@@ -30,7 +31,7 @@ const meta: Meta<typeof FilesDisplay> = {
         fileId: 'file-3',
         label: 'logo.png',
         extension: '.png',
-        url: 'https://example.com/logo.png',
+        url: IMAGE_URL_MOCK,
         fileCategory: 'IMAGE',
       },
     ],

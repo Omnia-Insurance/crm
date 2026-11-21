@@ -2,23 +2,18 @@ import { isObject } from '@sniptt/guards';
 
 import {
   FieldMetadataType,
-  type ActorFilter,
-  type AddressFilter,
   type AndObjectRecordFilter,
   type ArrayFilter,
   type BooleanFilter,
   type CurrencyFilter,
   type DateFilter,
-  type EmailsFilter,
+  type FieldReferenceFilter,
   type FilesFilter,
   type FloatFilter,
-  type FullNameFilter,
   type LeafObjectRecordFilter,
-  type LinksFilter,
   type MultiSelectFilter,
   type NotObjectRecordFilter,
   type OrObjectRecordFilter,
-  type PhonesFilter,
   type RatingFilter,
   type RawJsonFilter,
   type RecordGqlOperationFilter,
@@ -29,11 +24,14 @@ import {
   type UUIDFilter,
 } from 'twenty-shared/types';
 import {
+  COMPOSITE_FIELD_SUB_FIELD_MATCHERS_MAP,
   computeRelationGqlFieldJoinColumnName,
   isDefined,
   isEmptyObject,
+  isFieldReferenceFilterOperator,
   isMatchingArrayFilter,
   isMatchingBooleanFilter,
+  isMatchingCompositeFilter,
   isMatchingCurrencyFilter,
   isMatchingDateFilter,
   isMatchingFilesFilter,
@@ -47,10 +45,13 @@ import {
   isMatchingTSVectorFilter,
   isMatchingUUIDFilter,
 } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
 
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { computePossibleMorphGqlFieldForFieldName } from '@/object-record/cache/utils/computePossibleMorphGqlFieldForFieldName';
+import { isObjectRecordConnection } from '@/object-record/cache/utils/isObjectRecordConnection';
+import { isMatchingFieldReferenceFilter } from '@/object-record/record-filter/utils/isMatchingFieldReferenceFilter';
 
 const isLeafFilter = (
   filter: RecordGqlOperationFilter,
@@ -81,7 +82,7 @@ const isMorphRelationJoinColumnKey = ({
       morphRelations: fieldMetadataItem.morphRelations,
       fieldName: fieldMetadataItem.name,
     },
-  }).map((name) => `${name}Id`);
+  }).map((name) => doNotTranslate(`${name}Id`));
 
   return possibleJoinColumnNames.includes(key);
 };
@@ -94,14 +95,134 @@ const isNotFilter = (
   filter: RecordGqlOperationFilter,
 ): filter is NotObjectRecordFilter => 'not' in filter && !!filter.not;
 
+const UUID_FILTER_OPERATOR_KEYS = new Set<string>([
+  'eq',
+  'gt',
+  'gte',
+  'in',
+  'is',
+  'lt',
+  'lte',
+  'neq',
+]);
+
+// Either UUID operators on the related id, or nested field filters from view filters traversing a relation.
+const isNestedRelationFilter = (
+  filterValue: unknown,
+): filterValue is RecordGqlOperationFilter =>
+  isObject(filterValue) &&
+  Object.keys(filterValue).some((key) => !UUID_FILTER_OPERATOR_KEYS.has(key));
+
+// Records fetched through a relation often carry { list: { id } } without listId.
+const getJoinColumnValue = ({
+  record,
+  joinColumnName,
+}: {
+  record: Record<string, any>;
+  joinColumnName: string;
+}) => {
+  if (record[joinColumnName] !== undefined) {
+    return record[joinColumnName];
+  }
+
+  const relationRecord =
+    record[joinColumnName.slice(0, -doNotTranslate('Id').length)];
+
+  return isObject(relationRecord)
+    ? (relationRecord.id ?? null)
+    : relationRecord;
+};
+
+const isRecordMatchingNestedRelationFilter = ({
+  relationRecord,
+  nestedFilter,
+  relationFieldMetadataItem,
+  objectMetadataItems,
+  isWithinNegatedFilter,
+  parentRecord,
+}: {
+  relationRecord: unknown;
+  nestedFilter: RecordGqlOperationFilter;
+  relationFieldMetadataItem: Pick<FieldMetadataItem, 'relation'>;
+  objectMetadataItems: EnrichedObjectMetadataItem[];
+  isWithinNegatedFilter: boolean;
+  parentRecord: Record<string, unknown>;
+}): boolean => {
+  // Null fails the nested predicate (backend NOT EXISTS); unloaded returns the negation parity to stay excluded.
+  if (relationRecord === null) {
+    return false;
+  }
+
+  if (!isObject(relationRecord)) {
+    return isWithinNegatedFilter;
+  }
+
+  const relationTargetObjectMetadataItem = objectMetadataItems.find(
+    (objectMetadataItem) =>
+      objectMetadataItem.id ===
+      relationFieldMetadataItem.relation?.targetObjectMetadata.id,
+  );
+
+  if (!isDefined(relationTargetObjectMetadataItem)) {
+    return isWithinNegatedFilter;
+  }
+
+  const isRecordMatchingNestedFilter = (record: unknown) =>
+    isRecordMatchingFilter({
+      record,
+      filter: nestedFilter,
+      objectMetadataItem: relationTargetObjectMetadataItem,
+      objectMetadataItems,
+      isWithinNegatedFilter,
+      parentRecord,
+    });
+
+  // Matches when any loaded record does, like the backend EXISTS.
+  return getLoadedRelationRecords({
+    relationRecord,
+    relationTargetObjectNameSingular:
+      relationTargetObjectMetadataItem.nameSingular,
+  }).some(
+    (relatedRecord) =>
+      isObject(relatedRecord) && isRecordMatchingNestedFilter(relatedRecord),
+  );
+};
+
+// To-many values are an array (store) or a connection (GraphQL response).
+const getLoadedRelationRecords = ({
+  relationRecord,
+  relationTargetObjectNameSingular,
+}: {
+  relationRecord: object;
+  relationTargetObjectNameSingular: string;
+}): unknown[] => {
+  if (Array.isArray(relationRecord)) {
+    return relationRecord;
+  }
+
+  if (
+    isObjectRecordConnection(relationTargetObjectNameSingular, relationRecord)
+  ) {
+    return relationRecord.edges?.map((edge) => edge.node) ?? [];
+  }
+
+  return [relationRecord];
+};
+
 export const isRecordMatchingFilter = ({
   record,
   filter,
   objectMetadataItem,
+  objectMetadataItems,
+  isWithinNegatedFilter = false,
+  parentRecord,
 }: {
   record: any;
   filter: RecordGqlOperationFilter;
   objectMetadataItem: EnrichedObjectMetadataItem;
+  objectMetadataItems: EnrichedObjectMetadataItem[];
+  isWithinNegatedFilter?: boolean;
+  parentRecord?: Record<string, unknown>;
 }): boolean => {
   if (Object.keys(filter).length === 0 && record.deletedAt === null) {
     return true;
@@ -113,6 +234,9 @@ export const isRecordMatchingFilter = ({
         record,
         filter: { [filterKey]: value },
         objectMetadataItem,
+        objectMetadataItems,
+        isWithinNegatedFilter,
+        parentRecord,
       }),
     );
   }
@@ -122,7 +246,8 @@ export const isRecordMatchingFilter = ({
 
     if (!Array.isArray(filterValue)) {
       throw new Error(
-        'Unexpected value for "and" filter : ' + JSON.stringify(filterValue),
+        doNotTranslate('Unexpected value for "and" filter : ') +
+          JSON.stringify(filterValue),
       );
     }
 
@@ -133,6 +258,9 @@ export const isRecordMatchingFilter = ({
           record,
           filter: andFilter,
           objectMetadataItem,
+          objectMetadataItems,
+          isWithinNegatedFilter,
+          parentRecord,
         }),
       )
     );
@@ -149,6 +277,9 @@ export const isRecordMatchingFilter = ({
             record,
             filter: orFilter,
             objectMetadataItem,
+            objectMetadataItems,
+            isWithinNegatedFilter,
+            parentRecord,
           }),
         )
       );
@@ -160,17 +291,24 @@ export const isRecordMatchingFilter = ({
         record,
         filter: filterValue,
         objectMetadataItem,
+        objectMetadataItems,
+        isWithinNegatedFilter,
+        parentRecord,
       });
     }
 
-    throw new Error('Unexpected value for "or" filter : ' + filterValue);
+    throw new Error(
+      doNotTranslate('Unexpected value for "or" filter : ') + filterValue,
+    );
   }
 
   if (isNotFilter(filter)) {
     const filterValue = filter.not;
 
     if (!isDefined(filterValue)) {
-      throw new Error('Unexpected value for "not" filter : ' + filterValue);
+      throw new Error(
+        doNotTranslate('Unexpected value for "not" filter : ') + filterValue,
+      );
     }
 
     return (
@@ -179,6 +317,9 @@ export const isRecordMatchingFilter = ({
         record,
         filter: filterValue,
         objectMetadataItem,
+        objectMetadataItems,
+        isWithinNegatedFilter: !isWithinNegatedFilter,
+        parentRecord,
       })
     );
   }
@@ -192,11 +333,16 @@ export const isRecordMatchingFilter = ({
   return Object.entries(filter).every(([filterKey, filterValue]) => {
     if (!isDefined(filterValue)) {
       throw new Error(
-        'Unexpected value for filter key "' + filterKey + '" : ' + filterValue,
+        doNotTranslate('Unexpected value for filter key "') +
+          filterKey +
+          '" : ' +
+          filterValue,
       );
     }
 
-    if (isEmptyObject(filterValue)) return true;
+    if (isEmptyObject(filterValue)) {
+      return true;
+    }
 
     const objectMetadataField =
       objectMetadataItem.fields.find((field) => field.name === filterKey) ??
@@ -218,11 +364,40 @@ export const isRecordMatchingFilter = ({
 
     if (!isDefined(objectMetadataField)) {
       throw new Error(
-        'Field metadata item "' +
+        doNotTranslate('Field metadata item "') +
           filterKey +
-          '" not found for object metadata item ' +
+          doNotTranslate('" not found for object metadata item ') +
           objectMetadataItem.nameSingular,
       );
+    }
+
+    const fieldReferenceOperator = Object.keys(filterValue).find(
+      isFieldReferenceFilterOperator,
+    );
+
+    if (isDefined(fieldReferenceOperator)) {
+      return isMatchingFieldReferenceFilter({
+        value: record[filterKey],
+        fieldType: objectMetadataField.type,
+        operator: fieldReferenceOperator,
+        fieldReferenceValue: (filterValue as FieldReferenceFilter)[
+          fieldReferenceOperator
+        ],
+        record,
+        parentRecord,
+        isWithinNegatedFilter,
+      });
+    }
+
+    const subFieldMatchers =
+      COMPOSITE_FIELD_SUB_FIELD_MATCHERS_MAP[objectMetadataField.type];
+
+    if (isDefined(subFieldMatchers)) {
+      return isMatchingCompositeFilter({
+        compositeFilter: filterValue,
+        compositeValue: record[filterKey],
+        subFieldMatchers,
+      });
     }
 
     switch (objectMetadataField.type) {
@@ -230,6 +405,7 @@ export const isRecordMatchingFilter = ({
         return isMatchingRatingFilter({
           ratingFilter: filterValue as RatingFilter,
           value: record[filterKey],
+          options: objectMetadataField.options,
         });
       case FieldMetadataType.TEXT: {
         return isMatchingStringFilter({
@@ -247,6 +423,7 @@ export const isRecordMatchingFilter = ({
         return isMatchingSelectFilter({
           selectFilter: filterValue as SelectFilter,
           value: record[filterKey],
+          options: objectMetadataField.options,
         });
       case FieldMetadataType.MULTI_SELECT:
         return isMatchingMultiSelectFilter({
@@ -269,63 +446,6 @@ export const isRecordMatchingFilter = ({
         return isMatchingFilesFilter({
           filesFilter: filterValue as FilesFilter,
           value: record[filterKey],
-        });
-      }
-      case FieldMetadataType.FULL_NAME: {
-        const fullNameFilter = filterValue as FullNameFilter;
-
-        return (
-          (fullNameFilter.firstName === undefined ||
-            isMatchingStringFilter({
-              stringFilter: fullNameFilter.firstName,
-              value: record[filterKey]?.firstName,
-            })) &&
-          (fullNameFilter.lastName === undefined ||
-            isMatchingStringFilter({
-              stringFilter: fullNameFilter.lastName,
-              value: record[filterKey]?.lastName,
-            }))
-        );
-      }
-      case FieldMetadataType.ADDRESS: {
-        const addressFilter = filterValue as AddressFilter;
-
-        const keys = [
-          'addressStreet1',
-          'addressStreet2',
-          'addressCity',
-          'addressState',
-          'addressCountry',
-          'addressPostcode',
-        ] as const;
-
-        return keys.some((key) => {
-          const value = addressFilter[key];
-          if (value === undefined) {
-            return false;
-          }
-
-          return isMatchingStringFilter({
-            stringFilter: value,
-            value: record[filterKey]?.[key],
-          });
-        });
-      }
-      case FieldMetadataType.LINKS: {
-        const linksFilter = filterValue as LinksFilter;
-
-        const keys = ['primaryLinkLabel', 'primaryLinkUrl'] as const;
-
-        return keys.some((key) => {
-          const value = linksFilter[key];
-          if (value === undefined) {
-            return false;
-          }
-
-          return isMatchingStringFilter({
-            stringFilter: value,
-            value: record[filterKey]?.[key],
-          });
         });
       }
       case FieldMetadataType.DATE:
@@ -361,60 +481,6 @@ export const isRecordMatchingFilter = ({
           value: record[filterKey],
         });
       }
-      case FieldMetadataType.ACTOR: {
-        const actorFilter = filterValue as ActorFilter;
-
-        if (isDefined(actorFilter.workspaceMemberId)) {
-          return isMatchingUUIDFilter({
-            uuidFilter: actorFilter.workspaceMemberId,
-            value: record[filterKey]?.workspaceMemberId,
-          });
-        }
-
-        if (isDefined(actorFilter.source)) {
-          return isMatchingSelectFilter({
-            selectFilter: actorFilter.source,
-            value: record[filterKey].source,
-          });
-        }
-
-        return (
-          actorFilter.name === undefined ||
-          isMatchingStringFilter({
-            stringFilter: actorFilter.name,
-            value: record[filterKey]?.name,
-          })
-        );
-      }
-      case FieldMetadataType.EMAILS: {
-        const emailsFilter = filterValue as EmailsFilter;
-
-        if (emailsFilter.primaryEmail === undefined) {
-          return false;
-        }
-
-        return isMatchingStringFilter({
-          stringFilter: emailsFilter.primaryEmail,
-          value: record[filterKey]?.primaryEmail,
-        });
-      }
-      case FieldMetadataType.PHONES: {
-        const phonesFilter = filterValue as PhonesFilter;
-
-        const keys: (keyof PhonesFilter)[] = ['primaryPhoneNumber'];
-
-        return keys.some((key) => {
-          const value = phonesFilter[key];
-          if (value === undefined) {
-            return false;
-          }
-
-          return isMatchingStringFilter({
-            stringFilter: value,
-            value: record[filterKey]?.[key],
-          });
-        });
-      }
       case FieldMetadataType.RELATION:
       case FieldMetadataType.MORPH_RELATION: {
         const isJoinColumn =
@@ -430,27 +496,24 @@ export const isRecordMatchingFilter = ({
         if (isJoinColumn) {
           return isMatchingUUIDFilter({
             uuidFilter: filterValue as UUIDFilter,
-            value: record[filterKey],
+            value: getJoinColumnValue({ record, joinColumnName: filterKey }),
           });
         }
 
-        // OMNIA-CUSTOM: ONE_TO_MANY relation — handle { is: 'NULL' } /
-        // { is: 'NOT_NULL' } against the array-valued relation.
-        const relationFilter = filterValue as { is?: string };
-
-        if (relationFilter?.is === 'NULL') {
-          const val = record[filterKey];
-
-          return !val || (Array.isArray(val) && val.length === 0);
+        if (
+          objectMetadataField.type === FieldMetadataType.RELATION &&
+          isNestedRelationFilter(filterValue)
+        ) {
+          return isRecordMatchingNestedRelationFilter({
+            relationRecord: record[filterKey],
+            nestedFilter: filterValue,
+            relationFieldMetadataItem: objectMetadataField,
+            objectMetadataItems,
+            isWithinNegatedFilter,
+            parentRecord: record,
+          });
         }
 
-        if (relationFilter?.is === 'NOT_NULL') {
-          const val = record[filterKey];
-
-          return Array.isArray(val) && val.length > 0;
-        }
-
-        // MANY_TO_ONE relation: match by related record id.
         return isMatchingUUIDFilter({
           uuidFilter: filterValue as UUIDFilter,
           value: record[filterKey]?.id ?? null,
@@ -464,7 +527,9 @@ export const isRecordMatchingFilter = ({
       }
       default: {
         throw new Error(
-          `Not implemented yet for field type "${objectMetadataField.type}"`,
+          doNotTranslate(
+            `Not implemented yet for field type "${objectMetadataField.type}"`,
+          ),
         );
       }
     }

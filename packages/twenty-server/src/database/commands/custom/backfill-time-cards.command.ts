@@ -1,29 +1,38 @@
-import { InjectRepository } from '@nestjs/typeorm';
-
 import { Command, Option } from 'nest-commander';
-import { Repository } from 'typeorm';
+import { isDefined } from 'twenty-shared/utils';
 
-import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
+import { ProvisionedWorkspaceCommandRunner } from 'src/database/commands/command-runners/provisioned-workspace.command-runner';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
-import { type RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
+import {
+  type RunOnWorkspaceArgs,
+  type WorkspaceCommandOptions,
+} from 'src/database/commands/command-runners/workspace.command-runner';
 import { InjectMessageQueue } from 'src/engine/core-modules/message-queue/decorators/message-queue.decorator';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
 import { MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
 import { IngestionPipelineEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-pipeline.entity';
 import { IngestionPullJob } from 'src/engine/metadata-modules/ingestion-pipeline/jobs/ingestion-pull.job';
 import { type IngestionPullJobData } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-pull-scheduler.service';
+import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
+import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 
 const PIPELINE_NAME = 'Convoso Agent Productivity Sync';
 const DEFAULT_START_DATE = '2025-06-20';
 const DEFAULT_CHUNK_DAYS = 7;
 const CONVOSO_TIMEZONE = 'America/Los_Angeles';
 
+type BackfillTimeCardsOptions = WorkspaceCommandOptions & {
+  startDate?: string;
+  endDate?: string;
+  chunkDays?: number;
+};
+
 @Command({
   name: 'workspace:backfill-time-cards',
   description:
     'Backfill Time Cards from Convoso agent productivity history (chunked by week).',
 })
-export class BackfillTimeCardsCommand extends ActiveOrSuspendedWorkspaceCommandRunner {
+export class BackfillTimeCardsCommand extends ProvisionedWorkspaceCommandRunner<BackfillTimeCardsOptions> {
   @Option({
     flags: '--start-date <date>',
     description: `YYYY-MM-DD. Defaults to ${DEFAULT_START_DATE}.`,
@@ -48,13 +57,20 @@ export class BackfillTimeCardsCommand extends ActiveOrSuspendedWorkspaceCommandR
     required: false,
   })
   parseChunkDays(value: string): number {
-    return parseInt(value, 10);
+    const chunkDays = parseInt(value, 10);
+
+    // a zero or negative window never advances the chunk cursor
+    if (isNaN(chunkDays) || chunkDays <= 0) {
+      throw new Error('--chunk-days must be a positive number');
+    }
+
+    return chunkDays;
   }
 
   constructor(
     protected readonly workspaceIteratorService: WorkspaceIteratorService,
-    @InjectRepository(IngestionPipelineEntity)
-    private readonly pipelineRepository: Repository<IngestionPipelineEntity>,
+    @InjectWorkspaceScopedRepository(IngestionPipelineEntity)
+    private readonly pipelineRepository: WorkspaceScopedRepository<IngestionPipelineEntity>,
     @InjectMessageQueue(MessageQueue.ingestionQueue)
     private readonly messageQueueService: MessageQueueService,
   ) {
@@ -64,21 +80,16 @@ export class BackfillTimeCardsCommand extends ActiveOrSuspendedWorkspaceCommandR
   override async runOnWorkspace({
     workspaceId,
     options,
-  }: RunOnWorkspaceArgs): Promise<void> {
-    const opts = options as {
-      startDate?: string;
-      endDate?: string;
-      chunkDays?: number;
-    };
-    const startDate = opts.startDate ?? DEFAULT_START_DATE;
-    const endDate = opts.endDate ?? this.todayInTimezone(CONVOSO_TIMEZONE);
-    const chunkDays = opts.chunkDays ?? DEFAULT_CHUNK_DAYS;
+  }: RunOnWorkspaceArgs<BackfillTimeCardsOptions>): Promise<void> {
+    const startDate = options.startDate ?? DEFAULT_START_DATE;
+    const endDate = options.endDate ?? this.todayInTimezone(CONVOSO_TIMEZONE);
+    const chunkDays = options.chunkDays ?? DEFAULT_CHUNK_DAYS;
 
-    const pipeline = await this.pipelineRepository.findOne({
-      where: { workspaceId, name: PIPELINE_NAME },
+    const pipeline = await this.pipelineRepository.findOne(workspaceId, {
+      where: { name: PIPELINE_NAME },
     });
 
-    if (!pipeline) {
+    if (!isDefined(pipeline)) {
       this.logger.error(
         `Pipeline "${PIPELINE_NAME}" not found for workspace ${workspaceId}. Run workspace:seed-convoso-time-card-pipeline first.`,
       );
@@ -109,7 +120,7 @@ export class BackfillTimeCardsCommand extends ActiveOrSuspendedWorkspaceCommandR
           startTimeOverride: chunk.start,
           endTimeOverride: chunk.end,
         },
-        { retryLimit: 3 },
+        { isWorkspaceJob: true, workspaceId, retryLimit: 3 },
       );
 
       this.logger.log(
@@ -160,8 +171,6 @@ export class BackfillTimeCardsCommand extends ActiveOrSuspendedWorkspaceCommandR
   }
 
   private todayInTimezone(timeZone: string): string {
-    return new Date()
-      .toLocaleString('sv-SE', { timeZone })
-      .split(' ')[0];
+    return new Date().toLocaleString('sv-SE', { timeZone }).split(' ')[0];
   }
 }

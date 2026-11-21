@@ -1,6 +1,9 @@
 import { ViewFilterOperand, ViewFilterOperandDeprecated } from '@/types';
 
-const operandMapping: Record<string, ViewFilterOperand> = {
+const operandMapping: Record<
+  ViewFilterOperand | ViewFilterOperandDeprecated,
+  ViewFilterOperand
+> = {
   [ViewFilterOperandDeprecated.Is]: ViewFilterOperand.IS,
   [ViewFilterOperandDeprecated.IsNotNull]: ViewFilterOperand.IS_NOT_NULL,
   [ViewFilterOperandDeprecated.IsNot]: ViewFilterOperand.IS_NOT,
@@ -32,6 +35,7 @@ const operandMapping: Record<string, ViewFilterOperand> = {
   [ViewFilterOperand.IS_EMPTY]: ViewFilterOperand.IS_EMPTY,
   [ViewFilterOperand.IS_NOT_EMPTY]: ViewFilterOperand.IS_NOT_EMPTY,
   [ViewFilterOperand.IS_RELATIVE]: ViewFilterOperand.IS_RELATIVE,
+  // OMNIA-CUSTOM: workflow-only operand; the map is exhaustive over the enum.
   [ViewFilterOperand.IS_NOT_RELATIVE]: ViewFilterOperand.IS_NOT_RELATIVE,
   [ViewFilterOperand.IS_IN_PAST]: ViewFilterOperand.IS_IN_PAST,
   [ViewFilterOperand.IS_IN_FUTURE]: ViewFilterOperand.IS_IN_FUTURE,
@@ -40,7 +44,7 @@ const operandMapping: Record<string, ViewFilterOperand> = {
 };
 
 export const convertViewFilterOperandToCoreOperand = (
-  sharedOperand: string,
+  sharedOperand: ViewFilterOperand | ViewFilterOperandDeprecated,
 ): ViewFilterOperand => {
   return operandMapping[sharedOperand];
 };

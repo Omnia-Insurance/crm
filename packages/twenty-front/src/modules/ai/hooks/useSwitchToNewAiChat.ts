@@ -1,27 +1,49 @@
 import { useStore } from 'jotai';
 
-import { useSwitchAgentChatThreadWithDraft } from '@/ai/hooks/useSwitchAgentChatThreadWithDraft';
-import { AGENT_CHAT_NEW_THREAD_DRAFT_KEY } from '@/ai/states/agentChatDraftsByThreadIdState';
+import { useNavigateToAiChatPage } from '@/ai/hooks/useNavigateToAiChatPage';
+import { useSelectAiChatThread } from '@/ai/hooks/useSelectAiChatThread';
+import { agentChatNewThreadChannelIdState } from '@/ai/states/agentChatNewThreadChannelIdState';
+import { newAiChatThreadIdState } from '@/ai/states/newAiChatThreadIdState';
 import { shouldFocusChatEditorState } from '@/ai/states/shouldFocusChatEditorState';
-import { hasTriggeredCreateForDraftState } from '@/ai/states/hasTriggeredCreateForDraftState';
-import { threadIdCreatedFromDraftState } from '@/ai/states/threadIdCreatedFromDraftState';
 import { useOpenAskAiPageInSidePanel } from '@/side-panel/hooks/useOpenAskAiPageInSidePanel';
-import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
+import { isAiChatInboxPath } from '~/utils/isAiChatInboxPath';
 
-export const useSwitchToNewAiChat = () => {
-  const setThreadIdCreatedFromDraft = useSetAtomState(
-    threadIdCreatedFromDraftState,
-  );
-  const { switchThreadWithDraft } = useSwitchAgentChatThreadWithDraft();
+type UseSwitchToNewAiChatParams = {
+  shouldOpenInFullPage?: boolean;
+};
+
+export const useSwitchToNewAiChat = ({
+  shouldOpenInFullPage = false,
+}: UseSwitchToNewAiChatParams = {}) => {
+  const { selectAiChatThread } = useSelectAiChatThread();
   const store = useStore();
   const { openAskAiPage } = useOpenAskAiPageInSidePanel();
+  const { navigateToAiChatPage } = useNavigateToAiChatPage();
 
   const switchToNewChat = () => {
-    setThreadIdCreatedFromDraft(null);
-    store.set(hasTriggeredCreateForDraftState.atom, false);
-    switchThreadWithDraft(AGENT_CHAT_NEW_THREAD_DRAFT_KEY);
-    openAskAiPage();
+    const isOnInboxPage = isAiChatInboxPath(window.location.pathname);
+
+    if (!isOnInboxPage) {
+      store.set(agentChatNewThreadChannelIdState.atom, null);
+    }
+
+    const newAiChatThreadId = store.get(newAiChatThreadIdState.atom);
+
+    selectAiChatThread(newAiChatThreadId);
+
+    const shouldNavigateToChatPage = shouldOpenInFullPage && !isOnInboxPage;
+
+    if (shouldNavigateToChatPage) {
+      navigateToAiChatPage();
+    }
+
+    if (!shouldOpenInFullPage && !isOnInboxPage) {
+      openAskAiPage();
+    }
+
     store.set(shouldFocusChatEditorState.atom, true);
+
+    return newAiChatThreadId;
   };
 
   return { switchToNewChat };

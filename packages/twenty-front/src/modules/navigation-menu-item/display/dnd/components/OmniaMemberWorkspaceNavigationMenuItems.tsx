@@ -1,26 +1,53 @@
+import { useMemberSidebarObjectMetadataItems } from '@/navigation-menu-item/display/hooks/useMemberSidebarObjectMetadataItems';
+import { NavigationDrawerItemForObjectMetadataItem } from '@/navigation-menu-item/display/object/components/NavigationDrawerItemForObjectMetadataItem';
+import { NavigationMenuItemSection } from '@/navigation-menu-item/display/sections/components/NavigationMenuItemSection';
+import { useNavigationSection } from '@/ui/navigation/navigation-drawer/hooks/useNavigationSection';
+import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
+import { doNotTranslate } from 'twenty-shared/i18n';
+import { isNonEmptyArray } from 'twenty-shared/utils';
+import { themeCssVariables } from 'twenty-ui/theme';
 
-import { NavigationDrawerSectionForObjectMetadataItems } from '@/object-metadata/components/NavigationDrawerSectionForObjectMetadataItems';
-import { useFilteredObjectMetadataItems } from '@/object-metadata/hooks/useFilteredObjectMetadataItems';
-import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
-import isEmpty from 'lodash.isempty';
+// Same spacing as the read-only workspace tree in WorkspaceSectionContainer.
+const StyledContentGapOffset = styled.div`
+  margin-top: calc(-1 * ${themeCssVariables.betweenSiblingsGap});
+`;
+
+const StyledList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: ${themeCssVariables.betweenSiblingsGap};
+  padding-top: ${themeCssVariables.betweenSiblingsGap};
+`;
 
 export const OmniaMemberWorkspaceNavigationMenuItems = () => {
   const { t } = useLingui();
-  const { activeNonSystemObjectMetadataItems } =
-    useFilteredObjectMetadataItems();
-  const { objectPermissionsByObjectMetadataId } = useObjectPermissions();
+  const { isLoaded, objectMetadataItems } =
+    useMemberSidebarObjectMetadataItems();
+  const { isNavigationSectionOpen, toggleNavigationSection } =
+    useNavigationSection(doNotTranslate('Workspace'));
 
-  // Don't render until permissions have loaded — otherwise every object
-  // defaults to showInSidebar: true and flashes in the sidebar briefly.
-  if (isEmpty(objectPermissionsByObjectMetadataId)) {
+  if (!isLoaded || !isNonEmptyArray(objectMetadataItems)) {
     return null;
   }
 
   return (
-    <NavigationDrawerSectionForObjectMetadataItems
-      sectionTitle={t`Workspace`}
-      objectMetadataItems={activeNonSystemObjectMetadataItems}
-    />
+    <NavigationMenuItemSection
+      title={t`Workspace`}
+      isOpen={isNavigationSectionOpen}
+      onToggle={toggleNavigationSection}
+      contentWrapper={(children) => (
+        <StyledContentGapOffset>{children}</StyledContentGapOffset>
+      )}
+    >
+      <StyledList>
+        {objectMetadataItems.map((objectMetadataItem) => (
+          <NavigationDrawerItemForObjectMetadataItem
+            key={objectMetadataItem.id}
+            objectMetadataItem={objectMetadataItem}
+          />
+        ))}
+      </StyledList>
+    </NavigationMenuItemSection>
   );
 };

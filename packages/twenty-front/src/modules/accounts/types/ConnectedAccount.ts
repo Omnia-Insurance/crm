@@ -8,18 +8,18 @@ export type ConnectedAccount = {
   handle: string;
   provider: ConnectedAccountProvider;
   authFailedAt: string | null;
-  // Set when the account was frozen after its owner left the workspace:
-  // synced data is kept but the account is read-only.
+  authFailedReason: string | null;
+  // Set when the account is disconnected or frozen: synced data is kept but
+  // cannot be updated until the account is reconnected.
   archivedAt: string | null;
   scopes: string[] | null;
   handleAliases: string[] | null;
   lastSignedInAt: string | null;
   userWorkspaceId: string;
   connectionProviderId: string | null;
+  applicationId: string | null;
   name: string | null;
-  // Connection-row visibility — distinct from the `scopes` array above
-  // (those are upstream-granted OAuth permissions).
-  visibility: 'user' | 'workspace';
+  scope: 'USER' | 'WORKSPACE';
   lastCredentialsRefreshedAt: string | null;
   connectionParameters: ImapSmtpCaldavAccountInput | null;
   createdAt: string;

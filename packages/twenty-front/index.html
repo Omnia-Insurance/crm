@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
 
+    <!-- OMNIA-CUSTOM: Omnia favicon, apple-touch icon, og/twitter titles and page title. -->
     <link
       rel="icon"
       type="image/png"
@@ -10,7 +11,7 @@
       data-rh="true"
     />
     <link rel="apple-touch-icon" href="/images/icons/omnia/192.png" />
-    <link rel="manifest" href="/manifest.json" />
+    <link rel="manifest" href="/manifest.json" crossorigin="use-credentials" />
 
     <meta name="theme-color" content="#000000" />
     <meta name="description" content="A modern open-source CRM" />
@@ -28,17 +29,6 @@
 
     <meta name="twitter:description" content="A modern open-source CRM" />
     <meta name="twitter:title" content="Omnia" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"
-    />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500;600&display=swap"
-    />
-
     <title>Omnia</title>
     <!-- BEGIN: Twenty Config -->
     <script id="twenty-env-config">
@@ -48,7 +38,10 @@
     </script>
     <!-- END: Twenty Config -->
 
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content"
+    />
     <script type="module">
       const disableInputAutoZoom = () => {
         const viewportMetadata = document.querySelector('meta[name=viewport]');
@@ -56,7 +49,7 @@
         if (viewportMetadata !== null) {
           viewportMetadata.setAttribute(
             'content',
-            'width=device-width, initial-scale=1.0, maximum-scale=1.0',
+            'width=device-width, initial-scale=1.0, maximum-scale=1.0, interactive-widget=resizes-content',
           );
         }
       };
@@ -67,24 +60,27 @@
       }
     </script>
     <style>
+      /* react-data-grid declares its layer when it loads; keep it below twenty-ui. */
+      @layer rdg, twenty-ui;
+
       :root {
-        /* THEME_DARK.background.tertiary */
-        --theme-dark-background-tertiary: #1d1d1d;
-        /* THEME_LIGHT.background.tertiary */
-        --theme-light-background-tertiary: #f1f1f1;
+        /* THEME_DARK.background.secondary */
+        --theme-dark-background-secondary: #1b1b1b;
+        /* THEME_LIGHT.background.secondary */
+        --theme-light-background-secondary: #fcfcfc;
       }
 
       @media (prefers-color-scheme: dark) {
         html,
         body {
-          background-color: var(--theme-dark-background-tertiary);
+          background-color: var(--theme-dark-background-secondary);
         }
       }
 
       @media (prefers-color-scheme: light) {
         html,
         body {
-          background-color: var(--theme-light-background-tertiary);
+          background-color: var(--theme-light-background-secondary);
         }
       }
     </style>

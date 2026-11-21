@@ -5,15 +5,15 @@ export class AddTypeToNavigationMenuItem1773681736596 implements MigrationInterf
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
-      `DO $$ BEGIN CREATE TYPE "core"."navigationMenuItem_type_enum" AS ENUM('VIEW', 'FOLDER', 'LINK', 'OBJECT', 'RECORD'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
+      `CREATE TYPE "core"."navigationMenuItem_type_enum" AS ENUM('VIEW', 'FOLDER', 'LINK', 'OBJECT', 'RECORD')`,
     );
 
     await queryRunner.query(
-      `ALTER TABLE "core"."navigationMenuItem" ADD COLUMN IF NOT EXISTS "type" "core"."navigationMenuItem_type_enum"`,
+      `ALTER TABLE "core"."navigationMenuItem" ADD "type" "core"."navigationMenuItem_type_enum"`,
     );
 
     await queryRunner.query(
-      `ALTER TABLE "core"."navigationMenuItem" DROP CONSTRAINT IF EXISTS "CHK_navigation_menu_item_target_fields"`,
+      `ALTER TABLE "core"."navigationMenuItem" DROP CONSTRAINT "CHK_navigation_menu_item_target_fields"`,
     );
   }
 

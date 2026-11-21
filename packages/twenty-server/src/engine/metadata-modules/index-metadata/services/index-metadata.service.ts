@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { msg } from '@lingui/core/macro';
 import { compositeTypeDefinitions, RelationType } from 'twenty-shared/types';
 import { isNonEmptyString } from '@sniptt/guards';
+import { isWorkspaceCustomIndex } from 'twenty-shared/metadata';
 import { isDefined } from 'twenty-shared/utils';
 import { v4 } from 'uuid';
 
@@ -99,8 +100,6 @@ export class IndexMetadataService {
       );
     }
 
-    // Resolve each input to a flat field + validated subFieldName (or null
-    // for scalar/relation parents).
     const resolvedInputs = fieldInputs.map((input) => {
       const flatField = findFlatEntityByIdInFlatEntityMaps({
         flatEntityMaps: existingFlatFieldMetadataMaps,
@@ -161,7 +160,6 @@ export class IndexMetadataService {
           );
         }
       } else if (isNonEmptyString(input.subFieldName)) {
-        // Scalar / relation parent — sub-field doesn't apply.
         throw new IndexMetadataException(
           `Field ${flatField.name} is not composite — subFieldName must not be set`,
           IndexMetadataExceptionCode.INDEX_NOT_SUPPORTED_FOR_COMPOSITE_FIELD,
@@ -203,6 +201,11 @@ export class IndexMetadataService {
       objectMetadataId: createIndexInput.objectMetadataId,
     });
 
+    const { workspaceCustomFlatApplication } =
+      await this.applicationService.findWorkspaceTwentyStandardAndCustomApplicationOrThrow(
+        { workspaceId },
+      );
+
     const existingCustomIndexCount = Object.values(
       existingFlatIndexMaps.byUniversalIdentifier,
     )
@@ -210,7 +213,10 @@ export class IndexMetadataService {
       .filter(
         (flatIndex) =>
           flatIndex.objectMetadataId === createIndexInput.objectMetadataId &&
-          flatIndex.isCustom,
+          isWorkspaceCustomIndex({
+            indexMetadata: flatIndex,
+            workspaceCustomApplicationId: workspaceCustomFlatApplication.id,
+          }),
       ).length;
 
     if (existingCustomIndexCount >= MAX_CUSTOM_INDEXES_PER_OBJECT) {
@@ -222,11 +228,6 @@ export class IndexMetadataService {
         },
       );
     }
-
-    const { workspaceCustomFlatApplication } =
-      await this.applicationService.findWorkspaceTwentyStandardAndCustomApplicationOrThrow(
-        { workspaceId },
-      );
 
     const indexMetadataUniversalIdentifier = v4();
     const createdAt = new Date().toISOString();
@@ -241,7 +242,6 @@ export class IndexMetadataService {
           indexType: createIndexInput.indexType,
           // WHERE clause is system-only — see CreateIndexInput for rationale.
           indexWhereClause: null,
-          isCustom: true,
           isUnique: false,
           isSystemSideEffect: false,
           objectMetadataUniversalIdentifier:
@@ -341,9 +341,19 @@ export class IndexMetadataService {
       );
     }
 
+    const { workspaceCustomFlatApplication } =
+      await this.applicationService.findWorkspaceTwentyStandardAndCustomApplicationOrThrow(
+        { workspaceId },
+      );
+
     // Protect system indexes — they back uniqueness constraints, FK lookups,
     // and search performance. Dropping one corrupts the data model.
-    if (!flatIndexToDelete.isCustom) {
+    if (
+      !isWorkspaceCustomIndex({
+        indexMetadata: flatIndexToDelete,
+        workspaceCustomApplicationId: workspaceCustomFlatApplication.id,
+      })
+    ) {
       throw new IndexMetadataException(
         `Index ${id} is a system index and cannot be deleted`,
         IndexMetadataExceptionCode.CANNOT_DELETE_SYSTEM_INDEX,
@@ -352,11 +362,6 @@ export class IndexMetadataService {
         },
       );
     }
-
-    const { workspaceCustomFlatApplication } =
-      await this.applicationService.findWorkspaceTwentyStandardAndCustomApplicationOrThrow(
-        { workspaceId },
-      );
 
     const validateAndBuildResult =
       await this.workspaceMigrationValidateBuildAndRunService.validateBuildAndRunWorkspaceMigration(

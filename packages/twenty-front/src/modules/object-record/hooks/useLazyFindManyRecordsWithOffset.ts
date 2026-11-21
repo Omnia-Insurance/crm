@@ -12,6 +12,7 @@ import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPe
 import { useRelevantRecordsGqlFields } from '@/object-record/record-field/hooks/useRelevantRecordsGqlFields';
 import { useFindManyRecordIndexTableParams } from '@/object-record/record-index/hooks/useFindManyRecordIndexTableParams';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
+import { canReachSomeRecords } from 'twenty-shared/utils';
 
 type UseLazyFindManyRecordsWithOffsetParams = Pick<
   UseFindManyRecordsParams<ObjectRecord>,
@@ -46,7 +47,10 @@ export const useLazyFindManyRecordsWithOffset = ({
     objectMetadataItem.id,
   );
 
-  const hasReadPermission = objectPermissions.canReadObjectRecords;
+  const hasReadPermission = canReachSomeRecords({
+    objectRecordsPermissions: objectPermissions,
+    operationType: 'read',
+  });
 
   const findManyRecordsLazyWithOffset = useCallback(
     async (limit: number, offset: number) => {
@@ -59,9 +63,6 @@ export const useLazyFindManyRecordsWithOffset = ({
         };
       }
 
-      // OMNIA-CUSTOM: Use no-cache because the record table reads from jotai
-      // (recordStoreFamilyState), not Apollo cache. With Apollo 3 (no automatic
-      // cache GC), caching here causes unbounded memory growth → mobile OOM.
       const result =
         await apolloCoreClient.query<RecordGqlOperationFindManyResult>({
           query: findManyRecordsQuery,
@@ -70,6 +71,8 @@ export const useLazyFindManyRecordsWithOffset = ({
             limit,
             offset,
           },
+          // OMNIA-CUSTOM: the table reads rows from jotai; also caching them in
+          // Apollo (no automatic cache GC) grew memory until mobile crashed
           fetchPolicy: 'no-cache',
         });
 

@@ -1,30 +1,23 @@
 import { styled } from '@linaria/react';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { Card } from 'twenty-ui/primitives/surfaces';
+import { themeCssVariables } from 'twenty-ui/theme';
 
-type StyledCardContentProps = {
-  disabled?: boolean;
-  alignItems?: 'center' | 'flex-start';
-  fullHeight?: boolean;
-};
-
-export const StyledSettingsCardContent = styled.div<StyledCardContentProps>`
-  align-items: ${({ alignItems }) => alignItems ?? 'center'};
-  background-color: ${themeCssVariables.background.secondary};
+export const StyledSettingsCardContent = styled(Card.Content)`
+  align-items: center;
   display: flex;
   gap: ${themeCssVariables.spacing[3]};
-  height: ${({ fullHeight }) => (fullHeight ? '100%' : 'auto')};
-  padding: ${themeCssVariables.spacing[4]};
 `;
 export const StyledSettingsCardIcon = styled.div`
   align-items: center;
   background-color: ${themeCssVariables.background.primary};
   border: 2px solid ${themeCssVariables.border.color.light};
   border-radius: ${themeCssVariables.border.radius.sm};
+  box-sizing: border-box;
   display: flex;
-  height: ${themeCssVariables.spacing[7]};
+  height: ${themeCssVariables.spacing[8]};
   justify-content: center;
-  min-width: ${themeCssVariables.icon.size.md};
-  width: ${themeCssVariables.spacing[7]};
+  min-width: ${themeCssVariables.spacing[8]};
+  width: ${themeCssVariables.spacing[8]};
 `;
 
 export const StyledSettingsCardTitle = styled.div`

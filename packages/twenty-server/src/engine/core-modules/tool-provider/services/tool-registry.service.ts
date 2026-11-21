@@ -1,24 +1,33 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
+import * as Sentry from '@sentry/node';
 import { type ToolSet, jsonSchema } from 'ai';
+import { type ToolCategory } from 'twenty-shared/ai';
 import { type APP_LOCALES } from 'twenty-shared/translations';
+import { isDefined } from 'twenty-shared/utils';
 
+import { type FlatApplication } from 'src/engine/core-modules/application/types/flat-application.type';
+import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { type ToolProviderContext } from 'src/engine/core-modules/tool-provider/interfaces/tool-provider-context.type';
+import { type GenerateDescriptorOptions } from 'src/engine/core-modules/tool-provider/interfaces/generate-descriptor-options.type';
 import { type ToolProvider } from 'src/engine/core-modules/tool-provider/interfaces/tool-provider.interface';
 import { type ToolRetrievalOptions } from 'src/engine/core-modules/tool-provider/interfaces/tool-retrieval-options.type';
 
+import { ExceptionHandlerService } from 'src/engine/core-modules/exception-handler/exception-handler.service';
 import { TOOL_PROVIDERS } from 'src/engine/core-modules/tool-provider/constants/tool-providers.token';
 import { compactToolOutput } from 'src/engine/core-modules/tool-provider/output-transforms/compact-tool-output.util';
+import { normalizeToolOutputToJsonValues } from 'src/engine/core-modules/tool-provider/output-transforms/normalize-tool-output-to-json-values.util';
+import { DefinedToolRegistryService } from 'src/engine/core-modules/tool-provider/services/defined-tool-registry.service';
 import { ToolExecutorService } from 'src/engine/core-modules/tool-provider/services/tool-executor.service';
 import { type LearnToolsAspect } from 'src/engine/core-modules/tool-provider/tools/learn-tools.tool';
+import { type ToolCatalogOptions } from 'src/engine/core-modules/tool-provider/types/tool-catalog-options.type';
 import { type ToolContext } from 'src/engine/core-modules/tool-provider/types/tool-context.type';
 import { type ToolDescriptor } from 'src/engine/core-modules/tool-provider/types/tool-descriptor.type';
 import { type ToolIndexEntry } from 'src/engine/core-modules/tool-provider/types/tool-index-entry.type';
+import { buildToolExecutionFailure } from 'src/engine/core-modules/tool-provider/utils/build-tool-execution-failure.util';
 import { findSimilarToolNames } from 'src/engine/core-modules/tool-provider/utils/find-similar-tool-names.util';
-import { wrapWithErrorHandler } from 'src/engine/core-modules/tool-provider/utils/tool-error.util';
 import { ToolOutputSpillService } from 'src/engine/core-modules/tool/services/tool-output-spill.service';
 import { type ToolOutput } from 'src/engine/core-modules/tool/types/tool-output.type';
-import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
 
 @Injectable()
 export class ToolRegistryService {
@@ -27,24 +36,45 @@ export class ToolRegistryService {
   constructor(
     @Inject(TOOL_PROVIDERS)
     private readonly providers: ToolProvider[],
+    private readonly definedToolRegistryService: DefinedToolRegistryService,
     private readonly toolExecutorService: ToolExecutorService,
     private readonly toolOutputSpillService: ToolOutputSpillService,
+    private readonly exceptionHandlerService: ExceptionHandlerService,
   ) {}
 
-  async getCatalog(context: ToolProviderContext): Promise<ToolIndexEntry[]> {
-    const results = await Promise.all(
-      this.providers.map(async (provider) => {
-        if (await provider.isAvailable(context)) {
-          return provider.generateDescriptors(context, {
-            includeSchemas: false,
-          });
-        }
+  getCatalog(
+    context: ToolProviderContext,
+    options: ToolCatalogOptions & { includeSchemas: true },
+  ): Promise<ToolDescriptor[]>;
+  getCatalog(
+    context: ToolProviderContext,
+    options?: ToolCatalogOptions & { includeSchemas?: false },
+  ): Promise<ToolIndexEntry[]>;
+  async getCatalog(
+    context: ToolProviderContext,
+    {
+      categories,
+      excludeTools,
+      includeSchemas = false,
+    }: ToolCatalogOptions & { includeSchemas?: boolean } = {},
+  ): Promise<(ToolIndexEntry | ToolDescriptor)[]> {
+    const executionContext = await this.resolveExecutionContext(context);
 
-        return [];
+    const [providerDescriptors, definedToolDescriptors] = await Promise.all([
+      this.listProviderDescriptors({
+        context: executionContext,
+        categories,
+        includeSchemas,
       }),
-    );
+      this.definedToolRegistryService.getAvailableDescriptors(
+        executionContext,
+        { categories, includeSchemas },
+      ),
+    ]);
 
-    return results.flat();
+    return [...providerDescriptors, ...definedToolDescriptors].filter(
+      (entry) => !excludeTools?.has(entry.name),
+    );
   }
 
   async resolveSchemas({
@@ -56,20 +86,31 @@ export class ToolRegistryService {
     context: ToolProviderContext;
     precomputedCatalog?: ToolIndexEntry[];
   }): Promise<Map<string, object>> {
-    const index = precomputedCatalog ?? (await this.getCatalog(context));
+    const executionContext = await this.resolveExecutionContext(context);
+    const index =
+      precomputedCatalog ?? (await this.getCatalog(executionContext));
     const nameSet = new Set(toolNames);
     const matchingEntries = index.filter((entry) => nameSet.has(entry.name));
 
+    const schemas = new Map<string, object>();
     const byCategory = new Map<string, ToolIndexEntry[]>();
 
     for (const entry of matchingEntries) {
+      const definedTool = this.definedToolRegistryService.findDefinedTool(
+        entry.name,
+      );
+
+      if (isDefined(definedTool)) {
+        schemas.set(entry.name, definedTool.inputJsonSchema);
+
+        continue;
+      }
+
       const existing = byCategory.get(entry.category) ?? [];
 
       existing.push(entry);
       byCategory.set(entry.category, existing);
     }
-
-    const schemas = new Map<string, object>();
 
     for (const [category, entries] of byCategory) {
       const provider = this.providers.find(
@@ -82,9 +123,10 @@ export class ToolRegistryService {
 
       const entryNameSet = new Set(entries.map((entry) => entry.name));
 
-      const descriptors = await provider.generateDescriptors(context, {
-        includeSchemas: true,
-        toolNames: entryNameSet,
+      const descriptors = await this.generateProviderDescriptors({
+        provider,
+        context: executionContext,
+        options: { includeSchemas: true, toolNames: entryNameSet },
       });
 
       for (const descriptor of descriptors) {
@@ -101,12 +143,10 @@ export class ToolRegistryService {
     return schemas;
   }
 
-  // Hydrate ToolDescriptor[] into an AI SDK ToolSet with thin dispatch closures
   hydrateToolSet(
     descriptors: ToolDescriptor[],
     context: ToolProviderContext,
     options?: {
-      wrapWithErrorContext?: boolean;
       compactOutput?: boolean;
       spillLargeOutput?: boolean;
     },
@@ -131,21 +171,21 @@ export class ToolRegistryService {
           ? (compactToolOutput(result) as ToolOutput)
           : result;
 
-        return spillLargeOutput
-          ? this.toolOutputSpillService.spillIfTooLarge(
+        const inlined = spillLargeOutput
+          ? await this.toolOutputSpillService.spillIfTooLarge(
               compacted,
               { workspaceId: context.workspaceId },
               { toolName: descriptor.name },
             )
           : compacted;
+
+        return normalizeToolOutputToJsonValues(inlined);
       };
 
       toolSet[descriptor.name] = {
         description: descriptor.description,
         inputSchema: jsonSchema(schema),
-        execute: options?.wrapWithErrorContext
-          ? wrapWithErrorHandler(descriptor.name, executeFn)
-          : executeFn,
+        execute: executeFn,
       };
     }
 
@@ -154,22 +194,29 @@ export class ToolRegistryService {
 
   async buildToolIndex(
     workspaceId: string,
-    roleId: string,
-    options?: {
+    options: {
       userId?: string;
       userWorkspaceId?: string;
       locale?: keyof typeof APP_LOCALES;
+      categories?: ToolCategory[];
+      excludeTools?: Set<string>;
+      authContext?: WorkspaceAuthContext;
+      application?: FlatApplication;
     },
   ): Promise<ToolIndexEntry[]> {
     const context = this.buildContextFromToolContext({
       workspaceId,
-      roleId,
-      userId: options?.userId,
-      userWorkspaceId: options?.userWorkspaceId,
-      locale: options?.locale,
+      userId: options.userId,
+      userWorkspaceId: options.userWorkspaceId,
+      locale: options.locale,
+      authContext: options.authContext,
+      application: options.application,
     });
 
-    return this.getCatalog(context);
+    return this.getCatalog(context, {
+      categories: options.categories,
+      excludeTools: options.excludeTools,
+    });
   }
 
   async getToolsByName(
@@ -251,14 +298,28 @@ export class ToolRegistryService {
     });
   }
 
+  async findCatalogEntry(
+    toolName: string,
+    context: ToolContext,
+  ): Promise<ToolIndexEntry | undefined> {
+    const catalog = await this.getCatalog(
+      this.buildContextFromToolContext(context),
+    );
+
+    return catalog.find((entry) => entry.name === toolName);
+  }
+
   async suggestSimilarToolNames(
     toolNames: string[],
     context: ToolContext,
+    isToolAllowed: (toolName: string) => boolean = () => true,
   ): Promise<Record<string, string[]>> {
     const fullContext = this.buildContextFromToolContext(context);
 
     const catalog = await this.getCatalog(fullContext);
-    const candidateToolNames = catalog.map((entry) => entry.name);
+    const candidateToolNames = catalog
+      .map((entry) => entry.name)
+      .filter(isToolAllowed);
 
     const suggestionsByToolName: Record<string, string[]> = {};
 
@@ -301,7 +362,7 @@ export class ToolRegistryService {
         return {
           success: false,
           message: `Tool "${toolName}" not found`,
-          error: `Tool "${toolName}" not found.${suggestionHint} Use learn_tools to discover available tools.`,
+          error: `Tool "${toolName}" not found.${suggestionHint} Pass your best candidate name to learn_tools to confirm it before executing.`,
         };
       }
 
@@ -315,29 +376,47 @@ export class ToolRegistryService {
         ? (compactToolOutput(result) as ToolOutput)
         : result;
 
-      return options?.spillLargeOutput
-        ? this.toolOutputSpillService.spillIfTooLarge(
+      const inlined = options?.spillLargeOutput
+        ? await this.toolOutputSpillService.spillIfTooLarge(
             compacted,
             { workspaceId: fullContext.workspaceId },
             { toolName },
           )
         : compacted;
+
+      return normalizeToolOutputToJsonValues(inlined);
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
+      const { output, shouldCapture } = buildToolExecutionFailure({
+        error,
+        toolName,
+      });
 
-      this.logger.error(`Error executing tool "${toolName}": ${errorMessage}`);
+      if (shouldCapture) {
+        this.exceptionHandlerService.captureExceptions([error], {
+          workspace: { id: context.workspaceId },
+        });
+      }
 
-      return {
-        success: false,
-        message: `Failed to execute ${toolName}`,
-        error: errorMessage,
-      };
+      this.logger.error(
+        `Error executing tool "${toolName}" in workspace ${context.workspaceId}: ${output.error}`,
+      );
+
+      return output;
     }
   }
 
-  // Eager loading tools by categories (MCP, workflow agent).
-  // These paths need full schemas, so generate with includeSchemas: true.
+  async spillToolOutputIfTooLarge(
+    output: ToolOutput,
+    context: ToolContext,
+    toolName: string,
+  ): Promise<ToolOutput> {
+    return this.toolOutputSpillService.spillIfTooLarge(
+      output,
+      { workspaceId: context.workspaceId },
+      { toolName },
+    );
+  }
+
   async getToolsByCategories(
     context: ToolProviderContext,
     options: ToolRetrievalOptions = {},
@@ -345,42 +424,20 @@ export class ToolRegistryService {
     const {
       categories,
       excludeTools,
-      wrapWithErrorContext,
+      isToolOffered = () => true,
       compactOutput,
       spillLargeOutput,
     } = options;
-    const categorySet = categories ? new Set(categories) : undefined;
 
-    const results = await Promise.all(
-      this.providers
-        .filter(
-          (provider) => !categorySet || categorySet.has(provider.category),
-        )
-        .map(async (provider) => {
-          if (await provider.isAvailable(context)) {
-            return provider.generateDescriptors(context, {
-              includeSchemas: true,
-            });
-          }
+    const descriptors = (
+      await this.getCatalog(context, {
+        categories,
+        excludeTools,
+        includeSchemas: true,
+      })
+    ).filter(isToolOffered);
 
-          return [];
-        }),
-    );
-
-    const descriptors = results.flat() as ToolDescriptor[];
-
-    let filteredDescriptors = descriptors;
-
-    if (excludeTools?.length) {
-      const excludeSet = new Set(excludeTools);
-
-      filteredDescriptors = filteredDescriptors.filter(
-        (descriptor) => !excludeSet.has(descriptor.name),
-      );
-    }
-
-    const toolSet = this.hydrateToolSet(filteredDescriptors, context, {
-      wrapWithErrorContext,
+    const toolSet = this.hydrateToolSet(descriptors, context, {
       compactOutput,
       spillLargeOutput,
     });
@@ -392,21 +449,109 @@ export class ToolRegistryService {
     return toolSet;
   }
 
+  private async listProviderDescriptors({
+    context,
+    categories,
+    includeSchemas,
+  }: {
+    context: ToolProviderContext;
+    categories: ToolCategory[] | undefined;
+    includeSchemas: boolean;
+  }): Promise<(ToolIndexEntry | ToolDescriptor)[]> {
+    const descriptorsByProvider = await Promise.all(
+      this.providers
+        .filter(
+          (provider) =>
+            !isDefined(categories) || categories.includes(provider.category),
+        )
+        .map(async (provider) =>
+          (await provider.isAvailable(context))
+            ? this.generateProviderDescriptors({
+                provider,
+                context,
+                options: { includeSchemas },
+              })
+            : [],
+        ),
+    );
+
+    return descriptorsByProvider.flat();
+  }
+
+  private generateProviderDescriptors({
+    provider,
+    context,
+    options,
+  }: {
+    provider: ToolProvider;
+    context: ToolProviderContext;
+    options: GenerateDescriptorOptions;
+  }): Promise<(ToolIndexEntry | ToolDescriptor)[]> {
+    return Sentry.startSpan(
+      {
+        name: `tool provider ${provider.category} descriptors`,
+        op: 'tool.descriptors',
+        onlyIfParent: true,
+        attributes: {
+          'tool.category': provider.category,
+          'tool.include_schemas': options.includeSchemas ?? false,
+          ...(isDefined(options.toolNames) && {
+            'tool.requested_count': options.toolNames.size,
+          }),
+        },
+      },
+      async (span) => {
+        const providerDescriptors = await provider.generateDescriptors(
+          context,
+          options,
+        );
+
+        const descriptors = providerDescriptors.filter(
+          (descriptor) =>
+            !isDefined(
+              this.definedToolRegistryService.findDefinedTool(descriptor.name),
+            ),
+        );
+
+        span.setAttribute('tool.descriptor_count', descriptors.length);
+
+        return descriptors;
+      },
+    );
+  }
+
+  // Resolvers rebuild the caller's authorization and know nothing of an agent's explicit grants
+  private async resolveExecutionContext(
+    context: ToolProviderContext,
+  ): Promise<ToolProviderContext> {
+    if (!isDefined(context.resolveExecutionContext)) {
+      return context;
+    }
+
+    return {
+      ...(await context.resolveExecutionContext()),
+      explicitObjectGrants: context.explicitObjectGrants,
+    };
+  }
+
   private buildContextFromToolContext(
     context: ToolContext,
   ): ToolProviderContext {
-    const rolePermissionConfig: RolePermissionConfig = {
-      unionOf: [context.roleId],
-    };
-
     return {
+      resolveExecutionContext: context.resolveExecutionContext
+        ? async () =>
+            this.buildContextFromToolContext(
+              await context.resolveExecutionContext!(),
+            )
+        : undefined,
       workspaceId: context.workspaceId,
-      roleId: context.roleId,
-      rolePermissionConfig,
+      approvedToolName: context.approvedToolName,
       authContext: context.authContext,
+      application: context.application,
       actorContext: context.actorContext,
       userId: context.userId,
       userWorkspaceId: context.userWorkspaceId,
+      agentId: context.agentId,
       threadId: context.threadId,
       locale: context.locale,
       onCodeExecutionUpdate: context.onCodeExecutionUpdate,

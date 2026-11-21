@@ -10,10 +10,11 @@ export type ConnectWhere = Record<string, ConnectWhereValue>;
 export type ConnectObject = {
   [RELATION_NESTED_QUERY_KEYWORDS.CONNECT]: {
     [RELATION_NESTED_QUERY_KEYWORDS.CONNECT_WHERE]: ConnectWhere;
-    /** Optional data used to create the related record if no match is found.
-     *  Includes fields like name, email, address from the import CSV. */
-    createData?: Record<string, unknown>;
   };
+};
+
+export type CreateObject = {
+  [RELATION_NESTED_QUERY_KEYWORDS.CREATE]: Record<string, unknown>;
 };
 
 export type DisconnectObject = {
@@ -33,6 +34,6 @@ export type QueryDeepPartialEntityWithNestedRelationFields<T> = Omit<
   EntityRelationFields<T>
 > & {
   [K in keyof T]?: T[K] extends BaseWorkspaceEntity | null
-    ? T[K] | ConnectObject | DisconnectObject
+    ? T[K] | ConnectObject | CreateObject | DisconnectObject
     : T[K];
 };

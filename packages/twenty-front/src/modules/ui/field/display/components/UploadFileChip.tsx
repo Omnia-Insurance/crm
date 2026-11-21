@@ -1,13 +1,13 @@
 import { styled } from '@linaria/react';
-import { useContext } from 'react';
 import { IconArrowUp } from 'twenty-ui/icon';
-import { Loader } from 'twenty-ui/feedback';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { Loader } from 'twenty-ui/primitives/feedback';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
 
 const StyledContainer = styled.div`
   align-items: center;
   background-color: ${themeCssVariables.background.transparent.light};
-  border-radius: ${themeCssVariables.border.radius.sm};
+  border-radius: ${themeCssVariables.border.radius.smRound};
+  corner-shape: round;
   display: flex;
   gap: ${themeCssVariables.spacing[1]};
   height: ${themeCssVariables.spacing[5]};
@@ -18,8 +18,9 @@ const StyledContainer = styled.div`
 const StyledIconBox = styled.div`
   align-items: center;
   background-color: ${themeCssVariables.font.color.tertiary};
-  border-radius: ${themeCssVariables.border.radius.sm};
+  border-radius: ${themeCssVariables.border.radius.smRound};
   color: ${themeCssVariables.background.primary};
+  corner-shape: round;
   display: flex;
   height: 14px;
   justify-content: center;
@@ -29,8 +30,9 @@ const StyledIconBox = styled.div`
 const StyledStaticLoader = styled.div`
   align-items: center;
   border: 1px solid ${themeCssVariables.font.color.tertiary};
-  border-radius: 12px;
+  border-radius: ${themeCssVariables.border.radius.pill};
   box-sizing: border-box;
+  corner-shape: round;
   display: flex;
   height: 12px;
   justify-content: center;
@@ -42,7 +44,7 @@ type UploadFileChipProps = {
 };
 
 export const UploadFileChip = ({ isLoading = true }: UploadFileChipProps) => {
-  const { theme } = useContext(ThemeContext);
+  const theme = useTheme();
 
   return (
     <StyledContainer>

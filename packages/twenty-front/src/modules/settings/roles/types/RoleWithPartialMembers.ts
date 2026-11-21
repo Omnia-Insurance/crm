@@ -1,9 +1,11 @@
-import { type WorkspaceMember } from '~/generated-metadata/graphql';
-import { type OmniaRole } from '@/settings/roles/types/OmniaRoleExtensions';
+import { type FlatAgent } from '@/metadata-store/types/FlatAgent';
+import { type Role, type WorkspaceMember } from '~/generated-metadata/graphql';
 
 export type PartialWorkspaceMember = Omit<
   WorkspaceMember,
   | 'colorScheme'
+  | 'uiScale'
+  | 'openRecordIn'
   | 'locale'
   | 'timeZone'
   | 'dateFormat'
@@ -13,6 +15,10 @@ export type PartialWorkspaceMember = Omit<
   | 'updatedAt'
 >;
 
-export type RoleWithPartialMembers = Omit<OmniaRole, 'workspaceMembers'> & {
+export type RoleWithPartialMembers = Omit<
+  Role,
+  'workspaceMembers' | 'agents'
+> & {
   workspaceMembers: PartialWorkspaceMember[];
+  agents: FlatAgent[];
 };

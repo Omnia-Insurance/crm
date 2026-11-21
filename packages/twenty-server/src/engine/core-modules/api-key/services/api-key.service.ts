@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 
 import { msg } from '@lingui/core/macro';
+import { isNull } from '@sniptt/guards';
+import { isDefined } from 'twenty-shared/utils';
 import { IsNull } from 'typeorm';
 import { type QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 
@@ -9,6 +11,8 @@ import {
   ApiKeyException,
   ApiKeyExceptionCode,
 } from 'src/engine/core-modules/api-key/exceptions/api-key.exception';
+import { isApiKeyActive } from 'src/engine/core-modules/api-key/utils/is-api-key-active.util';
+import { isApiKeyExpired } from 'src/engine/core-modules/api-key/utils/is-api-key-expired.util';
 import { type ApiKeyToken } from 'src/engine/core-modules/auth/dto/api-key-token.dto';
 import { JwtTokenTypeEnum } from 'src/engine/core-modules/auth/types/jwt-token-type.enum';
 import { JwtWrapperService } from 'src/engine/core-modules/jwt/services/jwt-wrapper.service';
@@ -28,10 +32,13 @@ export class ApiKeyService {
   ) {}
 
   async create(
-    apiKeyData: Partial<ApiKeyEntity> & { roleId: string; workspaceId: string },
+    apiKeyData: Pick<ApiKeyEntity, 'name' | 'expiresAt' | 'revokedAt'> & {
+      roleId: string;
+      workspaceId: string;
+    },
   ): Promise<ApiKeyEntity> {
     const { roleId, workspaceId, ...apiKeyFields } = apiKeyData;
-    const savedApiKey = await this.apiKeyRepository.save(
+    const savedApiKey = await this.apiKeyRepository.insertAndReturnOne(
       workspaceId,
       apiKeyFields,
     );
@@ -65,12 +72,15 @@ export class ApiKeyService {
   }
 
   async findByWorkspaceId(workspaceId: string): Promise<ApiKeyEntity[]> {
-    return this.apiKeyRepository.find(workspaceId);
+    return this.apiKeyRepository.find(workspaceId, {
+      order: { createdAt: 'ASC', id: 'ASC' },
+    });
   }
 
   async findActiveByWorkspaceId(workspaceId: string): Promise<ApiKeyEntity[]> {
     return this.apiKeyRepository.find(workspaceId, {
       where: { revokedAt: IsNull() },
+      order: { createdAt: 'ASC', id: 'ASC' },
     });
   }
 
@@ -85,7 +95,24 @@ export class ApiKeyService {
       return null;
     }
 
-    await this.apiKeyRepository.update(workspaceId, { id }, updateData);
+    const { revokedAt, ...updateDataWithoutRevokedAt } = updateData;
+    const isClearingRevokedAt = isNull(revokedAt);
+
+    if (isClearingRevokedAt && this.isRevoked(apiKey)) {
+      throw new ApiKeyException(
+        `API Key with id ${id} is revoked and cannot be reactivated`,
+        ApiKeyExceptionCode.API_KEY_REVOKED,
+        {
+          userFriendlyMessage: msg`This API key has been revoked and cannot be reactivated. Please create a new API key.`,
+        },
+      );
+    }
+
+    await this.apiKeyRepository.update(
+      workspaceId,
+      { id },
+      isClearingRevokedAt ? updateDataWithoutRevokedAt : updateData,
+    );
     await this.invalidateApiKeyCache(workspaceId);
 
     return this.findById(id, workspaceId);
@@ -105,7 +132,7 @@ export class ApiKeyService {
       );
     }
 
-    if (apiKey.revokedAt) {
+    if (this.isRevoked(apiKey)) {
       throw new ApiKeyException(
         'This API Key is revoked',
         ApiKeyExceptionCode.API_KEY_REVOKED,
@@ -115,7 +142,7 @@ export class ApiKeyService {
       );
     }
 
-    if (new Date() > apiKey.expiresAt) {
+    if (this.isExpired(apiKey)) {
       throw new ApiKeyException(
         'This API Key has expired',
         ApiKeyExceptionCode.API_KEY_EXPIRED,
@@ -165,15 +192,15 @@ export class ApiKeyService {
   }
 
   isExpired(apiKey: ApiKeyEntity): boolean {
-    return new Date() > apiKey.expiresAt;
+    return isApiKeyExpired(apiKey);
   }
 
   isRevoked(apiKey: ApiKeyEntity): boolean {
-    return !!apiKey.revokedAt;
+    return isDefined(apiKey.revokedAt);
   }
 
   isActive(apiKey: ApiKeyEntity): boolean {
-    return !this.isRevoked(apiKey) && !this.isExpired(apiKey);
+    return isApiKeyActive(apiKey);
   }
 
   private async invalidateApiKeyCache(workspaceId: string): Promise<void> {

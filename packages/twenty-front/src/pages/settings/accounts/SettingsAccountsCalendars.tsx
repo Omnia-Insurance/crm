@@ -10,11 +10,10 @@ import { useLingui } from '@lingui/react/macro';
 import { useMemo } from 'react';
 import { CalendarChannelSyncStage, SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath } from 'twenty-shared/utils';
-import { Section } from 'twenty-ui/layout';
+import { Section } from 'twenty-ui/components/layout';
 
 export const SettingsAccountsCalendars = () => {
   const { t } = useLingui();
-
   const { channels: allCalendarChannels, loading } = useMyCalendarChannels();
 
   const calendarChannels = useMemo(
@@ -41,11 +40,11 @@ export const SettingsAccountsCalendars = () => {
     }
 
     return (
-      <Section>
+      <Section.Root>
         <SettingsAccountsCalendarChannelsContainer
           calendarChannels={calendarChannels}
         />
-      </Section>
+      </Section.Root>
     );
   };
 
@@ -66,6 +65,7 @@ export const SettingsAccountsCalendars = () => {
       secondaryBar={
         tabs.length > 1 ? (
           <SettingsTabBar
+            aria-label={t`Calendar accounts`}
             tabs={tabs}
             componentInstanceId={
               SETTINGS_ACCOUNT_CALENDAR_CHANNELS_TAB_LIST_COMPONENT_ID

@@ -27,7 +27,7 @@ import {
 } from 'src/engine/metadata-modules/navigation-menu-item/navigation-menu-item.exception';
 import { NavigationMenuItemAccessService } from 'src/engine/metadata-modules/navigation-menu-item/services/navigation-menu-item-access.service';
 import { NavigationMenuItemRecordIdentifierService } from 'src/engine/metadata-modules/navigation-menu-item/services/navigation-menu-item-record-identifier.service';
-import { PermissionsException } from 'src/engine/metadata-modules/permissions/permissions.exception';
+import { PermissionsException } from 'src/engine/permissions/permissions.exception';
 import { WorkspaceMigrationBuilderException } from 'src/engine/workspace-manager/workspace-migration/exceptions/workspace-migration-builder-exception';
 import { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspace-manager/workspace-migration/services/workspace-migration-validate-build-and-run-service';
 
@@ -68,7 +68,9 @@ export class NavigationMenuItemService {
       flatNavigationMenuItemMaps.byUniversalIdentifier,
     )
       .filter((item): item is NonNullable<typeof item> => {
-        if (!isDefined(item)) return false;
+        if (!isDefined(item)) {
+          return false;
+        }
 
         const itemIsUserScoped = isDefined(item.userWorkspaceId);
 
@@ -145,21 +147,15 @@ export class NavigationMenuItemService {
     input,
     workspaceId,
     authUserWorkspaceId,
-    authApiKeyId,
-    authApplicationId,
   }: {
     input: CreateNavigationMenuItemInput;
     workspaceId: string;
     authUserWorkspaceId?: string;
-    authApiKeyId?: string;
-    authApplicationId?: string;
   }): Promise<NavigationMenuItemDTO> {
     const createdItems = await this.createMany({
       inputs: [input],
       workspaceId,
       authUserWorkspaceId,
-      authApiKeyId,
-      authApplicationId,
     });
 
     const created = createdItems[0];
@@ -178,14 +174,10 @@ export class NavigationMenuItemService {
     inputs,
     workspaceId,
     authUserWorkspaceId,
-    authApiKeyId,
-    authApplicationId,
   }: {
     inputs: CreateNavigationMenuItemInput[];
     workspaceId: string;
     authUserWorkspaceId?: string;
-    authApiKeyId?: string;
-    authApplicationId?: string;
   }): Promise<NavigationMenuItemDTO[]> {
     if (inputs.length === 0) {
       return [];
@@ -195,9 +187,6 @@ export class NavigationMenuItemService {
       await this.navigationMenuItemAccessService.canUserCreateNavigationMenuItem(
         {
           userWorkspaceId: authUserWorkspaceId,
-          workspaceId,
-          apiKeyId: authApiKeyId,
-          applicationId: authApplicationId,
           inputUserWorkspaceId: input.userWorkspaceId,
         },
       );
@@ -213,6 +202,9 @@ export class NavigationMenuItemService {
       flatObjectMetadataMaps,
       flatViewMaps,
       flatPageLayoutMaps,
+      flatAgentChatChannelMaps,
+      flatWorkflowMaps,
+      flatAgentMaps,
     } = await this.workspaceManyOrAllFlatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
       {
         workspaceId,
@@ -221,6 +213,9 @@ export class NavigationMenuItemService {
           'flatObjectMetadataMaps',
           'flatViewMaps',
           'flatPageLayoutMaps',
+          'flatAgentChatChannelMaps',
+          'flatWorkflowMaps',
+          'flatAgentMaps',
         ],
       },
     );
@@ -259,6 +254,9 @@ export class NavigationMenuItemService {
           flatObjectMetadataMaps,
           flatViewMaps,
           flatPageLayoutMaps,
+          flatAgentChatChannelMaps,
+          flatWorkflowMaps,
+          flatAgentMaps,
         });
 
       addFlatNavigationMenuItemToMapsAndUpdateIndex({
@@ -317,14 +315,10 @@ export class NavigationMenuItemService {
     input,
     workspaceId,
     authUserWorkspaceId,
-    authApiKeyId,
-    authApplicationId,
   }: {
     input: UpdateNavigationMenuItemInput & { id: string };
     workspaceId: string;
     authUserWorkspaceId?: string;
-    authApiKeyId?: string;
-    authApplicationId?: string;
   }): Promise<NavigationMenuItemDTO> {
     const { id, ...update } = input;
 
@@ -332,8 +326,6 @@ export class NavigationMenuItemService {
       inputs: [{ id, update }],
       workspaceId,
       authUserWorkspaceId,
-      authApiKeyId,
-      authApplicationId,
     });
 
     const updated = updatedItems[0];
@@ -352,14 +344,10 @@ export class NavigationMenuItemService {
     inputs,
     workspaceId,
     authUserWorkspaceId,
-    authApiKeyId,
-    authApplicationId,
   }: {
     inputs: UpdateOneNavigationMenuItemInput[];
     workspaceId: string;
     authUserWorkspaceId?: string;
-    authApiKeyId?: string;
-    authApplicationId?: string;
   }): Promise<NavigationMenuItemDTO[]> {
     if (inputs.length === 0) {
       return [];
@@ -398,9 +386,6 @@ export class NavigationMenuItemService {
         await this.navigationMenuItemAccessService.canUserUpdateNavigationMenuItem(
           {
             userWorkspaceId: authUserWorkspaceId,
-            workspaceId,
-            apiKeyId: authApiKeyId,
-            applicationId: authApplicationId,
             existingUserWorkspaceId: existingNavigationMenuItem.userWorkspaceId,
           },
         );
@@ -463,21 +448,15 @@ export class NavigationMenuItemService {
     id,
     workspaceId,
     authUserWorkspaceId,
-    authApiKeyId,
-    authApplicationId,
   }: {
     id: string;
     workspaceId: string;
     authUserWorkspaceId?: string;
-    authApiKeyId?: string;
-    authApplicationId?: string;
   }): Promise<NavigationMenuItemDTO> {
     const deletedItems = await this.deleteMany({
       ids: [id],
       workspaceId,
       authUserWorkspaceId,
-      authApiKeyId,
-      authApplicationId,
     });
 
     const deleted = deletedItems[0];
@@ -496,14 +475,10 @@ export class NavigationMenuItemService {
     ids,
     workspaceId,
     authUserWorkspaceId,
-    authApiKeyId,
-    authApplicationId,
   }: {
     ids: string[];
     workspaceId: string;
     authUserWorkspaceId?: string;
-    authApiKeyId?: string;
-    authApplicationId?: string;
   }): Promise<NavigationMenuItemDTO[]> {
     if (ids.length === 0) {
       return [];
@@ -549,9 +524,6 @@ export class NavigationMenuItemService {
       await this.navigationMenuItemAccessService.canUserDeleteNavigationMenuItem(
         {
           userWorkspaceId: authUserWorkspaceId,
-          workspaceId,
-          apiKeyId: authApiKeyId,
-          applicationId: authApplicationId,
           existingUserWorkspaceId: flatNavigationMenuItemRoot.userWorkspaceId,
         },
       );

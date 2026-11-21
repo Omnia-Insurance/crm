@@ -5,7 +5,9 @@ import {
   type ReplyContext,
   type ReplyContextReady,
 } from '@/activities/emails/types/ReplyContext';
+import { getReplyToRecipients } from '@/activities/emails/utils/getReplyToRecipients';
 import { isDefined } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
 
 export type { ReplyContext, ReplyContextReady };
 
@@ -15,7 +17,9 @@ export const useReplyContext = (
   const {
     messages,
     connectedAccountId,
+    connectedAccountHandle,
     connectedAccountProvider,
+    messageChannelHandle,
     messageChannelLoading,
     threadLoading,
   } = useEmailThread(threadId);
@@ -47,28 +51,35 @@ export const useReplyContext = (
         inReplyTo: '',
         connectedAccountId,
         connectedAccountProvider,
+        messageChannelHandle,
       };
     }
 
-    const senderHandle = lastSentMessage.sender?.handle ?? '';
+    const replyTo = getReplyToRecipients({
+      message: lastSentMessage,
+      connectedAccountHandle,
+    });
 
     const rawSubject = lastSentMessage.subject ?? '';
-    const subject = rawSubject.startsWith('Re: ')
+    const subject = rawSubject.startsWith(doNotTranslate('Re: '))
       ? rawSubject
-      : `Re: ${rawSubject}`;
+      : doNotTranslate(`Re: ${rawSubject}`);
 
     return {
       loading: false,
-      to: senderHandle,
+      to: replyTo,
       subject,
       inReplyTo: lastSentMessage.headerMessageId ?? '',
       connectedAccountId,
       connectedAccountProvider,
+      messageChannelHandle,
     };
   }, [
     messages,
     connectedAccountId,
+    connectedAccountHandle,
     connectedAccountProvider,
+    messageChannelHandle,
     messageChannelLoading,
     threadLoading,
   ]);

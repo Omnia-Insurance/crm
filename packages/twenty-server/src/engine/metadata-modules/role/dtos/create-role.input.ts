@@ -45,6 +45,11 @@ export class CreateRoleInput {
   @IsBoolean()
   @IsOptional()
   @Field({ nullable: true })
+  canAccessAllAgentChatChannels?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  @Field({ nullable: true })
   canReadAllObjectRecords?: boolean;
 
   @IsBoolean()
@@ -62,10 +67,16 @@ export class CreateRoleInput {
   @Field({ nullable: true })
   canDestroyAllObjectRecords?: boolean;
 
+  // OMNIA-CUSTOM: role-wide sidebar default and policy edit window (C3, C4)
   @IsBoolean()
   @IsOptional()
   @Field({ nullable: true })
   showAllObjectsInSidebar?: boolean;
+
+  @IsInt()
+  @IsOptional()
+  @Field(() => Int, { nullable: true })
+  editWindowMinutes?: number | null;
 
   @IsBoolean()
   @IsOptional()
@@ -81,9 +92,4 @@ export class CreateRoleInput {
   @IsOptional()
   @Field({ nullable: true })
   canBeAssignedToApiKeys?: boolean;
-
-  @IsInt()
-  @IsOptional()
-  @Field(() => Int, { nullable: true })
-  editWindowMinutes?: number | null;
 }

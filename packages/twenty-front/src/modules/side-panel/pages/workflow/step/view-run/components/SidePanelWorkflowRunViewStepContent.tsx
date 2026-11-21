@@ -1,3 +1,5 @@
+import { TabListRoot } from '@/ui/layout/tab-list/components/TabListRoot';
+import { WorkflowStepTabPanel } from '@/workflow/workflow-steps/components/WorkflowStepTabPanel';
 import { SidePanelWorkflowRunStepContentComponentInstanceContext } from '@/side-panel/pages/workflow/step/view-run/states/contexts/SidePanelWorkflowRunStepContentComponentInstanceContext';
 import { getIsInputTabDisabled } from '@/side-panel/pages/workflow/step/view-run/utils/getIsInputTabDisabled';
 import { getIsOutputTabDisabled } from '@/side-panel/pages/workflow/step/view-run/utils/getIsOutputTabDisabled';
@@ -13,7 +15,7 @@ import { useWorkflowRun } from '@/workflow/hooks/useWorkflowRun';
 import { useWorkflowRunIdOrThrow } from '@/workflow/hooks/useWorkflowRunIdOrThrow';
 import { getStepDefinitionOrThrow } from '@/workflow/utils/getStepDefinitionOrThrow';
 import { workflowSelectedNodeComponentState } from '@/workflow/workflow-diagram/states/workflowSelectedNodeComponentState';
-import { WorkflowRunStepLogsDetail } from '@/workflow/workflow-run/observability/WorkflowRunStepLogsDetail';
+import { WorkflowRunStepLogsDetail } from '@/workflow/workflow-steps/workflow-actions/components/WorkflowRunStepLogsDetail';
 import { WorkflowRunStepInputDetail } from '@/workflow/workflow-steps/components/WorkflowRunStepInputDetail';
 import { WorkflowRunStepNodeDetail } from '@/workflow/workflow-steps/components/WorkflowRunStepNodeDetail';
 import { WorkflowRunStepOutputDetail } from '@/workflow/workflow-steps/components/WorkflowRunStepOutputDetail';
@@ -24,16 +26,17 @@ import {
 import { getWorkflowRunStepExecutionStatus } from '@/workflow/workflow-steps/utils/getWorkflowRunStepExecutionStatus';
 import { WorkflowIteratorSubStepSwitcher } from '@/workflow/workflow-steps/workflow-actions/iterator-action/components/WorkflowIteratorSubStepSwitcher';
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
 import { isNull } from '@sniptt/guards';
 import { isDefined } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
 import {
   IconLogin2,
   IconLogout,
   IconStepInto,
   IconTerminal,
 } from 'twenty-ui/icon';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledContainer = styled.div`
   display: flex;
@@ -49,6 +52,7 @@ const StyledTabListContainer = styled.div`
 type TabId = WorkflowRunTabIdType;
 
 export const SidePanelWorkflowRunViewStepContent = () => {
+  const { t } = useLingui();
   const flow = useFlowOrThrow();
   const workflowSelectedNode = useAtomComponentStateValue(
     workflowSelectedNodeComponentState,
@@ -62,7 +66,9 @@ export const SidePanelWorkflowRunViewStepContent = () => {
   );
   if (isNull(sidePanelPageComponentInstance)) {
     throw new Error(
-      'SidePanelPageComponentInstanceContext is not defined. This component should be used within SidePanelPageComponentInstanceContext.',
+      doNotTranslate(
+        'SidePanelPageComponentInstanceContext is not defined. This component should be used within SidePanelPageComponentInstanceContext.',
+      ),
     );
   }
 
@@ -141,47 +147,51 @@ export const SidePanelWorkflowRunViewStepContent = () => {
             stepExecutionStatus={stepExecutionStatus}
           />
         ) : (
-          <>
+          <TabListRoot
+            componentInstanceId={sidePanelPageComponentInstance.instanceId}
+          >
             <StyledTabListContainer>
               <TabList
+                aria-label={t`Workflow step results`}
                 tabs={tabs}
                 behaveAsLinks={false}
                 componentInstanceId={sidePanelPageComponentInstance.instanceId}
               />
             </StyledTabListContainer>
 
-            {activeTabId === WorkflowRunTabId.OUTPUT ? (
-              <WorkflowRunStepOutputDetail
-                key={workflowSelectedNode}
-                stepId={workflowSelectedNode}
-              />
-            ) : null}
+            <WorkflowStepTabPanel value={activeTabId ?? ''}>
+              {activeTabId === WorkflowRunTabId.OUTPUT ? (
+                <WorkflowRunStepOutputDetail
+                  key={workflowSelectedNode}
+                  stepId={workflowSelectedNode}
+                />
+              ) : null}
 
-            {activeTabId === WorkflowRunTabId.NODE ? (
-              <WorkflowRunStepNodeDetail
-                stepId={workflowSelectedNode}
-                trigger={flow.trigger}
-                steps={flow.steps}
-                stepExecutionStatus={stepExecutionStatus}
-              />
-            ) : null}
+              {activeTabId === WorkflowRunTabId.NODE ? (
+                <WorkflowRunStepNodeDetail
+                  stepId={workflowSelectedNode}
+                  trigger={flow.trigger}
+                  steps={flow.steps}
+                  stepExecutionStatus={stepExecutionStatus}
+                />
+              ) : null}
 
-            {activeTabId === WorkflowRunTabId.INPUT ? (
-              <WorkflowRunStepInputDetail
-                key={workflowSelectedNode}
-                stepId={workflowSelectedNode}
-              />
-            ) : null}
+              {activeTabId === WorkflowRunTabId.INPUT ? (
+                <WorkflowRunStepInputDetail
+                  key={workflowSelectedNode}
+                  stepId={workflowSelectedNode}
+                />
+              ) : null}
 
-            {activeTabId === WorkflowRunTabId.LOGS ? (
-              <WorkflowRunStepLogsDetail
-                key={workflowSelectedNode}
-                stepId={workflowSelectedNode}
-              />
-            ) : null}
-
+              {activeTabId === WorkflowRunTabId.LOGS ? (
+                <WorkflowRunStepLogsDetail
+                  key={workflowSelectedNode}
+                  stepId={workflowSelectedNode}
+                />
+              ) : null}
+            </WorkflowStepTabPanel>
             <WorkflowIteratorSubStepSwitcher stepId={workflowSelectedNode} />
-          </>
+          </TabListRoot>
         )}
       </StyledContainer>
     </SidePanelWorkflowRunStepContentComponentInstanceContext.Provider>

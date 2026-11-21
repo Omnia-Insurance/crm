@@ -1,15 +1,21 @@
 import {
   type LogicFunctionDriver,
   type LogicFunctionExecuteResult,
-  type LogicFunctionTranspileResult,
 } from 'src/engine/core-modules/logic-function/logic-function-drivers/interfaces/logic-function-driver.interface';
-
+import { executeHttpEgressRequest } from 'src/engine/core-modules/tool/tools/http-tool/utils/execute-http-egress-request.util';
+import { type SecureHttpClientService } from 'src/engine/core-modules/secure-http-client/secure-http-client.service';
+import { type HttpEgressRequest } from 'src/engine/core-modules/tool/tools/http-tool/types/http-egress-request.type';
+import { type HttpEgressResponse } from 'src/engine/core-modules/tool/tools/http-tool/types/http-egress-response.type';
 import {
   LogicFunctionException,
   LogicFunctionExceptionCode,
 } from 'src/engine/metadata-modules/logic-function/logic-function.exception';
 
 export class DisabledDriver implements LogicFunctionDriver {
+  constructor(
+    private readonly secureHttpClientService: SecureHttpClientService,
+  ) {}
+
   async delete(): Promise<void> {
     // No-op when disabled
   }
@@ -25,9 +31,16 @@ export class DisabledDriver implements LogicFunctionDriver {
     );
   }
 
-  async transpile(): Promise<LogicFunctionTranspileResult> {
+  async transpile(): Promise<never> {
     throw new LogicFunctionException(
       'Logic function transpilation is disabled. Set LOGIC_FUNCTION_TYPE to LOCAL or LAMBDA to enable.',
+      LogicFunctionExceptionCode.LOGIC_FUNCTION_DISABLED,
+    );
+  }
+
+  async buildDependencies(): Promise<never> {
+    throw new LogicFunctionException(
+      'Dependency builds are disabled. Set LOGIC_FUNCTION_TYPE to LOCAL or LAMBDA to enable.',
       LogicFunctionExceptionCode.LOGIC_FUNCTION_DISABLED,
     );
   }
@@ -41,5 +54,15 @@ export class DisabledDriver implements LogicFunctionDriver {
 
   async getInstalledBundleChecksum(): Promise<string | null> {
     return null;
+  }
+
+  // Disabling logic functions must not disable workflow HTTP steps.
+  async executeHttpRequest(
+    request: HttpEgressRequest,
+  ): Promise<HttpEgressResponse> {
+    return executeHttpEgressRequest(
+      request,
+      this.secureHttpClientService.getHttpClient(),
+    );
   }
 }

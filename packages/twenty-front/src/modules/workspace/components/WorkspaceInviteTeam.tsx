@@ -1,28 +1,29 @@
-import { styled } from '@linaria/react';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { styled } from '@linaria/react';
 import { useEffect } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import { type RoleWithPartialMembers } from '@/settings/roles/types/RoleWithPartialMembers';
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { Select } from '@/ui/input/components/Select';
 import { SettingsTextInput } from '@/ui/input/components/SettingsTextInput';
 import { useCreateWorkspaceInvitation } from '@/workspace-invitation/hooks/useCreateWorkspaceInvitation';
 import { sanitizeEmailList } from '@/workspace/utils/sanitizeEmailList';
 import { i18n } from '@lingui/core';
-import { msg } from '@lingui/core/macro';
+import { msg, t } from '@lingui/core/macro';
 import { useLingui } from '@lingui/react/macro';
 import { isDefined } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
+import { useToast } from 'twenty-ui/components/feedback';
 import {
   IconLock,
   IconSend,
   IconUser,
-  useIcons,
   type IconComponent,
 } from 'twenty-ui/icon';
-import { Button } from 'twenty-ui/input';
-import { MOBILE_VIEWPORT, themeCssVariables } from 'twenty-ui/theme-constants';
+import { useIcons } from 'twenty-ui/icon/provider';
+import { Button } from 'twenty-ui/primitives/input';
+import { MOBILE_VIEWPORT, themeCssVariables } from 'twenty-ui/theme';
 
 const StyledContainer = styled.div`
   align-items: center;
@@ -81,8 +82,8 @@ const validationSchema = z.object({
         code: 'custom',
         message:
           invalidEmails.length > 1
-            ? `Invalid emails: ${invalidEmailsList}`
-            : `Invalid email: ${invalidEmailsList}`,
+            ? t`Invalid emails: ${invalidEmailsList}`
+            : t`Invalid email: ${invalidEmailsList}`,
       });
     }
   }),
@@ -102,7 +103,7 @@ export const WorkspaceInviteTeam = ({ roles }: WorkspaceInviteTeamProps) => {
   const { t } = useLingui();
   const { getIcon } = useIcons();
 
-  const { enqueueSuccessSnackBar, enqueueErrorSnackBar } = useSnackBar();
+  const { enqueueToast } = useToast();
   const { sendInvitation } = useCreateWorkspaceInvitation();
 
   const roleOptions: Array<{
@@ -147,22 +148,20 @@ export const WorkspaceInviteTeam = ({ roles }: WorkspaceInviteTeamProps) => {
 
     if (data.sendInvitations.result.length > 0) {
       const invitationCount = data.sendInvitations.result.length;
-      enqueueSuccessSnackBar({
-        message: t`${invitationCount} invitations sent`,
-        options: {
-          duration: 2000,
-        },
+      enqueueToast({
+        status: 'success',
+        children: t`${invitationCount} invitations sent`,
+        duration: 2000,
       });
 
       return;
     }
 
     if (!data.sendInvitations.success) {
-      enqueueErrorSnackBar({
-        message: data.sendInvitations.errors.join(', '),
-        options: {
-          duration: 5000,
-        },
+      enqueueToast({
+        status: 'error',
+        children: data.sendInvitations.errors.join(', '),
+        duration: 5000,
       });
     }
   });
@@ -186,8 +185,9 @@ export const WorkspaceInviteTeam = ({ roles }: WorkspaceInviteTeamProps) => {
               return (
                 <SettingsTextInput
                   instanceId="workspace-invite-team-emails"
-                  // oxlint-disable-next-line lingui/no-unlocalized-strings
-                  placeholder="tim@apple.com, jony.ive@apple.dev"
+                  placeholder={doNotTranslate(
+                    'tim@apple.com, jony.ive@apple.dev',
+                  )}
                   value={value}
                   onChange={onChange}
                   error={error?.message}
@@ -218,13 +218,12 @@ export const WorkspaceInviteTeam = ({ roles }: WorkspaceInviteTeamProps) => {
           />
         </StyledRoleContainer>
         <Button
-          Icon={IconSend}
-          variant="primary"
-          accent="blue"
-          title={t`Invite`}
+          startIcon={<IconSend />}
           type="submit"
           disabled={isEmailsEmpty || !!errors.emails}
-        />
+          variant="solid"
+          color="accent"
+        >{t`Invite`}</Button>
       </StyledContainer>
     </form>
   );

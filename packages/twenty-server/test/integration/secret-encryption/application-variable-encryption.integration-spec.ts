@@ -4,20 +4,24 @@ import gql from 'graphql-tag';
 import { isDefined } from 'twenty-shared/utils';
 import { type DataSource } from 'typeorm';
 
+import { TEST_APPLICATION_PACKAGE_JSON_CHECKSUM } from 'test/integration/metadata/suites/application/constants/test-application-package-json.constant';
 import { buildBaseManifest } from 'test/integration/metadata/suites/application/utils/build-base-manifest.util';
 import { cleanupApplicationAndAppRegistration } from 'test/integration/metadata/suites/application/utils/cleanup-application-and-app-registration.util';
 import { setupApplicationForSync } from 'test/integration/metadata/suites/application/utils/setup-application-for-sync.util';
 import { syncApplication } from 'test/integration/metadata/suites/application/utils/sync-application.util';
-import { makeMetadataAPIRequest } from 'test/integration/metadata/suites/utils/make-metadata-api-request.util';
+import { makeMetadataApiRequest } from 'test/integration/metadata/suites/utils/make-metadata-api-request.util';
 import { buildSecretEncryptionServiceFromEnv } from 'test/integration/upgrade/utils/build-secret-encryption-service.util';
+import { getAppProviderByClassName } from 'test/integration/utils/get-app-provider-by-class-name.util';
 
 import { SECRET_APPLICATION_VARIABLE_MASK } from 'src/engine/core-modules/application/application-variable/constants/secret-application-variable-mask.constant';
 import { SECRET_ENCRYPTION_ENVELOPE_V2_PREFIX } from 'src/engine/core-modules/secret-encryption/constants/secret-encryption.constant';
 import { type SecretEncryptionService } from 'src/engine/core-modules/secret-encryption/secret-encryption.service';
+import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
+import { type WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 
 const V2_ENVELOPE_REGEX = /^enc:v2:[0-9a-f]{8}:[A-Za-z0-9+/=]+$/;
 const CONSTRAINT_NAME = 'CHK_applicationVariable_value_encrypted';
-const CONSTRAINT_EXPR = `"isSecret" = false OR "value" = '' OR "value" LIKE 'enc:v2:%'`;
+const CONSTRAINT_EXPR = `"value" LIKE 'enc:v2:%'`;
 
 const V2_VARIABLE_KEY = 'TEST_V2_SECRET';
 const V2_NON_SECRET_VARIABLE_KEY = 'TEST_V2_NON_SECRET';
@@ -73,7 +77,7 @@ describe('ApplicationVariable encryption (integration)', () => {
                 isSecret: true,
               },
             },
-            packageJsonChecksum: null,
+            packageJsonChecksum: TEST_APPLICATION_PACKAGE_JSON_CHECKSUM,
             yarnLockChecksum: null,
           },
         },
@@ -81,7 +85,7 @@ describe('ApplicationVariable encryption (integration)', () => {
       expectToFail: false,
     });
 
-    const findResponse = await makeMetadataAPIRequest({
+    const findResponse = await makeMetadataApiRequest({
       query: gql`
         query FindAppForEncryptionTestSetup($universalIdentifier: UUID!) {
           findOneApplication(universalIdentifier: $universalIdentifier) {
@@ -112,7 +116,7 @@ describe('ApplicationVariable encryption (integration)', () => {
   it('encrypts the value on the API write path, persists a v2 envelope in Postgres, and returns the masked decrypted value via the API read path', async () => {
     const plaintext = 'v2-encrypted-application-variable-secret-value-here';
 
-    const updateResponse = await makeMetadataAPIRequest({
+    const updateResponse = await makeMetadataApiRequest({
       query: gql`
         mutation UpdateAppVariableForEncryptionTest(
           $key: String!
@@ -149,7 +153,7 @@ describe('ApplicationVariable encryption (integration)', () => {
     );
     expect(dbRow.value).toMatch(V2_ENVELOPE_REGEX);
 
-    const findResponse = await makeMetadataAPIRequest({
+    const findResponse = await makeMetadataApiRequest({
       query: gql`
         query FindAppVariablesForEncryptionTest($id: UUID!) {
           findOneApplication(id: $id) {
@@ -179,7 +183,7 @@ describe('ApplicationVariable encryption (integration)', () => {
   it('encrypts a non-secret variable on write, persists a v2 envelope, and returns the full decrypted plaintext (not masked) on read', async () => {
     const plaintext = 'https://public-url.example.com/webhook';
 
-    const updateResponse = await makeMetadataAPIRequest({
+    const updateResponse = await makeMetadataApiRequest({
       query: gql`
         mutation UpdateNonSecretAppVarForEncryptionTest(
           $key: String!
@@ -216,7 +220,7 @@ describe('ApplicationVariable encryption (integration)', () => {
     );
     expect(dbRow.value).toMatch(V2_ENVELOPE_REGEX);
 
-    const findResponse = await makeMetadataAPIRequest({
+    const findResponse = await makeMetadataApiRequest({
       query: gql`
         query FindNonSecretAppVarsForEncryptionTest($id: UUID!) {
           findOneApplication(id: $id) {
@@ -244,6 +248,14 @@ describe('ApplicationVariable encryption (integration)', () => {
   });
 
   describe('legacy CTR values are rejected at runtime', () => {
+    // Raw SQL writes bypass the workspace cache that the API reads variables from
+    const refreshApplicationVariableCache = () =>
+      getAppProviderByClassName<WorkspaceCacheService>(
+        'WorkspaceCacheService',
+      ).invalidateAndRecompute(SEED_APPLE_WORKSPACE_ID, [
+        'flatApplicationVariableMaps',
+      ]);
+
     beforeAll(async () => {
       await dataSource.query(
         `ALTER TABLE core."applicationVariable"
@@ -253,11 +265,11 @@ describe('ApplicationVariable encryption (integration)', () => {
 
     afterAll(async () => {
       await dataSource.query(
-        `UPDATE core."applicationVariable"
-              SET "value" = ''
+        `DELETE FROM core."applicationVariable"
             WHERE "applicationId" = $1 AND "key" = $2`,
         [applicationId, LEGACY_VARIABLE_KEY],
       );
+      await refreshApplicationVariableCache();
       await dataSource.query(
         `ALTER TABLE core."applicationVariable"
          ADD CONSTRAINT "${CONSTRAINT_NAME}" CHECK (${CONSTRAINT_EXPR})`,
@@ -277,8 +289,9 @@ describe('ApplicationVariable encryption (integration)', () => {
           LEGACY_VARIABLE_KEY,
         ],
       );
+      await refreshApplicationVariableCache();
 
-      const findResponse = await makeMetadataAPIRequest({
+      const findResponse = await makeMetadataApiRequest({
         query: gql`
           query FindLegacyCtrAppVariablesForEncryptionTest($id: UUID!) {
             findOneApplication(id: $id) {

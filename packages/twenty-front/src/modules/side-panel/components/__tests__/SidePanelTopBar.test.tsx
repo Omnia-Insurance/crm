@@ -1,15 +1,20 @@
 import { i18n } from '@lingui/core';
 import { I18nProvider } from '@lingui/react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { createStore, Provider as JotaiProvider } from 'jotai';
 
 import { SIDE_PANEL_FOCUS_ID } from '@/side-panel/constants/SidePanelFocusId';
 import { SIDE_PANEL_SELECTABLE_LIST_ID } from '@/side-panel/constants/SidePanelSelectableListId';
 import { SidePanelList } from '@/side-panel/components/SidePanelList';
+import { type SidePanelContextChipProps } from '@/side-panel/types/SidePanelContextChipProps';
 import { SidePanelTopBar } from '@/side-panel/components/SidePanelTopBar';
 import { isSidePanelOpenedState } from '@/side-panel/states/isSidePanelOpenedState';
-import { sidePanelNavigationStackState } from '@/side-panel/states/sidePanelNavigationStackState';
-import { sidePanelPageState } from '@/side-panel/states/sidePanelPageState';
+import {
+  type SidePanelNavigationStackItem,
+  sidePanelNavigationStackState,
+} from '@/side-panel/states/sidePanelNavigationStackState';
+import { sidePanelSearchState } from '@/side-panel/states/sidePanelSearchState';
 import { SelectableListItem } from '@/ui/layout/selectable-list/components/SelectableListItem';
 import { selectedItemIdComponentState } from '@/ui/layout/selectable-list/states/selectedItemIdComponentState';
 import { PageFocusId } from '@/types/PageFocusId';
@@ -26,13 +31,21 @@ jest.mock('@/side-panel/components/SidePanelTopBarRightCornerIcon', () => ({
   SidePanelTopBarRightCornerIcon: () => null,
 }));
 
+jest.mock('@/side-panel/components/SidePanelExpandButton', () => ({
+  SidePanelExpandButton: () => null,
+}));
+
+const mockCloseSidePanelMenu = jest.fn();
+
+let mockContextChips: SidePanelContextChipProps[] = [];
+
 jest.mock('@/side-panel/hooks/useSidePanelContextChips', () => ({
-  useSidePanelContextChips: () => ({ contextChips: [] }),
+  useSidePanelContextChips: () => ({ contextChips: mockContextChips }),
 }));
 
 jest.mock('@/side-panel/hooks/useSidePanelMenu', () => ({
   useSidePanelMenu: () => ({
-    closeSidePanelMenu: jest.fn(),
+    closeSidePanelMenu: mockCloseSidePanelMenu,
   }),
 }));
 
@@ -55,7 +68,6 @@ const recordIndexFocusItem = {
 };
 
 const createSidePanelTopBarStore = ({
-  sidePanelPage = SidePanelPages.CommandMenuDisplay,
   sidePanelNavigationStack = [
     {
       page: SidePanelPages.CommandMenuDisplay,
@@ -65,18 +77,11 @@ const createSidePanelTopBarStore = ({
     },
   ],
 }: {
-  sidePanelPage?: SidePanelPages;
-  sidePanelNavigationStack?: Array<{
-    page: SidePanelPages;
-    pageTitle: string;
-    pageIcon: typeof IconDotsVertical;
-    pageId: string;
-  }>;
+  sidePanelNavigationStack?: SidePanelNavigationStackItem[];
 } = {}) => {
   const store = createStore();
 
   store.set(isSidePanelOpenedState.atom, true);
-  store.set(sidePanelPageState.atom, sidePanelPage);
   store.set(sidePanelNavigationStackState.atom, sidePanelNavigationStack);
   store.set(focusStackState.atom, [recordIndexFocusItem]);
 
@@ -105,7 +110,9 @@ const renderSidePanelCommandMenu = (store = createSidePanelTopBarStore()) => {
 
 describe('SidePanelTopBar', () => {
   beforeEach(() => {
+    mockCloseSidePanelMenu.mockClear();
     mockIsMobile = false;
+    mockContextChips = [];
   });
 
   it('keeps the command menu search input focused while arrowing through items', async () => {
@@ -150,6 +157,170 @@ describe('SidePanelTopBar', () => {
     });
   });
 
+  it('clears search with Escape without navigating', () => {
+    const { store } = renderSidePanelCommandMenu();
+
+    const input = screen.getByTestId(SIDE_PANEL_FOCUS_ID);
+
+    fireEvent.change(input, {
+      target: { value: 'company' },
+    });
+
+    fireEvent.keyDown(input, {
+      key: 'Escape',
+      code: 'Escape',
+    });
+
+    expect(store.get(sidePanelSearchState.atom)).toBe('');
+    expect(store.get(sidePanelNavigationStackState.atom)).toHaveLength(1);
+    expect(mockCloseSidePanelMenu).not.toHaveBeenCalled();
+  });
+
+  it('closes the side panel with Escape from an empty root search', () => {
+    renderSidePanelCommandMenu();
+
+    const input = screen.getByTestId(SIDE_PANEL_FOCUS_ID);
+
+    fireEvent.keyDown(input, {
+      key: 'Escape',
+      code: 'Escape',
+    });
+
+    expect(mockCloseSidePanelMenu).toHaveBeenCalledTimes(1);
+  });
+
+  it('handles Escape before the underlying page hotkeys', () => {
+    const underlyingPageEscapeHandler = jest.fn();
+
+    document.addEventListener('keydown', underlyingPageEscapeHandler);
+
+    try {
+      renderSidePanelCommandMenu();
+
+      fireEvent.keyDown(document.body, {
+        key: 'Escape',
+        code: 'Escape',
+      });
+
+      expect(mockCloseSidePanelMenu).toHaveBeenCalledTimes(1);
+      expect(underlyingPageEscapeHandler).not.toHaveBeenCalled();
+    } finally {
+      document.removeEventListener('keydown', underlyingPageEscapeHandler);
+    }
+  });
+
+  it('does not navigate with Backspace while search has text', () => {
+    const { store } = renderSidePanelCommandMenu(
+      createSidePanelTopBarStore({
+        sidePanelNavigationStack: [
+          {
+            page: SidePanelPages.CommandMenuDisplay,
+            pageTitle: 'Command Menu',
+            pageIcon: IconDotsVertical,
+            pageId: 'command-menu',
+          },
+          {
+            page: SidePanelPages.SearchRecords,
+            pageTitle: 'Search',
+            pageIcon: IconDotsVertical,
+            pageId: 'search-records',
+          },
+        ],
+      }),
+    );
+
+    const input = screen.getByTestId(SIDE_PANEL_FOCUS_ID);
+
+    fireEvent.change(input, {
+      target: { value: 'company' },
+    });
+
+    fireEvent.keyDown(input, {
+      key: 'Backspace',
+      code: 'Backspace',
+    });
+
+    expect(store.get(sidePanelSearchState.atom)).toBe('company');
+    expect(store.get(sidePanelNavigationStackState.atom)).toHaveLength(2);
+  });
+
+  it('goes back with Backspace from an empty search when side panel history exists', () => {
+    const { store } = renderSidePanelCommandMenu(
+      createSidePanelTopBarStore({
+        sidePanelNavigationStack: [
+          {
+            page: SidePanelPages.CommandMenuDisplay,
+            pageTitle: 'Command Menu',
+            pageIcon: IconDotsVertical,
+            pageId: 'command-menu',
+          },
+          {
+            page: SidePanelPages.SearchRecords,
+            pageTitle: 'Search',
+            pageIcon: IconDotsVertical,
+            pageId: 'search-records',
+          },
+        ],
+      }),
+    );
+
+    const input = screen.getByTestId(SIDE_PANEL_FOCUS_ID);
+
+    fireEvent.keyDown(input, {
+      key: 'Backspace',
+      code: 'Backspace',
+    });
+
+    expect(store.get(sidePanelNavigationStackState.atom)).toHaveLength(1);
+    expect(store.get(sidePanelNavigationStackState.atom).at(-1)?.page).toBe(
+      SidePanelPages.CommandMenuDisplay,
+    );
+    expect(mockCloseSidePanelMenu).not.toHaveBeenCalled();
+  });
+
+  it('does not close the root side panel with Backspace from an empty search', () => {
+    const { store } = renderSidePanelCommandMenu();
+
+    const input = screen.getByTestId(SIDE_PANEL_FOCUS_ID);
+
+    fireEvent.keyDown(input, {
+      key: 'Backspace',
+      code: 'Backspace',
+    });
+
+    expect(store.get(sidePanelNavigationStackState.atom)).toHaveLength(1);
+    expect(mockCloseSidePanelMenu).not.toHaveBeenCalled();
+  });
+
+  it('goes back with Escape while the search input is not focused', () => {
+    const { store } = renderSidePanelCommandMenu(
+      createSidePanelTopBarStore({
+        sidePanelNavigationStack: [
+          {
+            page: SidePanelPages.CommandMenuDisplay,
+            pageTitle: 'Command Menu',
+            pageIcon: IconDotsVertical,
+            pageId: 'command-menu',
+          },
+          {
+            page: SidePanelPages.SearchRecords,
+            pageTitle: 'Search',
+            pageIcon: IconDotsVertical,
+            pageId: 'search-records',
+          },
+        ],
+      }),
+    );
+
+    fireEvent.keyDown(document.body, {
+      key: 'Escape',
+      code: 'Escape',
+    });
+
+    expect(store.get(sidePanelNavigationStackState.atom)).toHaveLength(1);
+    expect(mockCloseSidePanelMenu).not.toHaveBeenCalled();
+  });
+
   it('renders the close button after the command menu content', () => {
     renderSidePanelCommandMenu();
 
@@ -164,6 +335,37 @@ describe('SidePanelTopBar', () => {
         Node.DOCUMENT_POSITION_FOLLOWING,
       ),
     ).toBe(true);
+  });
+
+  it('shows routed page info when the header title portal is empty', () => {
+    const store = createSidePanelTopBarStore({
+      sidePanelNavigationStack: [
+        {
+          page: SidePanelPages.RoutedPage,
+          pageTitle: 'Companies',
+          pageIcon: IconDotsVertical,
+          pageId: 'companies',
+          routedLocation: {
+            pathname: '/objects/companies',
+            search: '',
+            hash: '',
+            state: null,
+            key: 'companies',
+          },
+        },
+      ],
+    });
+    mockContextChips = [{ Icons: [], text: 'Companies' }];
+
+    render(
+      <I18nProvider i18n={i18n}>
+        <JotaiProvider store={store}>
+          <SidePanelTopBar />
+        </JotaiProvider>
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText('Companies')).toBeInTheDocument();
   });
 
   it('shows the close button on mobile when there is no back button to dismiss the panel', () => {
@@ -181,7 +383,6 @@ describe('SidePanelTopBar', () => {
 
     renderSidePanelCommandMenu(
       createSidePanelTopBarStore({
-        sidePanelPage: SidePanelPages.SearchRecords,
         sidePanelNavigationStack: [
           {
             page: SidePanelPages.CommandMenuDisplay,
@@ -203,5 +404,148 @@ describe('SidePanelTopBar', () => {
     expect(
       screen.queryByRole('button', { name: 'Close side panel' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('opens history on right click and keeps the back button usable', async () => {
+    const user = userEvent.setup();
+    mockContextChips = [
+      { Icons: [], text: 'Companies' },
+      { Icons: [], text: 'Search' },
+    ];
+    const { store } = renderSidePanelCommandMenu(
+      createSidePanelTopBarStore({
+        sidePanelNavigationStack: [
+          {
+            page: SidePanelPages.CommandMenuDisplay,
+            pageTitle: 'Command Menu',
+            pageIcon: IconDotsVertical,
+            pageId: 'command-menu',
+          },
+          {
+            page: SidePanelPages.SearchRecords,
+            pageTitle: 'Search',
+            pageIcon: IconDotsVertical,
+            pageId: 'search-records',
+          },
+        ],
+      }),
+    );
+    const backButton = screen.getByRole('button', { name: 'Back' });
+
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+
+    await user.pointer({ target: backButton, keys: '[MouseRight]' });
+
+    expect(
+      await screen.findByRole('menu', { name: 'Navigation history' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Companies' })).toBeVisible();
+
+    await user.click(backButton);
+
+    expect(store.get(sidePanelNavigationStackState.atom)).toHaveLength(1);
+  });
+
+  it('does not open history on right click without context chips', async () => {
+    const user = userEvent.setup();
+
+    renderSidePanelCommandMenu(
+      createSidePanelTopBarStore({
+        sidePanelNavigationStack: [
+          {
+            page: SidePanelPages.CommandMenuDisplay,
+            pageTitle: 'Command Menu',
+            pageIcon: IconDotsVertical,
+            pageId: 'command-menu',
+          },
+          {
+            page: SidePanelPages.SearchRecords,
+            pageTitle: 'Search',
+            pageIcon: IconDotsVertical,
+            pageId: 'search-records',
+          },
+        ],
+      }),
+    );
+
+    await user.pointer({
+      target: screen.getByRole('button', { name: 'Back' }),
+      keys: '[MouseRight]',
+    });
+
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it('does not open an empty history with a single context chip', () => {
+    mockContextChips = [{ Icons: [], text: 'Search' }];
+
+    renderSidePanelCommandMenu(
+      createSidePanelTopBarStore({
+        sidePanelNavigationStack: [
+          {
+            page: SidePanelPages.CommandMenuDisplay,
+            pageTitle: 'Command Menu',
+            pageIcon: IconDotsVertical,
+            pageId: 'command-menu',
+          },
+          {
+            page: SidePanelPages.SearchRecords,
+            pageTitle: 'Search',
+            pageIcon: IconDotsVertical,
+            pageId: 'search-records',
+          },
+        ],
+      }),
+    );
+
+    const isNativeContextMenuAllowed = fireEvent.contextMenu(
+      screen.getByRole('button', { name: 'Back' }),
+    );
+
+    expect(isNativeContextMenuAllowed).toBe(true);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it('closes history when going back with it open', async () => {
+    const user = userEvent.setup();
+    mockContextChips = [
+      { Icons: [], text: 'Search' },
+      { Icons: [], text: 'Edit' },
+    ];
+    const { store } = renderSidePanelCommandMenu(
+      createSidePanelTopBarStore({
+        sidePanelNavigationStack: [
+          {
+            page: SidePanelPages.CommandMenuDisplay,
+            pageTitle: 'Command Menu',
+            pageIcon: IconDotsVertical,
+            pageId: 'command-menu',
+          },
+          {
+            page: SidePanelPages.SearchRecords,
+            pageTitle: 'Search',
+            pageIcon: IconDotsVertical,
+            pageId: 'search-records',
+          },
+          {
+            page: SidePanelPages.CommandMenuEdit,
+            pageTitle: 'Edit',
+            pageIcon: IconDotsVertical,
+            pageId: 'command-menu-edit',
+          },
+        ],
+      }),
+    );
+    const backButton = screen.getByRole('button', { name: 'Back' });
+
+    await user.pointer({ target: backButton, keys: '[MouseRight]' });
+    await screen.findByRole('menu', { name: 'Navigation history' });
+    await user.click(backButton);
+
+    expect(store.get(sidePanelNavigationStackState.atom)).toHaveLength(2);
+    await waitFor(() =>
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument();
   });
 });

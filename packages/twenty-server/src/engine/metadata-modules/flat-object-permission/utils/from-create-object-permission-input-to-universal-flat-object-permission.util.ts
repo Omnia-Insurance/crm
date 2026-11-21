@@ -1,3 +1,4 @@
+import { getObjectPermissionUniversalIdentifier } from 'twenty-shared/application';
 import { v4 } from 'uuid';
 
 import { type FlatApplication } from 'src/engine/core-modules/application/types/flat-application.type';
@@ -25,9 +26,6 @@ export const fromCreateObjectPermissionInputToUniversalFlatObjectPermission = ({
     canUpdateObjectRecords,
     canSoftDeleteObjectRecords,
     canDestroyObjectRecords,
-    showInSidebar,
-    editWindowMinutes,
-    universalIdentifier,
   } = createObjectPermissionInput;
   const now = new Date().toISOString();
 
@@ -42,16 +40,23 @@ export const fromCreateObjectPermissionInputToUniversalFlatObjectPermission = ({
     });
   return {
     id: v4(),
-    universalIdentifier: universalIdentifier ?? v4(),
+    universalIdentifier: getObjectPermissionUniversalIdentifier({
+      applicationUniversalIdentifier: flatApplication.universalIdentifier,
+      roleUniversalIdentifier,
+      objectUniversalIdentifier: objectMetadataUniversalIdentifier,
+    }),
     applicationUniversalIdentifier: flatApplication.universalIdentifier,
     roleUniversalIdentifier,
     objectMetadataUniversalIdentifier,
     canReadObjectRecords: canReadObjectRecords ?? undefined,
+    canCreateObjectRecords: canUpdateObjectRecords ?? undefined,
     canUpdateObjectRecords: canUpdateObjectRecords ?? undefined,
     canSoftDeleteObjectRecords: canSoftDeleteObjectRecords ?? undefined,
     canDestroyObjectRecords: canDestroyObjectRecords ?? undefined,
-    showInSidebar: showInSidebar ?? undefined,
-    editWindowMinutes: editWindowMinutes ?? undefined,
+    // OMNIA-CUSTOM: per-object sidebar visibility and edit window (C3, C4)
+    showInSidebar: createObjectPermissionInput.showInSidebar ?? undefined,
+    editWindowMinutes:
+      createObjectPermissionInput.editWindowMinutes ?? undefined,
     createdAt: now,
     updatedAt: now,
   };

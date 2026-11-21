@@ -6,6 +6,8 @@
 
 import { Logger } from '@nestjs/common';
 
+import * as XLSX from 'xlsx';
+
 import type { MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
 import { ReconciliationMatchJob } from 'src/modules/reconciliation/jobs/match.job';
 import { ReconciliationParseJob } from 'src/modules/reconciliation/jobs/parse.job';
@@ -145,6 +147,58 @@ describe('reconciliation job status guards', () => {
         'PARSE',
         expect.any(Error),
       );
+    });
+
+    it('should auto-enqueue the match job scoped to the workspace and deduplicated per run', async () => {
+      const workbook = XLSX.utils.book_new();
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.aoa_to_sheet([
+          ['Policy Number', 'Policy Effective Date', 'Paid Through Date'],
+          ['U123', '2026-01-01', '2026-01-31'],
+        ]),
+        'Sheet1',
+      );
+
+      dataService.getReconciliation.mockResolvedValue({
+        id: RECONCILIATION_ID,
+        status: 'PARSING',
+        carrierConfigId: 'carrier-config-id',
+        columnMapping: COLUMN_MAPPING,
+        sheetName: null,
+      });
+      dataService.getCarrierConfig.mockResolvedValue({
+        id: 'carrier-config-id',
+        name: 'Ambetter',
+        parserVersion: 'ambetter-bob-v1',
+        fieldConfig: null,
+        matchingConfig: null,
+        statusConfig: {
+          fieldMapping: {
+            effectiveDate: 'Policy Effective Date',
+            paidThroughDate: 'Paid Through Date',
+          },
+        },
+        carrierId: null,
+        policyNumberPattern: null,
+      });
+      attachmentService.readSourceFile.mockResolvedValue(
+        XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }),
+      );
+
+      await expect(buildParseJob().handle(JOB_DATA)).resolves.toBeUndefined();
+
+      expect(stateMachine.setFailed).not.toHaveBeenCalled();
+      expect(queue.add).toHaveBeenCalledTimes(1);
+      expect(queue.add).toHaveBeenCalledWith('reconciliation-match', JOB_DATA, {
+        isWorkspaceJob: true,
+        workspaceId: WORKSPACE_ID,
+        deduplication: {
+          id: `reconciliation-match-${RECONCILIATION_ID}`,
+          keepLastIfActive: true,
+        },
+      });
     });
   });
 

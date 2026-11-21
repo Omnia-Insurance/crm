@@ -1,8 +1,10 @@
+import { Badge } from 'twenty-ui/primitives/data-display';
 import { styled } from '@linaria/react';
-import { isValidElement, type ReactNode } from 'react';
+import { isNonEmptyString } from '@sniptt/guards';
+import { isValidElement, type ReactNode, useId } from 'react';
 import { isDefined } from 'twenty-shared/utils';
-import { Radio } from 'twenty-ui/input';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { Radio } from 'twenty-ui/primitives/input';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 const StyledCard = styled.div`
   background-color: ${themeCssVariables.background.primary};
@@ -15,27 +17,22 @@ const StyledCard = styled.div`
   width: 100%;
 `;
 
-const StyledHeader = styled.button<{ hasBody: boolean }>`
-  align-items: flex-start;
+const StyledHeader = styled.label<{ hasBody: boolean; hasNote: boolean }>`
   background-color: transparent;
   border: none;
   border-bottom: ${({ hasBody }) =>
     hasBody ? `1px solid ${themeCssVariables.border.color.light}` : 'none'};
+  box-sizing: border-box;
   cursor: pointer;
   display: flex;
-  gap: ${themeCssVariables.spacing[2]};
-  justify-content: space-between;
-  padding: ${themeCssVariables.spacing[4]} ${themeCssVariables.spacing[3]};
+  flex-direction: column;
+  gap: ${themeCssVariables.spacing[4]};
+  padding: ${({ hasNote }) =>
+    hasNote
+      ? `${themeCssVariables.spacing[4]} ${themeCssVariables.spacing[3]}`
+      : themeCssVariables.spacing[3]};
   text-align: left;
   width: 100%;
-`;
-
-const StyledHeaderLeft = styled.div`
-  display: flex;
-  flex: 1 1 0;
-  flex-direction: column;
-  gap: ${themeCssVariables.spacing[2]};
-  min-width: 0;
 `;
 
 const StyledTitleRow = styled.div`
@@ -44,84 +41,128 @@ const StyledTitleRow = styled.div`
   gap: ${themeCssVariables.spacing[1]};
 `;
 
+const StyledTitleContent = styled.div`
+  align-items: center;
+  display: flex;
+  flex: 1 1 0;
+  flex-wrap: wrap;
+  gap: ${themeCssVariables.spacing[1]};
+  min-width: 0;
+`;
+
+const StyledTitleText = styled.div`
+  align-items: baseline;
+  display: flex;
+  flex: 1 0 auto;
+  flex-wrap: wrap;
+  gap: ${themeCssVariables.spacing[1]};
+`;
+
 const StyledTitle = styled.span`
   color: ${themeCssVariables.font.color.primary};
   font-size: ${themeCssVariables.font.size.md};
   font-weight: ${themeCssVariables.font.weight.medium};
+  line-height: 1.4;
 `;
 
-const StyledTitleSuffix = styled.span`
-  color: ${themeCssVariables.font.color.tertiary};
-  font-size: ${themeCssVariables.font.size.sm};
-  font-weight: ${themeCssVariables.font.weight.regular};
+const StyledTitleSuffix = styled.span<{ isEmphasized: boolean }>`
+  color: ${({ isEmphasized }) =>
+    isEmphasized
+      ? themeCssVariables.font.color.tertiary
+      : themeCssVariables.font.color.extraLight};
+  font-size: ${({ isEmphasized }) =>
+    isEmphasized
+      ? themeCssVariables.font.size.md
+      : themeCssVariables.font.size.sm};
+  font-weight: ${({ isEmphasized }) =>
+    isEmphasized
+      ? themeCssVariables.font.weight.medium
+      : themeCssVariables.font.weight.regular};
+  line-height: 1.4;
 `;
 
 const StyledNote = styled.span`
   color: ${themeCssVariables.font.color.light};
   font-size: ${themeCssVariables.font.size.sm};
   font-weight: ${themeCssVariables.font.weight.regular};
+  line-height: 1.4;
 `;
 
-const StyledHeaderRight = styled.div`
+const StyledRadioContainer = styled.div`
   align-items: center;
   display: flex;
-  gap: ${themeCssVariables.spacing[2]};
+  height: ${themeCssVariables.spacing[6]};
+  justify-content: center;
+  width: ${themeCssVariables.spacing[6]};
 `;
 
-const StyledBadge = styled.span`
-  align-items: center;
-  background-color: ${themeCssVariables.background.tertiary};
-  border-radius: ${themeCssVariables.border.radius.pill};
-  color: ${themeCssVariables.font.color.tertiary};
-  display: flex;
-  font-size: ${themeCssVariables.font.size.sm};
-  font-weight: ${themeCssVariables.font.weight.medium};
-  padding: ${themeCssVariables.spacing[1]} ${themeCssVariables.spacing[2]};
+const StyledTags = styled.span`
+  display: contents;
 `;
 
 const StyledBody = styled.div`
   display: flex;
   flex-direction: column;
+  gap: ${themeCssVariables.spacing[4]};
   padding: ${themeCssVariables.spacing[4]} ${themeCssVariables.spacing[3]};
 `;
 
 type OnboardingPlanCardProps = {
   title: string;
   titleSuffix?: string;
+  tags?: ReactNode;
   note?: string;
   badge?: string;
-  selected: boolean;
-  onSelect: () => void;
+  value: boolean;
   children?: ReactNode;
 };
 
 export const OnboardingPlanCard = ({
   title,
   titleSuffix,
+  tags,
   note,
   badge,
-  selected,
-  onSelect,
+  value,
   children,
 }: OnboardingPlanCardProps) => {
+  const titleId = useId();
+  const noteId = useId();
+  const tagsId = useId();
   const hasBody = isValidElement(children);
+  const hasNote = isDefined(note);
+  const hasTags = isDefined(tags);
+  const describedByIds = [hasTags ? tagsId : null, hasNote ? noteId : null]
+    .filter(isDefined)
+    .join(' ');
 
   return (
     <StyledCard>
-      <StyledHeader type="button" hasBody={hasBody} onClick={onSelect}>
-        <StyledHeaderLeft>
-          <StyledTitleRow>
-            <StyledTitle>{title}</StyledTitle>
-            {isDefined(titleSuffix) && (
-              <StyledTitleSuffix>{titleSuffix}</StyledTitleSuffix>
-            )}
-          </StyledTitleRow>
-          {isDefined(note) && <StyledNote>{note}</StyledNote>}
-        </StyledHeaderLeft>
-        <StyledHeaderRight>
-          {isDefined(badge) && <StyledBadge>{badge}</StyledBadge>}
-          <Radio checked={selected} />
-        </StyledHeaderRight>
+      <StyledHeader hasBody={hasBody} hasNote={hasNote}>
+        <StyledTitleRow>
+          <StyledTitleContent>
+            <StyledTitleText>
+              <StyledTitle id={titleId}>{title}</StyledTitle>
+              {isDefined(titleSuffix) && (
+                <StyledTitleSuffix isEmphasized={hasNote}>
+                  {titleSuffix}
+                </StyledTitleSuffix>
+              )}
+            </StyledTitleText>
+            {hasTags && <StyledTags id={tagsId}>{tags}</StyledTags>}
+            {isDefined(badge) && <Badge size="md">{badge}</Badge>}
+          </StyledTitleContent>
+          <StyledRadioContainer>
+            <Radio
+              value={value}
+              aria-labelledby={titleId}
+              aria-describedby={
+                isNonEmptyString(describedByIds) ? describedByIds : undefined
+              }
+            />
+          </StyledRadioContainer>
+        </StyledTitleRow>
+        {hasNote && <StyledNote id={noteId}>{note}</StyledNote>}
       </StyledHeader>
       {hasBody && <StyledBody>{children}</StyledBody>}
     </StyledCard>

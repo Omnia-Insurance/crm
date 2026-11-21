@@ -1,12 +1,14 @@
 import { CombinedGraphQLErrors } from '@apollo/client/errors';
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
-import { IconAlertCircle } from 'twenty-ui/icon';
-import { useContext } from 'react';
+import { type ReactNode } from 'react';
+import { IconAlertCircle, IconRefresh } from 'twenty-ui/icon';
+import { Button } from 'twenty-ui/primitives/input';
+import { isDefined } from 'twenty-shared/utils';
 
 import { type AiChatError } from '@/ai/types/AiChatError';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
 import { getErrorMessageFromApolloError } from '~/utils/get-error-message-from-apollo-error.util';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledErrorContainer = styled.div`
   align-items: center;
@@ -45,10 +47,19 @@ const StyledErrorMessage = styled.div`
 
 type AiChatErrorMessageProps = {
   error: AiChatError;
+  hint?: string;
+  onRetry?: () => void;
+  action?: ReactNode;
 };
 
-export const AiChatErrorMessage = ({ error }: AiChatErrorMessageProps) => {
-  const { theme } = useContext(ThemeContext);
+export const AiChatErrorMessage = ({
+  error,
+  hint,
+  onRetry,
+  action,
+}: AiChatErrorMessageProps) => {
+  const { t } = useLingui();
+  const theme = useTheme();
   const errorMessage = CombinedGraphQLErrors.is(error)
     ? getErrorMessageFromApolloError(error)
     : error.message;
@@ -63,7 +74,17 @@ export const AiChatErrorMessage = ({ error }: AiChatErrorMessageProps) => {
         <StyledErrorMessage>
           {errorMessage || t`An error occurred while processing your message`}
         </StyledErrorMessage>
+        {isDefined(hint) && <StyledErrorMessage>{hint}</StyledErrorMessage>}
       </StyledErrorContent>
+      {isDefined(onRetry) && (
+        <Button
+          size="sm"
+          startIcon={<IconRefresh />}
+          onClick={onRetry}
+          variant="outline"
+        >{t`Retry`}</Button>
+      )}
+      {action}
     </StyledErrorContainer>
   );
 };

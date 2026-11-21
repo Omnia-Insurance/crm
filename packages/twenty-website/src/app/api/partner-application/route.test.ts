@@ -2,6 +2,11 @@ const ORIGINAL_FETCH = global.fetch;
 const ORIGINAL_WEBHOOK_URL = process.env.PARTNER_APPLICATION_WEBHOOK_URL;
 const ORIGINAL_API_KEY = process.env.PARTNER_APPLICATION_SECRET;
 
+const VALID_EXPERIENCE_NOTES =
+  'Built a custom Twenty app for a property-management client, modeled leases and ' +
+  'tenants as data models, automated renewal workflows, and shipped a front component ' +
+  'for the broker dashboard with role-based views.';
+
 const VALID_PAYLOAD = {
   email: 'a@b.co',
   name: 'Ada Lovelace',
@@ -10,6 +15,9 @@ const VALID_PAYLOAD = {
   city: 'London',
   hourlyRate: 150,
   projectBudgetMin: 5000,
+  twentyExperience: ['WORKFLOWS'],
+  twentyExperienceNotes: VALID_EXPERIENCE_NOTES,
+  twentyExperienceProofLink: 'https://www.loom.com/share/example',
 };
 
 const VALID_BODY = JSON.stringify(VALID_PAYLOAD);
@@ -128,6 +136,48 @@ describe('POST /api/partner-application', () => {
     expect(response.status).toBe(400);
   });
 
+  it('returns 400 when applicationNotes is present (removed from apply)', async () => {
+    const { POST } = await loadRoute();
+    const response = await POST(
+      buildRequest({
+        body: JSON.stringify({
+          ...VALID_PAYLOAD,
+          applicationNotes: 'legacy catch-all notes',
+        }),
+        ip: '203.0.113.17',
+      }),
+    );
+    expect(response.status).toBe(400);
+  });
+
+  it('returns 400 when experience narrative is too short', async () => {
+    const { POST } = await loadRoute();
+    const response = await POST(
+      buildRequest({
+        body: JSON.stringify({
+          ...VALID_PAYLOAD,
+          twentyExperienceNotes: 'Too short for a real implementation.',
+        }),
+        ip: '203.0.113.18',
+      }),
+    );
+    expect(response.status).toBe(400);
+  });
+
+  it('returns 400 when twentyExperience is empty', async () => {
+    const { POST } = await loadRoute();
+    const response = await POST(
+      buildRequest({
+        body: JSON.stringify({
+          ...VALID_PAYLOAD,
+          twentyExperience: [],
+        }),
+        ip: '203.0.113.19',
+      }),
+    );
+    expect(response.status).toBe(400);
+  });
+
   it('returns 400 when country enum is unknown', async () => {
     const { POST } = await loadRoute();
     const response = await POST(
@@ -168,6 +218,9 @@ describe('POST /api/partner-application', () => {
       city: 'London',
       hourlyRate: 150,
       projectBudgetMin: 5000,
+      twentyExperience: ['WORKFLOWS'],
+      twentyExperienceNotes: VALID_EXPERIENCE_NOTES,
+      twentyExperienceProofLink: 'https://www.loom.com/share/example',
     });
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });
@@ -250,6 +303,27 @@ describe('POST /api/partner-application', () => {
     const { POST } = await loadRoute();
     const response = await POST(buildRequest({ ip: '203.0.113.26' }));
     expect(response.status).toBe(502);
+  });
+
+  it('returns 502 when the webhook answers success:true instead of ok:true', async () => {
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ success: true }), { status: 200 }),
+      );
+    const { POST } = await loadRoute();
+    const response = await POST(buildRequest({ ip: '203.0.113.27' }));
+    expect(response.status).toBe(502);
+  });
+
+  it('returns 503 without calling the webhook when the secret is not set', async () => {
+    delete process.env.PARTNER_APPLICATION_SECRET;
+    const fetchSpy = jest.fn();
+    global.fetch = fetchSpy;
+    const { POST } = await loadRoute();
+    const response = await POST(buildRequest({ ip: '203.0.113.28' }));
+    expect(response.status).toBe(503);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('returns 504 when the webhook surfaces an AbortError (timeout path)', async () => {

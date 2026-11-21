@@ -1,11 +1,13 @@
 import { FormSingleRecordPicker } from '@/object-record/record-field/ui/form-types/components/FormSingleRecordPicker';
-import { type VariablePickerComponent } from '@/object-record/record-field/ui/form-types/types/VariablePickerComponent';
+import { type VariablePickerComponent } from '@/ui/input/types/VariablePickerComponent';
 import {
   type FieldRelationToOneValue,
   type FieldRelationValue,
 } from '@/object-record/record-field/ui/types/FieldMetadata';
 import { isObject } from '@sniptt/guards';
 import { isDefined } from 'twenty-shared/utils';
+// OMNIA-CUSTOM: Carrier -> Product allowlist (U6)
+import { type RecordGqlOperationFilter } from 'twenty-shared/types';
 import { type JsonValue } from 'type-fest';
 
 export type FormRelationToOneFieldInputProps = {
@@ -16,6 +18,8 @@ export type FormRelationToOneFieldInputProps = {
   onClear?: () => void;
   readonly?: boolean;
   VariablePicker?: VariablePickerComponent;
+  // OMNIA-CUSTOM: Carrier -> Product allowlist (U6)
+  additionalFilter?: RecordGqlOperationFilter;
 };
 
 const isFieldRelationToOneValue = (
@@ -32,6 +36,8 @@ export const FormRelationToOneFieldInput = ({
   defaultValue,
   readonly,
   VariablePicker,
+  // OMNIA-CUSTOM: Carrier -> Product allowlist (U6)
+  additionalFilter,
 }: FormRelationToOneFieldInputProps) => {
   return (
     isDefined(objectNameSingular) && (
@@ -47,6 +53,8 @@ export const FormRelationToOneFieldInput = ({
         objectNameSingulars={[objectNameSingular]}
         disabled={readonly}
         VariablePicker={VariablePicker}
+        // OMNIA-CUSTOM: Carrier -> Product allowlist (U6)
+        additionalFilter={additionalFilter}
       />
     )
   );

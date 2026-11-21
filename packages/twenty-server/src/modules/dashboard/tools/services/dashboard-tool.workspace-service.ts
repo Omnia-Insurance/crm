@@ -1,3 +1,4 @@
+import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { Injectable } from '@nestjs/common';
 
 import { type ToolSet } from 'ai';
@@ -8,8 +9,9 @@ import { WorkspaceManyOrAllFlatEntityMapsCacheService } from 'src/engine/metadat
 import { PageLayoutTabService } from 'src/engine/metadata-modules/page-layout-tab/services/page-layout-tab.service';
 import { PageLayoutWidgetService } from 'src/engine/metadata-modules/page-layout-widget/services/page-layout-widget.service';
 import { PageLayoutService } from 'src/engine/metadata-modules/page-layout/services/page-layout.service';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
-import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
+// OMNIA-CUSTOM: dashboard audience token for gated creators
+import { DashboardAudienceCreatorService } from 'src/modules/dashboard/dashboard-audience/services/dashboard-audience-creator.service';
 import { createAddDashboardTabTool } from 'src/modules/dashboard/tools/add-dashboard-tab.tool';
 import { createAddDashboardWidgetTool } from 'src/modules/dashboard/tools/add-dashboard-widget.tool';
 import { createCreateCompleteDashboardTool } from 'src/modules/dashboard/tools/create-complete-dashboard.tool';
@@ -27,34 +29,45 @@ export class DashboardToolWorkspaceService {
     pageLayoutService: PageLayoutService,
     pageLayoutTabService: PageLayoutTabService,
     pageLayoutWidgetService: PageLayoutWidgetService,
-    globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    workspaceOrmManager: WorkspaceOrmManager,
     recordPositionService: RecordPositionService,
     applicationService: ApplicationService,
     flatEntityMapsCacheService: WorkspaceManyOrAllFlatEntityMapsCacheService,
+    // OMNIA-CUSTOM: tags a gated creator's dashboard with its audience token
+    dashboardAudienceCreatorService: DashboardAudienceCreatorService,
   ) {
     this.deps = {
       pageLayoutService,
       pageLayoutTabService,
       pageLayoutWidgetService,
-      globalWorkspaceOrmManager,
+      workspaceOrmManager,
       recordPositionService,
       applicationService,
       flatEntityMapsCacheService,
+      // OMNIA-CUSTOM: dashboard audience token for gated creators
+      dashboardAudienceCreatorService,
     };
   }
 
   generateDashboardTools(
     workspaceId: string,
-    _rolePermissionConfig: RolePermissionConfig,
+    authContext: WorkspaceAuthContext,
   ): ToolSet {
     const context = { workspaceId };
+    const contextWithPermissions = { workspaceId, authContext };
 
     const createCompleteDashboard = createCreateCompleteDashboardTool(
       this.deps,
-      context,
+      contextWithPermissions,
     );
-    const listDashboards = createListDashboardsTool(this.deps, context);
-    const getDashboard = createGetDashboardTool(this.deps, context);
+    const listDashboards = createListDashboardsTool(
+      this.deps,
+      contextWithPermissions,
+    );
+    const getDashboard = createGetDashboardTool(
+      this.deps,
+      contextWithPermissions,
+    );
     const addDashboardTab = createAddDashboardTabTool(this.deps, context);
     const addDashboardWidget = createAddDashboardWidgetTool(this.deps, context);
     const updateDashboardWidget = createUpdateDashboardWidgetTool(

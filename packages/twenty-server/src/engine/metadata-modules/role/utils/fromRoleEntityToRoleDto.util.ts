@@ -8,8 +8,10 @@ export const fromRoleEntityToRoleDto = (role: RoleEntity): RoleDTO => {
     id: role.id,
     label: role.label,
     universalIdentifier: role.universalIdentifier,
+    applicationId: role.applicationId,
     canUpdateAllSettings: role.canUpdateAllSettings,
     canAccessAllTools: role.canAccessAllTools,
+    canAccessAllAgentChatChannels: role.canAccessAllAgentChatChannels,
     description: role.description ?? undefined,
     icon: role.icon ?? undefined,
     isEditable: role.isEditable,
@@ -17,6 +19,7 @@ export const fromRoleEntityToRoleDto = (role: RoleEntity): RoleDTO => {
     canUpdateAllObjectRecords: role.canUpdateAllObjectRecords,
     canSoftDeleteAllObjectRecords: role.canSoftDeleteAllObjectRecords,
     canDestroyAllObjectRecords: role.canDestroyAllObjectRecords,
+    // OMNIA-CUSTOM: role-wide sidebar default and policy edit window (C3, C4)
     showAllObjectsInSidebar: role.showAllObjectsInSidebar,
     editWindowMinutes: role.editWindowMinutes,
     canBeAssignedToUsers: role.canBeAssignedToUsers,

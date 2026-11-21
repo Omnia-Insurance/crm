@@ -9,6 +9,7 @@ import { findManyFlatEntityByIdInFlatEntityMapsOrThrow } from 'src/engine/metada
 import { findRelationFlatFieldMetadataTargetFlatFieldMetadataOrThrow } from 'src/engine/metadata-modules/flat-field-metadata/utils/find-relation-flat-field-metadatas-target-flat-field-metadata-or-throw.util';
 import { isMorphOrRelationFlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/utils/is-morph-or-relation-flat-field-metadata.util';
 import { type FlatIndexMetadata } from 'src/engine/metadata-modules/flat-index-metadata/types/flat-index-metadata.type';
+import { type FlatView } from 'src/engine/metadata-modules/flat-view/types/flat-view.type';
 import { type DeleteOneObjectInput } from 'src/engine/metadata-modules/object-metadata/dtos/delete-object.input';
 import {
   ObjectMetadataException,
@@ -21,18 +22,23 @@ type FromDeleteObjectInputToFlatFieldMetadatasToDeleteArgs = {
   deleteObjectInput: DeleteOneObjectInput;
 } & Pick<
   AllFlatEntityMaps,
-  'flatFieldMetadataMaps' | 'flatObjectMetadataMaps' | 'flatIndexMaps'
+  | 'flatFieldMetadataMaps'
+  | 'flatObjectMetadataMaps'
+  | 'flatIndexMaps'
+  | 'flatViewMaps'
 >;
 export const fromDeleteObjectInputToFlatFieldMetadatasToDelete = ({
   deleteObjectInput: rawDeleteObjectInput,
   flatFieldMetadataMaps,
   flatObjectMetadataMaps,
   flatIndexMaps,
+  flatViewMaps,
   // This should return an AllFlatEntityMaps
 }: FromDeleteObjectInputToFlatFieldMetadatasToDeleteArgs): {
   flatFieldMetadatasToDelete: UniversalFlatFieldMetadata[];
   flatObjectMetadataToDelete: UniversalFlatObjectMetadata;
   flatIndexToDelete: FlatIndexMetadata[];
+  flatViewToDelete: FlatView[];
 } => {
   const { id: objectMetadataToDeleteId } =
     trimAndRemoveDuplicatedWhitespacesFromObjectStringProperties(
@@ -59,6 +65,10 @@ export const fromDeleteObjectInputToFlatFieldMetadatasToDelete = ({
     });
   const flatFieldMetadatasToDelete = objectFlatFieldMetadatas.flatMap(
     (flatFieldMetadata) => {
+      if (flatFieldMetadata.isSystemSideEffect === true) {
+        return [];
+      }
+
       if (
         isMorphOrRelationFlatFieldMetadata(flatFieldMetadata) &&
         flatFieldMetadata.relationTargetObjectMetadataId !==
@@ -87,15 +97,25 @@ export const fromDeleteObjectInputToFlatFieldMetadatasToDelete = ({
   ).filter(
     (flatIndex): flatIndex is FlatIndexMetadata =>
       isDefined(flatIndex) &&
+      !(
+        flatIndex.isSystemSideEffect === true &&
+        flatIndex.objectMetadataId === flatObjectMetadataToDelete.id
+      ) &&
       (flatIndex.objectMetadataId === flatObjectMetadataToDelete.id ||
         flatIndex.flatIndexFieldMetadatas.some((flatIndexField) =>
           fieldIdsToDelete.has(flatIndexField.fieldMetadataId),
         )),
   );
 
+  const flatViewToDelete = findManyFlatEntityByIdInFlatEntityMapsOrThrow({
+    flatEntityMaps: flatViewMaps,
+    flatEntityIds: flatObjectMetadataToDelete.viewIds,
+  }).filter((flatView) => !flatView.isSystemSideEffect);
+
   return {
     flatFieldMetadatasToDelete,
     flatObjectMetadataToDelete,
     flatIndexToDelete: flatIndexMetadataToDelete,
+    flatViewToDelete,
   };
 };

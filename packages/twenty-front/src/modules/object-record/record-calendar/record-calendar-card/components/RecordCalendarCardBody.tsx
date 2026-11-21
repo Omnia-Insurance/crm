@@ -1,10 +1,10 @@
-import { useGetIsMetadataItemFromStandardApplication } from '@/object-metadata/hooks/useGetIsMetadataItemFromStandardApplication';
 import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
 import { isRecordFieldReadOnly } from '@/object-record/read-only/utils/isRecordFieldReadOnly';
+import { useRecordRestrictedFieldNames } from '@/object-record/record-store/hooks/useRecordRestrictedFieldNames';
 import { StopPropagationContainer } from '@/object-record/record-board/record-board-card/components/StopPropagationContainer';
 import { useRecordCalendarContextOrThrow } from '@/object-record/record-calendar/contexts/RecordCalendarContext';
-import { RECORD_CALENDAR_CARD_INPUT_ID_PREFIX } from '@/object-record/record-calendar/record-calendar-card/constants/RecordCalendarCardInputIdPrefix';
 import { recordCalendarCardHoverPositionComponentState } from '@/object-record/record-calendar/record-calendar-card/states/recordCalendarCardHoverPositionComponentState';
+import { getRecordCalendarCardInstanceIdPrefix } from '@/object-record/record-calendar/record-calendar-card/utils/getRecordCalendarCardInstanceIdPrefix';
 import { RecordCardBodyContainer } from '@/object-record/record-card/components/RecordCardBodyContainer';
 import { visibleRecordFieldsComponentSelector } from '@/object-record/record-field/states/visibleRecordFieldsComponentSelector';
 import {
@@ -18,21 +18,28 @@ import { RecordInlineCell } from '@/object-record/record-inline-cell/components/
 import { getRecordFieldInputInstanceId } from '@/object-record/utils/getRecordFieldInputId';
 import { useAtomComponentSelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorValue';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
+import { isDefined } from 'twenty-shared/utils';
 
 type RecordCalendarCardBodyProps = {
   recordId: string;
+  calendarDay: string;
   isRecordReadOnly: boolean;
 };
 
 export const RecordCalendarCardBody = ({
   recordId,
+  calendarDay,
   isRecordReadOnly,
 }: RecordCalendarCardBodyProps) => {
-  const { objectPermissions, objectMetadataItem } =
-    useRecordCalendarContextOrThrow();
+  const { objectMetadataItem } = useRecordCalendarContextOrThrow();
+
+  const cardInstanceIdPrefix =
+    getRecordCalendarCardInstanceIdPrefix(calendarDay);
 
   const { updateOneRecord } = useUpdateOneRecord();
+
+  const restrictedFieldNames = useRecordRestrictedFieldNames(recordId);
 
   const useUpdateOneRecordHook: RecordUpdateHook = () => {
     const updateEntity = ({ variables }: RecordUpdateHookParams) => {
@@ -48,6 +55,7 @@ export const RecordCalendarCardBody = ({
 
   const {
     labelIdentifierFieldMetadataItem,
+    fieldMetadataItemByFieldMetadataItemId,
     fieldDefinitionByFieldMetadataItemId,
     objectPermissionsByObjectMetadataId,
   } = useRecordIndexContextOrThrow();
@@ -64,8 +72,6 @@ export const RecordCalendarCardBody = ({
   const setRecordCalendarCardHoverPosition = useSetAtomComponentState(
     recordCalendarCardHoverPositionComponentState,
   );
-  const getIsMetadataItemFromStandardApplication =
-    useGetIsMetadataItemFromStandardApplication();
 
   const handleMouseEnter = (index: number) => {
     setRecordCalendarCardHoverPosition(index);
@@ -78,6 +84,24 @@ export const RecordCalendarCardBody = ({
       {visibleRecordFieldsExceptLabelIdentifier.map((recordField, index) => {
         const correspondingFieldDefinition =
           fieldDefinitionByFieldMetadataItemId[recordField.fieldMetadataItemId];
+        const fieldMetadataItem =
+          fieldMetadataItemByFieldMetadataItemId[
+            recordField.fieldMetadataItemId
+          ];
+
+        // OMNIA-CUSTOM: sub-field columns are table-only (contract C6). Skipped, not filtered out,
+        // so hover and edit positions keep indexing useRecordCalendarCardMetadataFromPosition's list
+        if (
+          !isDefined(correspondingFieldDefinition) ||
+          !isDefined(fieldMetadataItem) ||
+          isDefined(recordField.subFieldName)
+        ) {
+          return null;
+        }
+
+        const isFieldRestricted = restrictedFieldNames.includes(
+          fieldMetadataItem.name,
+        );
 
         return (
           <StopPropagationContainer key={recordField.fieldMetadataItemId}>
@@ -86,29 +110,21 @@ export const RecordCalendarCardBody = ({
                 recordId,
                 maxWidth: 156,
                 isLabelIdentifier: false,
-                isRecordFieldReadOnly: isRecordFieldReadOnly({
-                  isRecordReadOnly,
-                  isSystemObject: objectMetadataItem.isSystem,
-                  isFieldFromStandardApplication:
-                    getIsMetadataItemFromStandardApplication({
-                      applicationId:
-                        correspondingFieldDefinition.metadata.applicationId,
-                    }),
-                  objectPermissions,
-                  fieldMetadataItem: {
-                    id: recordField.fieldMetadataItemId,
-                    isUIEditable:
-                      correspondingFieldDefinition.metadata.isUIEditable ??
-                      true,
-                  },
-                  fieldDefinition: correspondingFieldDefinition,
-                  objectPermissionsByObjectMetadataId,
-                }),
+                isForbidden: isFieldRestricted,
+                isRecordFieldReadOnly:
+                  isFieldRestricted ||
+                  isRecordFieldReadOnly({
+                    isRecordReadOnly,
+                    objectMetadataId: objectMetadataItem.id,
+                    fieldMetadataItem,
+                    fieldDefinition: correspondingFieldDefinition,
+                    objectPermissionsByObjectMetadataId,
+                  }),
                 fieldDefinition: correspondingFieldDefinition,
                 useUpdateRecord: useUpdateOneRecordHook,
                 isDisplayModeFixHeight: true,
                 triggerEvent: 'CLICK',
-                anchorId: `${RECORD_CALENDAR_CARD_INPUT_ID_PREFIX}-${recordId}-${correspondingFieldDefinition.metadata.fieldName}`,
+                anchorId: `${cardInstanceIdPrefix}-${recordId}-${correspondingFieldDefinition.metadata.fieldName}`,
                 onMouseEnter: () => handleMouseEnter(index),
               }}
             >
@@ -117,13 +133,11 @@ export const RecordCalendarCardBody = ({
                   instanceId: getRecordFieldInputInstanceId({
                     recordId,
                     fieldName: correspondingFieldDefinition.metadata.fieldName,
-                    prefix: RECORD_CALENDAR_CARD_INPUT_ID_PREFIX,
+                    prefix: cardInstanceIdPrefix,
                   }),
                 }}
               >
-                <RecordInlineCell
-                  instanceIdPrefix={RECORD_CALENDAR_CARD_INPUT_ID_PREFIX}
-                />
+                <RecordInlineCell instanceIdPrefix={cardInstanceIdPrefix} />
               </RecordFieldComponentInstanceContext.Provider>
             </FieldContext.Provider>
           </StopPropagationContainer>

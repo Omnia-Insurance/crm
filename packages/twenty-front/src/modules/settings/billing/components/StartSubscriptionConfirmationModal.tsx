@@ -1,5 +1,5 @@
-import { ConfirmationModal } from '@/ui/layout/modal/components/ConfirmationModal';
-import { t } from '@lingui/core/macro';
+import { ConfirmationDialog } from '@/ui/layout/dialog/components/ConfirmationDialog';
+import { useLingui } from '@lingui/react/macro';
 
 type StartSubscriptionConfirmationModalProps = {
   modalInstanceId: string;
@@ -14,11 +14,12 @@ export const StartSubscriptionConfirmationModal = ({
   onConfirmClick,
   loading,
 }: StartSubscriptionConfirmationModalProps) => {
+  const { t } = useLingui();
   const needsCreditCard = hasPaymentMethod === false;
 
   return (
-    <ConfirmationModal
-      modalInstanceId={modalInstanceId}
+    <ConfirmationDialog
+      dialogId={modalInstanceId}
       title={
         needsCreditCard ? t`Add your credit card` : t`Start Your Subscription`
       }
@@ -29,7 +30,7 @@ export const StartSubscriptionConfirmationModal = ({
       }
       onConfirmClick={onConfirmClick}
       confirmButtonText={needsCreditCard ? t`Add credit card` : t`Confirm`}
-      confirmButtonAccent="blue"
+      confirmButtonColor="accent"
       loading={loading}
     />
   );

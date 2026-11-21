@@ -2,7 +2,7 @@ import { FieldMetadataType } from '@/types/FieldMetadataType';
 import {
   type IteratorOutputSchema,
   type RecordOutputSchemaV2,
-} from '../../types/output-schema.type';
+} from '../../types/OutputSchema';
 import { searchVariableInOutputSchema } from '../search-variable-in-output-schema';
 
 const searchVariableThroughIteratorOutputSchema = ({
@@ -75,6 +75,24 @@ describe('searchVariableInOutputSchema - iterator output schema', () => {
       variableType: FieldMetadataType.NUMBER,
     });
   });
+
+  it.each([{}, { currentItem: null }])(
+    'should return an unresolved variable for an incomplete iterator schema %j',
+    (schema) => {
+      const result = searchVariableInOutputSchema({
+        schema,
+        stepType: 'ITERATOR',
+        stepName: 'Iterate Companies',
+        rawVariableName: '{{step1.currentItem.name}}',
+        isFullRecord: false,
+      });
+
+      expect(result).toEqual({
+        variableLabel: undefined,
+        variablePathLabel: undefined,
+      });
+    },
+  );
 
   it('should handle hasProcessedAllItems variable correctly', () => {
     const result = searchVariableThroughIteratorOutputSchema({

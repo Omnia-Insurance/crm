@@ -1,20 +1,18 @@
 import { styled } from '@linaria/react';
-import type { ReactNode } from 'react';
+import { useLingui } from '@lingui/react/macro';
+import { type ReactNode } from 'react';
 import { IconArrowBackUp, IconListCheck } from 'twenty-ui/icon';
-import { Button } from 'twenty-ui/input';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { Button } from 'twenty-ui/primitives/input';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 type ReconciliationToolbarProps = {
-  /** Number of PENDING items eligible for batch apply in current filter */
+  // PENDING items in the current filter that batch apply would write
   batchApplyCount?: number;
-  /** Fire the batch-apply mutation */
   onBatchApplyClick?: () => void;
-  /** Number of APPROVED items eligible for batch undo in current filter */
+  // APPROVED items in the current filter that batch undo would revert
   batchUndoCount?: number;
-  /** Fire the batch-undo mutation */
   onBatchUndoClick?: () => void;
   batchActionLoading?: boolean;
-  /** Native Twenty filter chip bar */
   filterBar: ReactNode;
 };
 
@@ -55,6 +53,8 @@ export const ReconciliationToolbar = ({
   batchActionLoading,
   filterBar,
 }: ReconciliationToolbarProps) => {
+  const { t } = useLingui();
+
   return (
     <StyledToolbarContainer>
       <StyledFilterRow>
@@ -63,27 +63,29 @@ export const ReconciliationToolbar = ({
             batchApplyCount !== undefined &&
             batchApplyCount > 0 && (
               <Button
-                title={`Apply ${batchApplyCount} changes`}
-                variant="secondary"
-                accent="blue"
-                size="small"
-                Icon={IconListCheck}
+                variant="outline"
+                color="accent"
+                size="sm"
+                startIcon={<IconListCheck />}
                 onClick={onBatchApplyClick}
                 disabled={batchActionLoading}
-              />
+              >
+                {t`Apply ${batchApplyCount} changes`}
+              </Button>
             )}
           {onBatchUndoClick &&
             batchUndoCount !== undefined &&
             batchUndoCount > 0 && (
               <Button
-                title={`Undo ${batchUndoCount} changes`}
-                variant="secondary"
-                accent="danger"
-                size="small"
-                Icon={IconArrowBackUp}
+                variant="outline"
+                color="danger"
+                size="sm"
+                startIcon={<IconArrowBackUp />}
                 onClick={onBatchUndoClick}
                 disabled={batchActionLoading}
-              />
+              >
+                {t`Undo ${batchUndoCount} changes`}
+              </Button>
             )}
         </StyledLeftSection>
         <StyledFilterBarSlot>{filterBar}</StyledFilterBarSlot>

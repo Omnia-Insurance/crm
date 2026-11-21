@@ -1,12 +1,12 @@
 import { CommandMenuItem } from '@/command-menu/components/CommandMenuItem';
-import { CommandMenuItemDropdown } from '@/command-menu/components/CommandMenuItemDropdown';
+import { CommandMenuItemDropdownTrigger } from '@/command-menu/components/CommandMenuItemDropdownTrigger';
 import { CommandMenuItemNumberInput } from '@/command-menu/components/CommandMenuItemNumberInput';
 import { CommandMenuItemTextInput } from '@/command-menu/components/CommandMenuItemTextInput';
-import { CommandMenuItemToggle } from '@/command-menu/components/CommandMenuItemToggle';
+import { CommandMenuItemSwitch } from '@/command-menu/components/CommandMenuItemSwitch';
 import { SIDE_PANEL_SELECTABLE_LIST_ID } from '@/side-panel/constants/SidePanelSelectableListId';
 import { useSidePanelSubPageHistory } from '@/side-panel/hooks/useSidePanelSubPageHistory';
 import { useChartSettingsValues } from '@/side-panel/pages/page-layout/hooks/useChartSettingsValues';
-import { usePageLayoutIdFromContextStore } from '@/side-panel/pages/page-layout/hooks/usePageLayoutIdFromContextStore';
+import { usePageLayoutSidePanelTarget } from '@/side-panel/pages/page-layout/hooks/usePageLayoutSidePanelTarget';
 import { useUpdateChartSettingInput } from '@/side-panel/pages/page-layout/hooks/useUpdateChartSettingInput';
 import { useUpdateChartSettingTextInput } from '@/side-panel/pages/page-layout/hooks/useUpdateChartSettingTextInput';
 import { useUpdateChartSettingToggle } from '@/side-panel/pages/page-layout/hooks/useUpdateChartSettingToggle';
@@ -16,13 +16,15 @@ import { type ChartSettingsItem } from '@/side-panel/pages/page-layout/types/Cha
 import { isMinMaxRangeValid } from '@/side-panel/pages/page-layout/utils/isMinMaxRangeValid';
 import { SidePanelSubPages } from '@/side-panel/types/SidePanelSubPages';
 import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
-import { useCloseAnyOpenDropdown } from '@/ui/layout/dropdown/hooks/useCloseAnyOpenDropdown';
+import { DropdownRoot } from '@/ui/layout/dropdown/components/DropdownRoot';
 import { useOpenDropdown } from '@/ui/layout/dropdown/hooks/useOpenDropdown';
 import { SelectableListItem } from '@/ui/layout/selectable-list/components/SelectableListItem';
 import { useSelectableList } from '@/ui/layout/selectable-list/hooks/useSelectableList';
-import { t } from '@lingui/core/macro';
 import { isString } from '@sniptt/guards';
 import { isDefined } from 'twenty-shared/utils';
+import { useLingui } from '@lingui/react/macro';
+
+const CHART_SETTINGS_DROPDOWN_SIDE_OFFSET = 4;
 
 type ChartSettingItemProps = {
   item: ChartSettingsItem;
@@ -35,8 +37,8 @@ export const ChartSettingItem = ({
   objectMetadataId,
   configuration,
 }: ChartSettingItemProps) => {
-  const { pageLayoutId } = usePageLayoutIdFromContextStore();
-  const { closeAnyOpenDropdown } = useCloseAnyOpenDropdown();
+  const { t } = useLingui();
+  const { pageLayoutId } = usePageLayoutSidePanelTarget();
   const { openDropdown } = useOpenDropdown();
   const { setSelectedItemId } = useSelectableList(
     SIDE_PANEL_SELECTABLE_LIST_ID,
@@ -59,7 +61,7 @@ export const ChartSettingItem = ({
   const { updateChartSettingTextInput } =
     useUpdateChartSettingTextInput(pageLayoutId);
 
-  const handleToggleChange = () => {
+  const handleCheckedChange = () => {
     setSelectedItemId(item.id);
     updateChartSettingToggle(item.id);
   };
@@ -73,7 +75,6 @@ export const ChartSettingItem = ({
   };
 
   const handleDropdownOpen = () => {
-    closeAnyOpenDropdown();
     openDropdown({
       dropdownComponentInstanceIdFromProps: item.id,
     });
@@ -160,18 +161,21 @@ export const ChartSettingItem = ({
       <SelectableListItem
         key={item.id}
         itemId={item.id}
-        onEnter={handleToggleChange}
+        onEnter={handleCheckedChange}
       >
-        <CommandMenuItemToggle
+        <CommandMenuItemSwitch
           LeftIcon={item.Icon}
           text={t(item.label)}
           id={item.id}
-          toggled={getChartSettingsValues(item.id) as boolean}
-          onToggleChange={handleToggleChange}
+          checked={getChartSettingsValues(item.id) as boolean}
+          onCheckedChange={handleCheckedChange}
         />
       </SelectableListItem>
     );
   }
+
+  const settingValue = getChartSettingsValues(item.id);
+  const settingDescription = isString(settingValue) ? settingValue : undefined;
 
   return (
     <SelectableListItem
@@ -179,22 +183,24 @@ export const ChartSettingItem = ({
       itemId={item.id}
       onEnter={handleDropdownOpen}
     >
-      <CommandMenuItemDropdown
-        Icon={item.Icon}
-        label={t(item.label)}
-        id={item.id}
-        dropdownId={item.id}
-        dropdownComponents={
-          <DropdownContent widthInPixels={item.dropdownWidth}>
-            {item.DropdownContent && <item.DropdownContent />}
-          </DropdownContent>
-        }
-        dropdownPlacement="bottom-end"
-        dropdownOffset={{ y: 4 }}
-        description={getChartSettingsValues(item.id) as string}
-        contextualTextPosition={'right'}
-        hasSubMenu
-      />
+      <DropdownRoot dropdownId={item.id} type="picker">
+        <CommandMenuItemDropdownTrigger
+          Icon={item.Icon}
+          label={t(item.label)}
+          id={item.id}
+          description={settingDescription}
+          contextualTextPosition="right"
+        />
+        <DropdownContent
+          side="bottom"
+          align="end"
+          sideOffset={CHART_SETTINGS_DROPDOWN_SIDE_OFFSET}
+          width={item.dropdownWidth}
+          collisionPadding={{ left: 0, right: 0 }}
+        >
+          {item.DropdownContent && <item.DropdownContent />}
+        </DropdownContent>
+      </DropdownRoot>
     </SelectableListItem>
   );
 };

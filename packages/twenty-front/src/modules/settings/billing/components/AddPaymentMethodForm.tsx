@@ -1,13 +1,12 @@
 import { currentUserState } from '@/auth/states/currentUserState';
+import { getToastOptionsFromError } from '@/error-handler/utils/getToastOptionsFromError';
 import { START_SUBSCRIPTION_AFTER_PAYMENT_METHOD_QUERY_PARAM } from '@/settings/billing/constants/StartSubscriptionAfterPaymentMethodQueryParam';
 import { useStripeAppearance } from '@/settings/billing/hooks/useStripeAppearance';
 import { useStripePromise } from '@/settings/billing/hooks/useStripePromise';
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { CombinedGraphQLErrors } from '@apollo/client/errors';
 import { useMutation } from '@apollo/client/react';
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
 import {
   Elements,
   PaymentElement,
@@ -17,14 +16,16 @@ import {
 import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { isDefined } from 'twenty-shared/utils';
-import { Info } from 'twenty-ui/feedback';
-import { Button } from 'twenty-ui/input';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { InlineBanner, useToast } from 'twenty-ui/components/feedback';
+import { Button } from 'twenty-ui/primitives/input';
+import { themeCssVariables } from 'twenty-ui/theme';
 import { CreateBillingPaymentMethodSetupIntentDocument } from '~/generated-metadata/graphql';
+import { useLingui } from '@lingui/react/macro';
 
 type AddPaymentMethodFormContentProps = {
   finalRedirectPath?: string;
   onPaymentMethodAdded: () => Promise<void>;
+  shouldStartSubscriptionAfterPaymentMethod?: boolean;
 };
 
 type AddPaymentMethodFormProps = AddPaymentMethodFormContentProps;
@@ -39,10 +40,12 @@ const StyledFormContainer = styled.div`
 const AddPaymentMethodFormContent = ({
   finalRedirectPath,
   onPaymentMethodAdded,
+  shouldStartSubscriptionAfterPaymentMethod = true,
 }: AddPaymentMethodFormContentProps) => {
+  const { t } = useLingui();
   const stripe = useStripe();
   const elements = useElements();
-  const { enqueueErrorSnackBar } = useSnackBar();
+  const { enqueueToast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const location = useLocation();
 
@@ -59,10 +62,12 @@ const AddPaymentMethodFormContent = ({
       finalRedirectPath ?? `${location.pathname}${location.search}`;
     const returnUrl = new URL(basePath, window.location.origin);
 
-    returnUrl.searchParams.set(
-      START_SUBSCRIPTION_AFTER_PAYMENT_METHOD_QUERY_PARAM,
-      'true',
-    );
+    if (shouldStartSubscriptionAfterPaymentMethod) {
+      returnUrl.searchParams.set(
+        START_SUBSCRIPTION_AFTER_PAYMENT_METHOD_QUERY_PARAM,
+        'true',
+      );
+    }
 
     return returnUrl.toString();
   };
@@ -77,8 +82,9 @@ const AddPaymentMethodFormContent = ({
     try {
       const { error: submitError } = await elements.submit();
       if (isDefined(submitError)) {
-        enqueueErrorSnackBar({
-          message:
+        enqueueToast({
+          status: 'error',
+          children:
             submitError.message ??
             t`Your payment details are incomplete. Please review and retry.`,
         });
@@ -91,8 +97,9 @@ const AddPaymentMethodFormContent = ({
       const clientSecret =
         data?.createBillingPaymentMethodSetupIntent?.clientSecret;
       if (!isDefined(clientSecret)) {
-        enqueueErrorSnackBar({
-          message: t`Subscription error. Please retry or contact Twenty team`,
+        enqueueToast({
+          status: 'error',
+          children: t`Subscription error. Please retry or contact Twenty team`,
         });
         setIsSubmitting(false);
         return;
@@ -106,8 +113,9 @@ const AddPaymentMethodFormContent = ({
       });
 
       if (isDefined(error)) {
-        enqueueErrorSnackBar({
-          message:
+        enqueueToast({
+          status: 'error',
+          children:
             error.message ??
             t`We couldn't confirm your payment method. Please retry.`,
         });
@@ -120,10 +128,11 @@ const AddPaymentMethodFormContent = ({
       }
     } catch (error) {
       if (CombinedGraphQLErrors.is(error)) {
-        enqueueErrorSnackBar({ apolloError: error });
+        enqueueToast(getToastOptionsFromError({ error }));
       } else {
-        enqueueErrorSnackBar({
-          message: t`Subscription error. Please retry or contact Twenty team`,
+        enqueueToast({
+          status: 'error',
+          children: t`Subscription error. Please retry or contact Twenty team`,
         });
       }
       setIsSubmitting(false);
@@ -140,15 +149,13 @@ const AddPaymentMethodFormContent = ({
         }}
       />
       <Button
-        title={t`Add credit card`}
         onClick={handleSubmit}
-        variant="secondary"
-        accent="blue"
         fullWidth
-        justify="center"
-        isLoading={isSubmitting}
+        loading={isSubmitting}
         disabled={!isStripeReady || isSubmitting}
-      />
+        variant="outline"
+        color="accent"
+      >{t`Add credit card`}</Button>
     </StyledFormContainer>
   );
 };
@@ -156,17 +163,19 @@ const AddPaymentMethodFormContent = ({
 export const AddPaymentMethodForm = ({
   finalRedirectPath,
   onPaymentMethodAdded,
+  shouldStartSubscriptionAfterPaymentMethod,
 }: AddPaymentMethodFormProps) => {
+  const { t } = useLingui();
   const stripePromise = useStripePromise();
   const appearance = useStripeAppearance();
 
   if (!isDefined(stripePromise)) {
     return (
       <StyledFormContainer>
-        <Info
-          accent="danger"
-          text={t`Card payment is currently unavailable. Please verify your Stripe configuration or contact your workspace admin.`}
-        />
+        <InlineBanner
+          layout="compact"
+          status="error"
+        >{t`Card payment is currently unavailable. Please verify your Stripe configuration or contact your workspace admin.`}</InlineBanner>
       </StyledFormContainer>
     );
   }
@@ -179,6 +188,9 @@ export const AddPaymentMethodForm = ({
       <AddPaymentMethodFormContent
         finalRedirectPath={finalRedirectPath}
         onPaymentMethodAdded={onPaymentMethodAdded}
+        shouldStartSubscriptionAfterPaymentMethod={
+          shouldStartSubscriptionAfterPaymentMethod
+        }
       />
     </Elements>
   );

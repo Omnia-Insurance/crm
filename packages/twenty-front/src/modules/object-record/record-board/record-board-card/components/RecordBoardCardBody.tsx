@@ -1,5 +1,5 @@
-import { useGetIsMetadataItemFromStandardApplication } from '@/object-metadata/hooks/useGetIsMetadataItemFromStandardApplication';
 import { isRecordFieldReadOnly } from '@/object-record/read-only/utils/isRecordFieldReadOnly';
+import { useRecordRestrictedFieldNames } from '@/object-record/record-store/hooks/useRecordRestrictedFieldNames';
 import { RecordBoardContext } from '@/object-record/record-board/contexts/RecordBoardContext';
 import { StopPropagationContainer } from '@/object-record/record-board/record-board-card/components/StopPropagationContainer';
 import { RECORD_BOARD_CARD_INPUT_ID_PREFIX } from '@/object-record/record-board/record-board-card/constants/RecordBoardCardInputIdPrefix';
@@ -19,15 +19,19 @@ import { getRecordFieldInputInstanceId } from '@/object-record/utils/getRecordFi
 import { useAtomComponentSelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorValue';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
 import { useContext } from 'react';
+import { isDefined } from 'twenty-shared/utils';
 
 export const RecordBoardCardBody = () => {
-  const { recordId, isRecordReadOnly } = useContext(RecordBoardCardContext);
+  const { recordId, isRecordReadOnly, isDragOverlay } = useContext(
+    RecordBoardCardContext,
+  );
 
-  const { updateOneRecord, objectPermissions, objectMetadataItem } =
+  const { updateOneRecord, objectMetadataItem } =
     useContext(RecordBoardContext);
 
   const {
     labelIdentifierFieldMetadataItem,
+    fieldMetadataItemByFieldMetadataItemId,
     fieldDefinitionByFieldMetadataItemId,
     objectPermissionsByObjectMetadataId,
   } = useRecordIndexContextOrThrow();
@@ -55,18 +59,36 @@ export const RecordBoardCardBody = () => {
   const setRecordBoardCardHoverPosition = useSetAtomComponentState(
     recordBoardCardHoverPositionComponentState,
   );
-  const getIsMetadataItemFromStandardApplication =
-    useGetIsMetadataItemFromStandardApplication();
 
   const handleMouseEnter = (index: number) => {
     setRecordBoardCardHoverPosition(index);
   };
+
+  const restrictedFieldNames = useRecordRestrictedFieldNames(recordId);
 
   return (
     <RecordCardBodyContainer>
       {visibleRecordFieldsExceptLabelIdentifier.map((recordField, index) => {
         const correspondingFieldDefinition =
           fieldDefinitionByFieldMetadataItemId[recordField.fieldMetadataItemId];
+        const fieldMetadataItem =
+          fieldMetadataItemByFieldMetadataItemId[
+            recordField.fieldMetadataItemId
+          ];
+
+        // OMNIA-CUSTOM: sub-field columns are table-only (contract C6). Skipped here, not filtered out, so hover and
+        // edit positions still index the list useRecordBoardCardMetadataFromPosition reads
+        if (
+          !isDefined(correspondingFieldDefinition) ||
+          !isDefined(fieldMetadataItem) ||
+          isDefined(recordField.subFieldName)
+        ) {
+          return null;
+        }
+
+        const isFieldRestricted = restrictedFieldNames.includes(
+          fieldMetadataItem.name,
+        );
 
         return (
           <StopPropagationContainer key={recordField.fieldMetadataItemId}>
@@ -75,29 +97,23 @@ export const RecordBoardCardBody = () => {
                 recordId,
                 maxWidth: 156,
                 isLabelIdentifier: false,
-                isRecordFieldReadOnly: isRecordFieldReadOnly({
-                  isRecordReadOnly,
-                  isSystemObject: objectMetadataItem.isSystem,
-                  isFieldFromStandardApplication:
-                    getIsMetadataItemFromStandardApplication({
-                      applicationId:
-                        correspondingFieldDefinition.metadata.applicationId,
-                    }),
-                  objectPermissions,
-                  fieldMetadataItem: {
-                    id: recordField.fieldMetadataItemId,
-                    isUIEditable:
-                      correspondingFieldDefinition.metadata.isUIEditable ??
-                      true,
-                  },
-                  fieldDefinition: correspondingFieldDefinition,
-                  objectPermissionsByObjectMetadataId,
-                }),
+                isForbidden: isFieldRestricted,
+                isRecordFieldReadOnly:
+                  isFieldRestricted ||
+                  isRecordFieldReadOnly({
+                    isRecordReadOnly,
+                    objectMetadataId: objectMetadataItem.id,
+                    fieldMetadataItem,
+                    fieldDefinition: correspondingFieldDefinition,
+                    objectPermissionsByObjectMetadataId,
+                  }),
                 fieldDefinition: correspondingFieldDefinition,
                 useUpdateRecord: useUpdateOneRecordHook,
                 isDisplayModeFixHeight: true,
                 triggerEvent: 'CLICK',
-                anchorId: `${RECORD_BOARD_CARD_INPUT_ID_PREFIX}-${recordId}-${correspondingFieldDefinition.metadata.fieldName}`,
+                anchorId: isDragOverlay
+                  ? undefined
+                  : `${RECORD_BOARD_CARD_INPUT_ID_PREFIX}-${recordId}-${correspondingFieldDefinition.metadata.fieldName}`,
                 onMouseEnter: () => handleMouseEnter(index),
               }}
             >

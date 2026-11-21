@@ -1,5 +1,4 @@
-import { type AiModelConfig } from 'src/engine/metadata-modules/ai/ai-models/types/ai-model-config.type';
-import { ModelFamily } from 'src/engine/metadata-modules/ai/ai-models/types/model-family.enum';
+import { type AiModelCostConfig } from 'src/engine/metadata-modules/ai/ai-models/types/ai-model-cost-config.type';
 
 export type TokenUsageInput = {
   inputTokens?: number;
@@ -29,18 +28,9 @@ const safeNumber = (value: number | undefined): number => {
   return Number.isFinite(result) ? result : 0;
 };
 
-// Input token semantics (all providers we use):
-//   `inputTokens` is the FULL prompt size and already includes cached and
-//   cache-creation tokens. The @ai-sdk/anthropic provider reports
-//   inputTokens = noCache + cacheRead + cacheCreation, and OpenAI-style
-//   providers include cached tokens (and never report cache-creation tokens).
-//   So the uncached, full-rate portion is always inputTokens minus cached
-//   minus cache-creation, and the full input size is just inputTokens.
-// Output token semantics still differ by model family:
-//   Anthropic: outputTokens excludes reasoning (thinking) tokens
-//   OpenAI/xAI/Groq/Google: outputTokens includes reasoning tokens
+// every provider we use counts cache reads and writes inside inputTokens and reasoning inside outputTokens
 export const computeCostBreakdown = (
-  model: AiModelConfig,
+  model: AiModelCostConfig,
   usage: TokenUsageInput,
 ): CostBreakdown => {
   const rawInputTokens = safeNumber(usage.inputTokens);
@@ -49,16 +39,12 @@ export const computeCostBreakdown = (
   const cachedInputTokens = safeNumber(usage.cachedInputTokens);
   const cacheCreationTokens = safeNumber(usage.cacheCreationTokens);
 
-  const isAnthropicTokenReporting = model.modelFamily === ModelFamily.CLAUDE;
-
   const adjustedInputTokens = Math.max(
     0,
     rawInputTokens - cachedInputTokens - cacheCreationTokens,
   );
 
-  const adjustedOutputTokens = isAnthropicTokenReporting
-    ? rawOutputTokens
-    : Math.max(0, rawOutputTokens - reasoningTokens);
+  const adjustedOutputTokens = Math.max(0, rawOutputTokens - reasoningTokens);
 
   const totalInputTokens = rawInputTokens;
 

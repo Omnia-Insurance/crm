@@ -6,6 +6,8 @@ import {
   FlatEntityMapsExceptionCode,
 } from 'src/engine/metadata-modules/flat-entity/exceptions/flat-entity-maps.exception';
 import { type ViewOverrides } from 'src/engine/metadata-modules/view/entities/view.entity';
+import { type AuthoredOverrides } from 'src/engine/metadata-modules/overrides/types/authored-overrides.type';
+import { mapAuthoredOverrideEntries } from 'src/engine/metadata-modules/overrides/utils/map-authored-override-entries.util';
 
 type UniversalViewOverrides =
   FormatRecordSerializedRelationProperties<ViewOverrides>;
@@ -13,6 +15,7 @@ type UniversalViewOverrides =
 const VIEW_OVERRIDES_FIELD_METADATA_FOREIGN_KEYS = [
   'kanbanAggregateOperationFieldMetadataId',
   'calendarFieldMetadataId',
+  'calendarEndFieldMetadataId',
   'mainGroupByFieldMetadataId',
 ] as const;
 
@@ -27,7 +30,7 @@ const toUniversalIdentifierProperty = (
     'UniversalIdentifier',
   ) as keyof UniversalViewOverrides;
 
-export const fromViewOverridesToUniversalOverrides = ({
+const fromViewOverridesToUniversalOverridesEntry = ({
   overrides,
   fieldMetadataUniversalIdentifierById,
   shouldThrowOnMissingIdentifier = true,
@@ -39,6 +42,7 @@ export const fromViewOverridesToUniversalOverrides = ({
   const {
     kanbanAggregateOperationFieldMetadataId: _kanban,
     calendarFieldMetadataId: _calendar,
+    calendarEndFieldMetadataId: _calendarEnd,
     mainGroupByFieldMetadataId: _mainGroupBy,
     ...scalarOverrides
   } = overrides;
@@ -77,3 +81,23 @@ export const fromViewOverridesToUniversalOverrides = ({
     scalarOverrides,
   );
 };
+
+export const fromViewOverridesToUniversalOverrides = ({
+  overrides,
+  fieldMetadataUniversalIdentifierById,
+  shouldThrowOnMissingIdentifier,
+}: {
+  overrides: AuthoredOverrides<ViewOverrides>;
+  fieldMetadataUniversalIdentifierById: Partial<Record<string, string>>;
+  shouldThrowOnMissingIdentifier?: boolean;
+}): AuthoredOverrides<UniversalViewOverrides> =>
+  mapAuthoredOverrideEntries({
+    metadataName: 'view',
+    overrides,
+    mapEntry: (entry) =>
+      fromViewOverridesToUniversalOverridesEntry({
+        overrides: entry,
+        fieldMetadataUniversalIdentifierById,
+        shouldThrowOnMissingIdentifier,
+      }),
+  });

@@ -3,6 +3,7 @@ import { PassportStrategy } from '@nestjs/passport';
 
 import { type Request } from 'express';
 import {
+  type AuthenticateOptionsGoogle,
   Strategy,
   type Profile as GoogleProfile,
   type VerifyCallback,
@@ -14,8 +15,8 @@ import {
   AuthException,
   AuthExceptionCode,
 } from 'src/engine/core-modules/auth/auth.exception';
-import { type SocialSSOSignInUpActionType } from 'src/engine/core-modules/auth/types/signInUp.type';
-import { type SocialSSOState } from 'src/engine/core-modules/auth/types/social-sso-state.type';
+import { type SocialSsoSignInUpActionType } from 'src/engine/core-modules/auth/types/sign-in-up.type';
+import { type SocialSsoState } from 'src/engine/core-modules/auth/types/social-sso-state.type';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 
 export type GoogleRequest = Omit<
@@ -29,7 +30,7 @@ export type GoogleRequest = Omit<
     picture: string | null;
     locale?: keyof typeof APP_LOCALES | null;
     workspaceInviteHash?: string;
-    action: SocialSSOSignInUpActionType;
+    action: SocialSsoSignInUpActionType;
     workspaceId?: string;
     billingCheckoutSessionState?: string;
     returnToPath?: string;
@@ -48,8 +49,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     });
   }
 
-  // oxlint-disable-next-line typescript/no-explicit-any
-  authenticate(req: Request, options: any) {
+  authenticate(req: Request, options: AuthenticateOptionsGoogle) {
     options = {
       ...options,
       state: JSON.stringify({
@@ -73,7 +73,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     done: VerifyCallback,
   ): Promise<void> {
     const { name, emails, photos } = profile;
-    const state = parseJson<SocialSSOState>(request.query.state as string);
+    const state = parseJson<SocialSsoState>(request.query.state as string);
 
     const firstVerifiedEmail = emails?.find(
       (email) => email?.verified === true,

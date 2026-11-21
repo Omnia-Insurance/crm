@@ -1,13 +1,17 @@
 import { t } from '@lingui/core/macro';
+import { doNotTranslate } from 'twenty-shared/i18n';
 import { AppBasePath, AppPath, SettingsPath } from 'twenty-shared/types';
 
 enum SettingsPathPrefixes {
   Accounts = `${AppBasePath.Settings}/${SettingsPath.Accounts}`,
+  AppPreferences = `${AppBasePath.Settings}/${SettingsPath.AppPreferences}`,
+  Billing = `${AppBasePath.Settings}/${SettingsPath.Billing}`,
+  Partner = `${AppBasePath.Settings}/${SettingsPath.Partner}`,
   Experience = `${AppBasePath.Settings}/${SettingsPath.Experience}`,
   Profile = `${AppBasePath.Settings}/${SettingsPath.ProfilePage}`,
   Objects = `${AppBasePath.Settings}/${SettingsPath.Objects}`,
   Members = `${AppBasePath.Settings}/${SettingsPath.WorkspaceMembersPage}`,
-  ApiWebhooks = `${AppBasePath.Settings}/${SettingsPath.ApiWebhooks}`,
+  Developers = `${AppBasePath.Settings}/${SettingsPath.Developers}`,
   LogicFunctions = `${AppBasePath.Settings}/${SettingsPath.LogicFunctions}`,
   Integration = `${AppBasePath.Settings}/${SettingsPath.Integrations}`,
   General = `${AppBasePath.Settings}/${SettingsPath.General}`,
@@ -27,15 +31,12 @@ export const getPageTitleFromPath = (pathname: string): string => {
   const pathnameOrPrefix = getPathnameOrPrefix(pathname);
   switch (pathnameOrPrefix) {
     case AppPath.Verify:
-    case AppPath.VerifyV2:
       return t`Verify`;
     case AppPath.SignInUp:
-    case AppPath.SignInUpV2:
       return t`Sign in or Create an account`;
     case AppPath.Invite:
       return t`Invite`;
     case AppPath.WorkspaceActivation:
-    case AppPath.WorkspaceActivationV2:
       return t`Create Workspace`;
     case AppPath.CreateProfile:
       return t`Create Profile`;
@@ -43,14 +44,20 @@ export const getPageTitleFromPath = (pathname: string): string => {
       return t`Experience - Settings`;
     case SettingsPathPrefixes.Accounts:
       return t`Account - Settings`;
+    case SettingsPathPrefixes.AppPreferences:
+      return t`Apps preferences - Settings`;
+    case SettingsPathPrefixes.Billing:
+      return t`Billing - Settings`;
+    case SettingsPathPrefixes.Partner:
+      return t`Partner - Settings`;
     case SettingsPathPrefixes.Profile:
       return t`Profile - Settings`;
     case SettingsPathPrefixes.Members:
       return t`Members - Settings`;
     case SettingsPathPrefixes.Objects:
       return t`Data model - Settings`;
-    case SettingsPathPrefixes.ApiWebhooks:
-      return t`API Keys - Settings`;
+    case SettingsPathPrefixes.Developers:
+      return t`Developers - Settings`;
     case SettingsPathPrefixes.LogicFunctions:
       return t`Functions - Settings`;
     case SettingsPathPrefixes.Integration:
@@ -60,6 +67,7 @@ export const getPageTitleFromPath = (pathname: string): string => {
     case SettingsPathPrefixes.Community:
       return t`Community - Settings`;
     default:
-      return 'Omnia';
+      // OMNIA-CUSTOM: Omnia default page title (brand name, never translated)
+      return doNotTranslate('Omnia');
   }
 };

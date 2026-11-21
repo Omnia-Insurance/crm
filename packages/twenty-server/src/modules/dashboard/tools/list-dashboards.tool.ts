@@ -1,8 +1,7 @@
 import { z } from 'zod';
 
-import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import {
-  type DashboardToolContext,
+  type DashboardToolContextWithPermissions,
   type DashboardToolDependencies,
 } from 'src/modules/dashboard/tools/types/dashboard-tool-dependencies.type';
 
@@ -17,8 +16,13 @@ const listDashboardsSchema = z.object({
 });
 
 export const createListDashboardsTool = (
-  deps: Pick<DashboardToolDependencies, 'globalWorkspaceOrmManager'>,
-  context: DashboardToolContext,
+  deps: {
+    workspaceOrmManager: Pick<
+      DashboardToolDependencies['workspaceOrmManager'],
+      'executeInWorkspaceContext' | 'getRepository'
+    >;
+  },
+  context: DashboardToolContextWithPermissions,
 ) => ({
   name: 'list_dashboards' as const,
   description: `List all dashboards in the workspace. Use get_dashboard to retrieve full layout structure.`,
@@ -26,21 +30,13 @@ export const createListDashboardsTool = (
   execute: async (parameters: { limit?: number }) => {
     try {
       const limit = parameters.limit ?? 20;
-      const authContext = buildSystemAuthContext(context.workspaceId);
 
       const dashboards =
-        await deps.globalWorkspaceOrmManager.executeInWorkspaceContext(
-          async () => {
-            const repo = await deps.globalWorkspaceOrmManager.getRepository(
-              context.workspaceId,
-              'dashboard',
-              { shouldBypassPermissionChecks: true },
-            );
+        await deps.workspaceOrmManager.executeInWorkspaceContext(async () => {
+          const repo = deps.workspaceOrmManager.getRepository('dashboard');
 
-            return repo.find({ take: limit, order: { position: 'ASC' } });
-          },
-          authContext,
-        );
+          return repo.find({ take: limit, order: { position: 'ASC' } });
+        }, context.authContext);
 
       const dashboardList = dashboards.map((d) => ({
         id: d.id,

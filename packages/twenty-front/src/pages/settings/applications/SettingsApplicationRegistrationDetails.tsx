@@ -1,12 +1,14 @@
+import { useRefetchOnApplicationRegistrationChange } from '@/applications/hooks/useRefetchOnApplicationRegistrationChange';
 import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
+import { SettingsTabBar } from '@/settings/components/layout/SettingsTabBar';
+import { SETTINGS_DEVELOPERS_TABS } from '@/settings/developers/constants/SettingsDevelopersTabs';
 import { useQuery } from '@apollo/client/react';
 import { useParams } from 'react-router-dom';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath, isDefined } from 'twenty-shared/utils';
 import { FindOneApplicationRegistrationDocument } from '~/generated-metadata/graphql';
 import { useLingui } from '@lingui/react/macro';
-import { Avatar, Tag } from 'twenty-ui/data-display';
-import { TabList } from '@/ui/layout/tab-list/components/TabList';
+import { Avatar, Tag } from 'twenty-ui/primitives/data-display';
 import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
 import {
   IconInfoCircle,
@@ -37,9 +39,17 @@ export const SettingsApplicationRegistrationDetails = () => {
     applicationRegistrationId: string;
   }>();
 
-  const { data, loading } = useQuery(FindOneApplicationRegistrationDocument, {
-    variables: { id: applicationRegistrationId },
-    skip: !applicationRegistrationId,
+  const { data, loading, refetch } = useQuery(
+    FindOneApplicationRegistrationDocument,
+    {
+      variables: { id: applicationRegistrationId },
+      skip: !applicationRegistrationId,
+    },
+  );
+
+  useRefetchOnApplicationRegistrationChange({
+    applicationRegistrationId,
+    refetch,
   });
 
   const registration = data?.findOneApplicationRegistration;
@@ -90,38 +100,40 @@ export const SettingsApplicationRegistrationDetails = () => {
       title={registration.name}
       icon={
         <Avatar
-          type="app"
+          shape="square"
+          variant="outline"
           size="md"
-          avatarUrl={getAbsoluteImageUrl(registration.logoUrl ?? undefined)}
-          placeholder={registration.name}
-          placeholderColorSeed={registration.name}
+          src={getAbsoluteImageUrl(registration.logoUrl ?? undefined)}
+          name={registration.name}
+          colorSeed={registration.name}
         />
       }
-      tag={<Tag text={t`Owner`} color={'gray'} />}
+      tag={<Tag color="gray">{t`Owner`}</Tag>}
       links={[
         {
           children: t`Workspace`,
           href: getSettingsPath(SettingsPath.General),
         },
         {
-          children: t`Applications - Developer`,
+          children: t`Developers`,
           href: getSettingsPath(
-            SettingsPath.Applications,
+            SettingsPath.Developers,
             undefined,
             undefined,
-            'developer',
+            SETTINGS_DEVELOPERS_TABS.TABS_IDS.APPS,
           ),
         },
         { children: registration.name },
       ]}
-    >
-      <SettingsPageContainer>
-        <TabList
+      secondaryBar={
+        <SettingsTabBar
+          aria-label={t`Application registration`}
           tabs={tabs}
           componentInstanceId={REGISTRATION_DETAIL_TAB_LIST_ID}
         />
-        {renderActiveTabContent()}
-      </SettingsPageContainer>
+      }
+    >
+      <SettingsPageContainer>{renderActiveTabContent()}</SettingsPageContainer>
     </SettingsPageLayout>
   );
 };

@@ -30,8 +30,8 @@ export class PublicDomainService {
     private readonly publicDomainRepositoryUnscoped: Repository<PublicDomainEntity>,
     @InjectRepository(WorkspaceEntity)
     private readonly workspaceRepository: Repository<WorkspaceEntity>,
-    @InjectRepository(ApplicationEntity)
-    private readonly applicationRepository: Repository<ApplicationEntity>,
+    @InjectWorkspaceScopedRepository(ApplicationEntity)
+    private readonly applicationRepository: WorkspaceScopedRepository<ApplicationEntity>,
   ) {}
 
   async deletePublicDomain({
@@ -69,9 +69,8 @@ export class PublicDomainService {
         this.publicDomainRepository.findOne(workspace.id, {
           where: { domain: formattedDomain },
         }),
-        this.applicationRepository.findOneBy({
+        this.applicationRepository.findOneBy(workspace.id, {
           id: applicationId,
-          workspaceId: workspace.id,
         }),
       ]);
 
@@ -141,7 +140,9 @@ export class PublicDomainService {
         },
       ));
 
-    if (!publicDomainWithRecords) return;
+    if (!publicDomainWithRecords) {
+      return;
+    }
 
     const isCustomDomainWorking =
       await this.dnsManagerService.isHostnameWorking(publicDomain.domain, {
@@ -149,11 +150,10 @@ export class PublicDomainService {
       });
 
     if (publicDomain.isValidated !== isCustomDomainWorking) {
-      publicDomain.isValidated = isCustomDomainWorking;
-
-      await this.publicDomainRepository.save(
+      await this.publicDomainRepository.update(
         publicDomain.workspaceId,
-        publicDomain,
+        { id: publicDomain.id },
+        { isValidated: isCustomDomainWorking },
       );
     }
 

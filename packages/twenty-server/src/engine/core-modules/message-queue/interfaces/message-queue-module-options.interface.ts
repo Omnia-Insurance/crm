@@ -1,5 +1,8 @@
+import { type EventEmitter2 } from '@nestjs/event-emitter';
+
 import { type BullMQDriverOptions } from 'src/engine/core-modules/message-queue/drivers/bullmq.driver';
 import { type MetricsService } from 'src/engine/core-modules/metrics/metrics.service';
+import { type TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 
 export enum MessageQueueDriverType {
   BullMQ = 'bull-mq',
@@ -10,6 +13,8 @@ export interface BullMQDriverFactoryOptions {
   type: MessageQueueDriverType.BullMQ;
   options: BullMQDriverOptions;
   metricsService: MetricsService;
+  twentyConfigService: TwentyConfigService;
+  eventEmitter: EventEmitter2;
 }
 
 export interface SyncDriverFactoryOptions {

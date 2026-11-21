@@ -1,4 +1,5 @@
 import { type MessageFolder } from '@/accounts/types/MessageFolder';
+import { getToastOptionsFromError } from '@/error-handler/utils/getToastOptionsFromError';
 import { SettingsMessageFoldersEmptyStateCard } from '@/settings/accounts/components/message-folders/SettingsMessageFoldersEmptyStateCard';
 import { SettingsMessageFoldersSkeletonLoader } from '@/settings/accounts/components/message-folders/SettingsMessageFoldersSkeletonLoader';
 import { SettingsMessageFoldersTreeItem } from '@/settings/accounts/components/message-folders/SettingsMessageFoldersTreeItem';
@@ -7,19 +8,18 @@ import { computeToggleAllFoldersState } from '@/settings/accounts/components/mes
 import { useMyMessageFolders } from '@/settings/accounts/hooks/useMyMessageFolders';
 import { useUpdateMessageFoldersSyncStatus } from '@/settings/accounts/hooks/useUpdateMessageFoldersSyncStatus';
 import { settingsAccountsSelectedMessageChannelState } from '@/settings/accounts/states/settingsAccountsSelectedMessageChannelState';
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { SettingsTextInput } from '@/ui/input/components/SettingsTextInput';
 import { Table } from '@/ui/layout/table/components/Table';
 import { TableCell } from '@/ui/layout/table/components/TableCell';
-import { CombinedGraphQLErrors } from '@apollo/client/errors';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
-import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useMemo, useState } from 'react';
-import { Label } from 'twenty-ui/typography';
-import { Checkbox, CheckboxSize } from 'twenty-ui/input';
-import { Section } from 'twenty-ui/layout';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { useToast } from 'twenty-ui/components/feedback';
+import { Section } from 'twenty-ui/components/layout';
+import { Checkbox } from 'twenty-ui/primitives/input';
+import { Text } from 'twenty-ui/primitives/typography';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 const StyledTreeList = styled.ul`
   list-style: none;
@@ -53,7 +53,6 @@ const StyledSectionHeader = styled.div`
 
 const StyledLabelContainer = styled.span`
   align-items: center;
-  color: ${themeCssVariables.font.color.tertiary};
   display: flex;
   margin-bottom: ${themeCssVariables.spacing[2]};
   margin-top: ${themeCssVariables.spacing[2]};
@@ -63,7 +62,7 @@ export const SettingsAccountsMessageFoldersCard = () => {
   const { t } = useLingui();
   const [search, setSearch] = useState('');
 
-  const { enqueueErrorSnackBar } = useSnackBar();
+  const { enqueueToast } = useToast();
 
   const settingsAccountsSelectedMessageChannel = useAtomStateValue(
     settingsAccountsSelectedMessageChannelState,
@@ -92,7 +91,9 @@ export const SettingsAccountsMessageFoldersCard = () => {
   );
 
   const handleToggleAllFolders = async () => {
-    if (messageFolderIds.length === 0) return;
+    if (messageFolderIds.length === 0) {
+      return;
+    }
 
     try {
       await updateMessageFoldersSyncStatus({
@@ -100,9 +101,7 @@ export const SettingsAccountsMessageFoldersCard = () => {
         isSynced: targetSyncState,
       });
     } catch (error) {
-      enqueueErrorSnackBar({
-        ...(CombinedGraphQLErrors.is(error) ? { apolloError: error } : {}),
-      });
+      enqueueToast(getToastOptionsFromError({ error }));
     }
   };
 
@@ -115,19 +114,17 @@ export const SettingsAccountsMessageFoldersCard = () => {
         isSynced,
       });
     } catch (error) {
-      enqueueErrorSnackBar({
-        ...(CombinedGraphQLErrors.is(error) ? { apolloError: error } : {}),
-      });
+      enqueueToast(getToastOptionsFromError({ error }));
     }
   };
 
   if (loading) {
     return (
-      <Section>
+      <Section.Root>
         <Table>
           <SettingsMessageFoldersSkeletonLoader />
         </Table>
-      </Section>
+      </Section.Root>
     );
   }
 
@@ -136,7 +133,7 @@ export const SettingsAccountsMessageFoldersCard = () => {
   }
 
   return (
-    <Section>
+    <Section.Root>
       <Table>
         <StyledSearchInputContainer>
           <SettingsTextInput
@@ -147,19 +144,23 @@ export const SettingsAccountsMessageFoldersCard = () => {
           />
         </StyledSearchInputContainer>
         <StyledLabelContainer>
-          <Label>{t`Folders`}</Label>
+          <Text size="xs" weight="semibold" color="light">{t`Folders`}</Text>
         </StyledLabelContainer>
 
         <StyledSectionHeader>
-          <Label>{t`Toggle all folders`}</Label>
+          <Text
+            size="xs"
+            weight="semibold"
+            color="light"
+          >{t`Toggle all folders`}</Text>
           <TableCell
             align="right"
             padding={`0 ${themeCssVariables.spacing[1]} 0 ${themeCssVariables.spacing[2]}`}
           >
             <Checkbox
               checked={allSynced}
-              onChange={handleToggleAllFolders}
-              size={CheckboxSize.Small}
+              onCheckedChange={() => handleToggleAllFolders()}
+              size={'sm'}
             />
           </TableCell>
         </StyledSectionHeader>
@@ -176,6 +177,6 @@ export const SettingsAccountsMessageFoldersCard = () => {
           </StyledTreeList>
         </StyledFoldersContainer>
       </Table>
-    </Section>
+    </Section.Root>
   );
 };

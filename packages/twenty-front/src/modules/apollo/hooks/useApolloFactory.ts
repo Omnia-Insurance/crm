@@ -2,25 +2,23 @@ import { InMemoryCache } from '@apollo/client';
 import { useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { ApolloFactory, type Options } from '@/apollo/services/apollo.factory';
+import { ApolloFactory, type Options } from '@/apollo/services/ApolloFactory';
+import { ONGOING_USER_CREATION_PATHS } from '@/auth/constants/OngoingUserCreationPaths';
 import { currentUserState } from '@/auth/states/currentUserState';
 import { currentUserWorkspaceState } from '@/auth/states/currentUserWorkspaceState';
 import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMemberState';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
+import { isCookieAuthActiveState } from '@/auth/states/isCookieAuthActiveState';
 import { returnToPathState } from '@/auth/states/returnToPathState';
+import { clearSessionGeneration } from '@/auth/utils/clearSessionGeneration';
 import { isValidReturnToPath } from '@/auth/utils/isValidReturnToPath';
-import {
-  clearSsoTokenPairCookie,
-  writeSsoTokenPairCookie,
-} from '@/auth/utils/ssoTokenPairCookie';
-import { tokenPairState } from '@/auth/states/tokenPairState';
 import { appVersionState } from '@/client-config/states/appVersionState';
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
 import { AppPath } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
+import { useToast } from 'twenty-ui/components/feedback';
 import { REACT_APP_SERVER_BASE_URL } from '~/config';
 import { useUpdateEffect } from '~/hooks/useUpdateEffect';
 import { isMatchingLocation } from '~/utils/isMatchingLocation';
@@ -30,7 +28,7 @@ export const useApolloFactory = (options: Partial<Options> = {}) => {
   const apolloRef = useRef<ApolloFactory | null>(null);
 
   const navigate = useNavigate();
-  const setTokenPair = useSetAtomState(tokenPairState);
+  const setIsCookieAuthActive = useSetAtomState(isCookieAuthActiveState);
   const [currentWorkspace, setCurrentWorkspace] = useAtomState(
     currentWorkspaceState,
   );
@@ -47,7 +45,7 @@ export const useApolloFactory = (options: Partial<Options> = {}) => {
   const locationRef = useRef(location);
   locationRef.current = location;
 
-  const { enqueueErrorSnackBar } = useSnackBar();
+  const { enqueueToast } = useToast();
 
   const apolloClient = useMemo(() => {
     apolloRef.current = new ApolloFactory({
@@ -69,28 +67,17 @@ export const useApolloFactory = (options: Partial<Options> = {}) => {
       currentWorkspaceMember: currentWorkspaceMember,
       currentWorkspace: currentWorkspace,
       appVersion,
-      onTokenPairChange: (tokenPair) => {
-        setTokenPair(tokenPair);
-        // OMNIA-CUSTOM: keep the cross-app SSO cookie in sync on every silent
-        // token refresh so the sibling omniaagent.com dashboard never verifies a
-        // stale/expired token.
-        writeSsoTokenPairCookie(tokenPair);
-      },
       onUnauthenticatedError: () => {
-        setTokenPair(null);
-        // OMNIA-CUSTOM: drop the cross-app SSO cookie so the sibling app also
-        // loses the session on unauthenticated errors.
-        clearSsoTokenPairCookie();
+        clearSessionGeneration();
+        setIsCookieAuthActive(false);
         setCurrentUser(null);
         setCurrentWorkspaceMember(null);
         setCurrentWorkspace(null);
         setCurrentUserWorkspace(null);
         if (
-          !isMatchingLocation(locationRef.current, AppPath.Verify) &&
-          !isMatchingLocation(locationRef.current, AppPath.VerifyV2) &&
-          !isMatchingLocation(locationRef.current, AppPath.SignInUp) &&
-          !isMatchingLocation(locationRef.current, AppPath.Invite) &&
-          !isMatchingLocation(locationRef.current, AppPath.ResetPassword)
+          ![...ONGOING_USER_CREATION_PATHS, AppPath.ResetPassword].some(
+            (path) => isMatchingLocation(locationRef.current, path),
+          )
         ) {
           const path = `${locationRef.current.pathname}${locationRef.current.search}${locationRef.current.hash}`;
 
@@ -101,36 +88,32 @@ export const useApolloFactory = (options: Partial<Options> = {}) => {
         }
       },
       onAppVersionMismatch: (message) => {
-        enqueueErrorSnackBar({
-          message,
-          options: {
-            dedupeKey: 'app-version-mismatch',
-          },
+        enqueueToast({
+          status: 'error',
+          children: message,
+          dedupeKey: 'app-version-mismatch',
         });
       },
       onPayloadTooLarge: (message) => {
-        enqueueErrorSnackBar({
-          message,
-          options: {
-            dedupeKey: 'payload-too-large',
-          },
+        enqueueToast({
+          status: 'error',
+          children: message,
+          dedupeKey: 'payload-too-large',
         });
       },
       extraLinks: [],
       isDebugMode: process.env.IS_DEBUG_MODE === 'true',
-      // Override options
       ...options,
     });
 
     return apolloRef.current.getClient();
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    setTokenPair,
     setCurrentUser,
     setCurrentWorkspaceMember,
     setCurrentWorkspace,
     setReturnToPath,
-    enqueueErrorSnackBar,
+    enqueueToast,
   ]);
 
   useUpdateEffect(() => {

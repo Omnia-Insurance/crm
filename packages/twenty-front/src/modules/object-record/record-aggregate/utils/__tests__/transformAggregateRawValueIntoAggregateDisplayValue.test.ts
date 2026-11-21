@@ -63,6 +63,21 @@ describe('transformAggregateRawValueIntoAggregateDisplayValue', () => {
     ).toBe('153,909');
   });
 
+  it('should format large COUNT values with the SHORT chart number format', () => {
+    expect(
+      transformAggregateRawValueIntoAggregateDisplayValue({
+        aggregateFieldMetadataItem: undefined,
+        aggregateOperation: AggregateOperations.COUNT,
+        aggregateRawValue: 153909,
+        dateFormat: DateFormat.DAY_FIRST,
+        timeFormat: TimeFormat.HOUR_24,
+        localeCatalog: enUS,
+        timeZone: 'UTC',
+        chartNumberFormat: ChartNumberFormat.SHORT,
+      }),
+    ).toBe('153.9k');
+  });
+
   it('should format large COUNT values respecting the SPACES_AND_COMMA number format', () => {
     expect(
       transformAggregateRawValueIntoAggregateDisplayValue({
@@ -152,6 +167,25 @@ describe('transformAggregateRawValueIntoAggregateDisplayValue', () => {
         timeZone: 'UTC',
       }),
     ).toBe('230.4k');
+  });
+
+  it('should return rating average rounded to one decimal', () => {
+    const mockRatingFieldMetadataItem = {
+      ...mockCompanyEmployeesFieldMetadataItem,
+      type: FieldMetadataType.RATING,
+    } as FieldMetadataItem;
+
+    expect(
+      transformAggregateRawValueIntoAggregateDisplayValue({
+        aggregateFieldMetadataItem: mockRatingFieldMetadataItem,
+        aggregateOperation: AggregateOperations.AVG,
+        aggregateRawValue: '3.4285714285714286',
+        dateFormat: DateFormat.DAY_FIRST,
+        timeFormat: TimeFormat.HOUR_24,
+        localeCatalog: enUS,
+        timeZone: 'UTC',
+      }),
+    ).toBe('3.4');
   });
 
   it('should return correct number formatted value', () => {

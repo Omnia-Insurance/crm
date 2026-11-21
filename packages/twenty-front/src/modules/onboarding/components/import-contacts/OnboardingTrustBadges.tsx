@@ -1,23 +1,15 @@
 import { styled } from '@linaria/react';
-import { type ReactNode } from 'react';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 const BADGE_ASSET_PATH = '/images/onboarding/trust-badges';
-
-const TRUSTED_BY_LOGOS = [
-  { name: 'Bayer', src: `${BADGE_ASSET_PATH}/bayer.png` },
-  { name: 'PwC', src: `${BADGE_ASSET_PATH}/pwc.png` },
-  {
-    name: 'République Française',
-    src: `${BADGE_ASSET_PATH}/french-republic.png`,
-  },
-];
 
 const StyledRow = styled.div`
   align-items: center;
   display: flex;
+  flex-wrap: wrap;
   gap: ${themeCssVariables.spacing[2]};
   justify-content: center;
+  max-width: 100%;
 `;
 
 const StyledBadge = styled.div`
@@ -27,30 +19,20 @@ const StyledBadge = styled.div`
   border-radius: ${themeCssVariables.border.radius.pill};
   box-sizing: border-box;
   color: ${themeCssVariables.font.color.light};
+  corner-shape: round;
   display: flex;
   font-size: ${themeCssVariables.font.size.xs};
   font-weight: ${themeCssVariables.font.weight.semiBold};
   gap: ${themeCssVariables.spacing[1]};
   height: ${themeCssVariables.spacing[7]};
-  padding: 0 ${themeCssVariables.spacing[2]} 0 ${themeCssVariables.spacing[1]};
+  overflow: hidden;
+  padding: 0 10px 0 ${themeCssVariables.spacing[1]};
 `;
 
 const StyledSeal = styled.img`
-  height: 20px;
+  height: 21px;
   object-fit: contain;
-  width: 20px;
-`;
-
-const StyledLogoCluster = styled.div`
-  align-items: center;
-  display: flex;
-  gap: ${themeCssVariables.spacing[1]};
-`;
-
-const StyledClusterLogo = styled.img`
-  height: 18px;
-  object-fit: contain;
-  width: auto;
+  width: 21px;
 `;
 
 const StyledBadgeLabel = styled.span`
@@ -59,35 +41,19 @@ const StyledBadgeLabel = styled.span`
 
 type TrustBadgeProps = {
   label: string;
-  leading: ReactNode;
+  sealSrc: string;
 };
 
-const TrustBadge = ({ label, leading }: TrustBadgeProps) => (
+const TrustBadge = ({ label, sealSrc }: TrustBadgeProps) => (
   <StyledBadge>
-    {leading}
+    <StyledSeal src={sealSrc} alt="" />
     <StyledBadgeLabel>{label}</StyledBadgeLabel>
   </StyledBadge>
 );
 
 export const OnboardingTrustBadges = () => (
   <StyledRow>
-    <TrustBadge
-      label="SOC2"
-      leading={<StyledSeal src={`${BADGE_ASSET_PATH}/soc2.png`} alt="" />}
-    />
-    <TrustBadge
-      label="+10k"
-      leading={
-        <StyledLogoCluster>
-          {TRUSTED_BY_LOGOS.map((logo) => (
-            <StyledClusterLogo key={logo.name} src={logo.src} alt={logo.name} />
-          ))}
-        </StyledLogoCluster>
-      }
-    />
-    <TrustBadge
-      label="GDPR"
-      leading={<StyledSeal src={`${BADGE_ASSET_PATH}/gdpr.png`} alt="" />}
-    />
+    <TrustBadge label="SOC2" sealSrc={`${BADGE_ASSET_PATH}/soc2.png`} />
+    <TrustBadge label="GDPR" sealSrc={`${BADGE_ASSET_PATH}/gdpr.png`} />
   </StyledRow>
 );

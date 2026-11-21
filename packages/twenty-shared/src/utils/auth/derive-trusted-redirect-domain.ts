@@ -1,34 +1,33 @@
+import { isDefined } from '@/utils/validation/isDefined';
+
 const IP_HOSTNAME_REGEX = /^[\d.]+$/;
 
-/**
- * Derives the "trusted parent domain" from a Twenty frontend URL using the
- * same strip-leftmost-subdomain approach used elsewhere for shared cookies.
- * Returns null for hosts without a meaningful subdomain to strip (localhost,
- * IPs, apex domains).
- */
+// crm.omniaagent.com -> omniaagent.com. Null when there is no subdomain to
+// strip (localhost, IPs, apex domains), so nothing beyond the host is trusted.
 export const deriveTrustedParentDomain = (
   frontendUrl: string,
 ): string | null => {
   try {
     const { hostname } = new URL(frontendUrl);
-    if (hostname === 'localhost' || IP_HOSTNAME_REGEX.test(hostname))
+
+    if (hostname === 'localhost' || IP_HOSTNAME_REGEX.test(hostname)) {
       return null;
-    const parts = hostname.split('.');
-    if (parts.length < 3) return null;
-    return parts.slice(1).join('.');
+    }
+
+    const hostnameLabels = hostname.split('.');
+
+    if (hostnameLabels.length < 3) {
+      return null;
+    }
+
+    return hostnameLabels.slice(1).join('.');
   } catch {
     return null;
   }
 };
 
-/**
- * Returns true if `candidateUrl` is safe to redirect to from a Twenty frontend
- * deployed at `frontendUrl`. Allowed:
- *   - Same host as frontendUrl
- *   - localhost ↔ localhost (any ports; cookies cross ports on localhost)
- *   - Any subdomain of the derived trusted parent (e.g. omniaagent.com from
- *     crm.omniaagent.com)
- */
+// https is required: a javascript: URL can carry a trusted host and would run
+// script once assigned to window.location.
 export const isExternalRedirectTrusted = (
   candidateUrl: string,
   frontendUrl: string,
@@ -36,18 +35,31 @@ export const isExternalRedirectTrusted = (
   try {
     const candidate = new URL(candidateUrl);
     const frontend = new URL(frontendUrl);
-    if (candidate.host === frontend.host) return true;
+
     if (
       frontend.hostname === 'localhost' &&
       candidate.hostname === 'localhost'
     ) {
+      return candidate.protocol === 'http:' || candidate.protocol === 'https:';
+    }
+
+    if (candidate.protocol !== 'https:') {
+      return false;
+    }
+
+    if (candidate.host === frontend.host) {
       return true;
     }
-    const trustedParent = deriveTrustedParentDomain(frontendUrl);
-    if (trustedParent === null) return false;
+
+    const trustedParentDomain = deriveTrustedParentDomain(frontendUrl);
+
+    if (!isDefined(trustedParentDomain)) {
+      return false;
+    }
+
     return (
-      candidate.hostname === trustedParent ||
-      candidate.hostname.endsWith('.' + trustedParent)
+      candidate.hostname === trustedParentDomain ||
+      candidate.hostname.endsWith(`.${trustedParentDomain}`)
     );
   } catch {
     return false;

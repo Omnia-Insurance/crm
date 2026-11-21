@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
 
-import { isNonEmptyString } from '@sniptt/guards';
-import { type ToolSet } from 'ai';
+import { isString } from '@sniptt/guards';
+import { asSchema, type ToolExecuteFunction } from 'ai';
 import { isDefined } from 'twenty-shared/utils';
 
+import { TOOL_EXECUTION_DURATION_MS_BUCKET_BOUNDARIES } from 'src/engine/core-modules/metrics/constants/tool-execution-duration-ms-bucket-boundaries.constant';
+import { TOOL_OUTPUT_TOKENS_BUCKET_BOUNDARIES } from 'src/engine/core-modules/metrics/constants/tool-output-tokens-bucket-boundaries.constant';
 import { MetricsService } from 'src/engine/core-modules/metrics/metrics.service';
 import { MetricsKeys } from 'src/engine/core-modules/metrics/types/metrics-keys.type';
 import { estimateToolOutputTokens } from 'src/engine/core-modules/tool-provider/utils/estimate-tool-output-tokens.util';
@@ -11,60 +13,48 @@ import { getToolMetricName } from 'src/engine/core-modules/tool-provider/utils/g
 import { isToolOutputSuccessful } from 'src/engine/core-modules/tool-provider/utils/is-tool-output-successful.util';
 import { resolveToolName } from 'src/engine/core-modules/tool-provider/utils/resolve-tool-name.util';
 
-import { JSON_RPC_ERROR_CODE } from 'src/engine/api/mcp/constants/json-rpc-error-code.const';
+import { MCP_PROGRESS_NOTIFICATION_METHOD } from 'src/engine/api/mcp/constants/mcp-progress-notification.constant';
 import {
-  MCP_PROGRESS_NOTIFICATION_METHOD,
-  TOOL_CALL_PROGRESS_TOKEN_PREFIX,
-} from 'src/engine/api/mcp/constants/mcp-progress-notification.const';
-import { type McpToolAnnotations } from 'src/engine/api/mcp/types/mcp-tool-annotations.type';
-import { wrapJsonRpcResponse } from 'src/engine/api/mcp/utils/wrap-jsonrpc-response.util';
-
-type McpToolDefinition = ToolSet[string] & {
-  annotations?: McpToolAnnotations;
-};
-
-const unwrapJsonSchema = (schema: unknown) =>
-  schema && typeof schema === 'object' && 'jsonSchema' in schema
-    ? schema.jsonSchema
-    : schema;
+  McpException,
+  McpExceptionCode,
+} from 'src/engine/api/mcp/exceptions/mcp.exception';
+import { type McpListedTool } from 'src/engine/api/mcp/types/mcp-listed-tool.type';
+import { type McpToolCallResult } from 'src/engine/api/mcp/types/mcp-tool-call-result.type';
+import { type McpToolSet } from 'src/engine/api/mcp/types/mcp-tool-set.type';
+import { type McpToolsListResult } from 'src/engine/api/mcp/types/mcp-tools-list-result.type';
 
 @Injectable()
 export class McpToolExecutorService {
   constructor(private readonly metricsService: MetricsService) {}
 
-  async handleToolCall(
-    id: string | number,
-    toolSet: ToolSet,
-    params: Record<string, unknown>,
-    sseWriter?: (data: Record<string, unknown>) => void,
-  ) {
-    if (!isNonEmptyString(params.name)) {
-      return wrapJsonRpcResponse(id, {
-        error: {
-          code: JSON_RPC_ERROR_CODE.INVALID_PARAMS,
-          message: 'Tool name is required',
-        },
-      });
-    }
-
-    const toolName = params.name;
+  async handleToolCall({
+    toolSet,
+    toolName,
+    toolArguments,
+    progressToken,
+    sseWriter,
+  }: {
+    toolSet: McpToolSet;
+    toolName: string;
+    toolArguments: Record<string, unknown> | undefined;
+    progressToken: string | number | undefined;
+    sseWriter?: (data: Record<string, unknown>) => void;
+  }): Promise<McpToolCallResult> {
     const tool = toolSet[toolName];
 
     if (!isDefined(tool) || !isDefined(tool.execute)) {
-      return wrapJsonRpcResponse(id, {
-        error: {
-          code: JSON_RPC_ERROR_CODE.INVALID_PARAMS,
-          message: `Unknown tool: ${toolName}`,
-        },
-      });
+      throw new McpException(
+        `Unknown tool: ${toolName}`,
+        McpExceptionCode.INVALID_PARAMS,
+      );
     }
 
-    if (isDefined(sseWriter)) {
+    if (isDefined(sseWriter) && isDefined(progressToken)) {
       sseWriter({
         jsonrpc: '2.0',
         method: MCP_PROGRESS_NOTIFICATION_METHOD,
         params: {
-          progressToken: `${TOOL_CALL_PROGRESS_TOKEN_PREFIX}${String(id)}`,
+          progressToken,
           progress: 0,
           total: 1,
         },
@@ -74,24 +64,31 @@ export class McpToolExecutorService {
     const metricToolName = getToolMetricName(
       resolveToolName({
         toolName,
-        input: params.arguments,
+        input: toolArguments,
       }),
     );
 
+    const executionStartedAt = performance.now();
+
     try {
-      const result = await tool.execute(params.arguments, {
+      // ToolSet widens execute to a union no argument satisfies
+      const execute = tool.execute as ToolExecuteFunction<
+        unknown,
+        unknown,
+        undefined
+      >;
+      const result = await execute(toolArguments, {
         toolCallId: '1',
         messages: [],
+        context: undefined,
       });
 
       const succeeded = isToolOutputSuccessful(result);
 
-      this.metricsService.incrementCounterBy({
-        key: succeeded
-          ? MetricsKeys.McpToolExecutionSucceeded
-          : MetricsKeys.McpToolExecutionFailed,
-        amount: 1,
-        attributes: { tool: metricToolName },
+      this.recordToolExecutionMetrics({
+        metricToolName,
+        executionStartedAt,
+        succeeded,
       });
 
       this.metricsService.recordHistogram({
@@ -99,61 +96,79 @@ export class McpToolExecutorService {
         value: estimateToolOutputTokens(result),
         unit: 'token',
         attributes: { tool: metricToolName },
+        bucketBoundaries: TOOL_OUTPUT_TOKENS_BUCKET_BOUNDARIES,
       });
 
-      return wrapJsonRpcResponse(id, {
-        result: {
-          content: [{ type: 'text', text: JSON.stringify(result) }],
-          isError: false,
-        },
-      });
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result) }],
+        isError: !succeeded,
+      };
     } catch (executionError) {
-      this.metricsService.incrementCounterBy({
-        key: MetricsKeys.McpToolExecutionFailed,
-        amount: 1,
-        attributes: { tool: metricToolName },
+      this.recordToolExecutionMetrics({
+        metricToolName,
+        executionStartedAt,
+        succeeded: false,
       });
 
-      return wrapJsonRpcResponse(id, {
-        result: {
-          content: [
-            {
-              type: 'text',
-              text:
-                executionError instanceof Error
-                  ? executionError.message
-                  : 'Tool execution failed',
-            },
-          ],
-          isError: true,
-        },
-      });
+      return {
+        content: [
+          {
+            type: 'text',
+            text:
+              executionError instanceof Error
+                ? executionError.message
+                : 'Tool execution failed',
+          },
+        ],
+        isError: true,
+      };
     }
   }
 
-  handleToolsListing(id: string | number, toolSet: ToolSet) {
-    const toolsArray = Object.entries(toolSet)
-      .filter(([, def]) => !!def.inputSchema)
-      .map(([name, def]) => {
-        const toolDefinition = def as McpToolDefinition;
-        // Unwrap the AI SDK's jsonSchema wrapper if present
-        // The AI SDK serializes schemas as { jsonSchema: {...} } but MCP expects {...} directly
-        const inputSchema = unwrapJsonSchema(toolDefinition.inputSchema);
-
-        return {
+  async handleToolsListing(toolSet: McpToolSet): Promise<McpToolsListResult> {
+    const tools = await Promise.all(
+      Object.entries(toolSet)
+        .filter(([, tool]) => isDefined(tool.inputSchema))
+        .map(async ([name, tool]): Promise<McpListedTool> => ({
           name,
-          description: toolDefinition.description,
-          inputSchema,
-          ...(isDefined(toolDefinition.annotations) && {
-            annotations: toolDefinition.annotations,
-          }),
-        };
-      });
+          // AI SDK v7 also allows a description resolver, which MCP clients cannot call
+          description: isString(tool.description)
+            ? tool.description
+            : undefined,
+          inputSchema: {
+            ...(await asSchema(tool.inputSchema).jsonSchema),
+            type: 'object',
+          },
+          annotations: tool.annotations,
+        })),
+    );
 
-    return wrapJsonRpcResponse(id, {
-      result: {
-        tools: toolsArray,
-      },
+    return { tools };
+  }
+
+  private recordToolExecutionMetrics({
+    metricToolName,
+    executionStartedAt,
+    succeeded,
+  }: {
+    metricToolName: string;
+    executionStartedAt: number;
+    succeeded: boolean;
+  }) {
+    this.metricsService.recordHistogram({
+      key: MetricsKeys.McpToolExecutionDurationMs,
+      value: performance.now() - executionStartedAt,
+      unit: 'ms',
+      attributes: { tool: metricToolName },
+      bucketBoundaries: TOOL_EXECUTION_DURATION_MS_BUCKET_BOUNDARIES,
+    });
+
+    this.metricsService.incrementCounterBy({
+      key: succeeded
+        ? MetricsKeys.McpToolExecutionSucceeded
+        : MetricsKeys.McpToolExecutionFailed,
+      amount: 1,
+      attributes: { tool: metricToolName },
     });
   }
 }

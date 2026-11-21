@@ -1,40 +1,77 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { downloadTranscript } from 'src/logic-functions/flows/download-transcript.util';
 
-const retrieveRecallTranscriptMock = vi.hoisted(() => vi.fn());
+const TRANSCRIPT_DOWNLOAD_URL =
+  'https://recall-transcripts.example.com/transcript-1';
+const RECALL_TRANSCRIPT_URL =
+  'https://us-west-2.recall.ai/api/v1/transcript/recall-transcript-1/';
 
-vi.mock(
-  'src/logic-functions/recall-api/retrieve-recall-transcript.util',
-  () => ({
-    retrieveRecallTranscript: retrieveRecallTranscriptMock,
-  }),
-);
+const buildRecallTranscriptResponse = () =>
+  new Response(
+    JSON.stringify({
+      data: { download_url: TRANSCRIPT_DOWNLOAD_URL },
+      status: { code: 'done' },
+    }),
+    { status: 200 },
+  );
 
 describe('downloadTranscript', () => {
   const fetchMock = vi.fn();
 
   beforeEach(() => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
-    retrieveRecallTranscriptMock.mockReset();
     fetchMock.mockReset();
     vi.stubGlobal('fetch', fetchMock);
+    vi.stubEnv('RECALL_API_KEY', 'recall-api-key');
+    vi.stubEnv('RECALL_REGION', 'us-west-2');
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it('reports a transcript Recall has deleted', async () => {
+    fetchMock.mockImplementation((url: string) => {
+      if (url === RECALL_TRANSCRIPT_URL) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              data: { download_url: null },
+              status: { code: 'deleted' },
+            }),
+            { status: 200 },
+          ),
+        );
+      }
+
+      throw new Error(`Unhandled fetch url in test: ${url}`);
+    });
+
+    const result = await downloadTranscript({
+      transcriptId: 'recall-transcript-1',
+    });
+
+    expect(result).toEqual({ outcome: 'deleted' });
   });
 
   it('downloads transcript content with a timeout', async () => {
     const transcriptContent = [{ participant: { id: 1 }, words: [] }];
 
-    retrieveRecallTranscriptMock.mockResolvedValue({
-      ok: true,
-      transcript: {
-        downloadUrl: 'https://recall-transcripts.example.com/transcript-1',
-        statusCode: 'done',
-        statusSubCode: undefined,
-      },
-    });
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: async () => transcriptContent,
+    fetchMock.mockImplementation((url: string) => {
+      if (url === RECALL_TRANSCRIPT_URL) {
+        return Promise.resolve(buildRecallTranscriptResponse());
+      }
+
+      if (url === TRANSCRIPT_DOWNLOAD_URL) {
+        return Promise.resolve(
+          new Response(JSON.stringify(transcriptContent), { status: 200 }),
+        );
+      }
+
+      throw new Error(`Unhandled fetch url in test: ${url}`);
     });
 
     const result = await downloadTranscript({
@@ -43,7 +80,14 @@ describe('downloadTranscript', () => {
 
     expect(result).toEqual({ outcome: 'filled', content: transcriptContent });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://recall-transcripts.example.com/transcript-1',
+      RECALL_TRANSCRIPT_URL,
+      expect.objectContaining({
+        method: 'GET',
+        headers: { Authorization: 'Token recall-api-key' },
+      }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      TRANSCRIPT_DOWNLOAD_URL,
       expect.objectContaining({
         signal: expect.any(AbortSignal),
       }),
@@ -51,15 +95,17 @@ describe('downloadTranscript', () => {
   });
 
   it('logs raw download failures but returns a generic error', async () => {
-    retrieveRecallTranscriptMock.mockResolvedValue({
-      ok: true,
-      transcript: {
-        downloadUrl: 'https://recall-transcripts.example.com/transcript-1',
-        statusCode: 'done',
-        statusSubCode: undefined,
-      },
+    fetchMock.mockImplementation((url: string) => {
+      if (url === RECALL_TRANSCRIPT_URL) {
+        return Promise.resolve(buildRecallTranscriptResponse());
+      }
+
+      if (url === TRANSCRIPT_DOWNLOAD_URL) {
+        return Promise.reject(new Error('socket leaked detail'));
+      }
+
+      throw new Error(`Unhandled fetch url in test: ${url}`);
     });
-    fetchMock.mockRejectedValue(new Error('socket leaked detail'));
 
     await expect(
       downloadTranscript({ transcriptId: 'recall-transcript-1' }),
@@ -70,5 +116,13 @@ describe('downloadTranscript', () => {
     expect(console.warn).toHaveBeenCalledWith(
       expect.stringContaining('socket leaked detail'),
     );
+  });
+  it('settles a pending transcript whose provider resource now returns 404', async () => {
+    fetchMock.mockResolvedValue(new Response('{}', { status: 404 }));
+
+    await expect(
+      downloadTranscript({ transcriptId: 'recall-transcript-1' }),
+    ).resolves.toEqual({ outcome: 'deleted' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

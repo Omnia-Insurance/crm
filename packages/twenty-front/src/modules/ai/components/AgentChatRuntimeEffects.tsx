@@ -1,35 +1,22 @@
 import { AgentChatMessagesFetchEffect } from '@/ai/components/AgentChatMessagesFetchEffect';
-import { AgentChatSessionStartTimeEffect } from '@/ai/components/AgentChatSessionStartTimeEffect';
-import { AgentChatStreamKeepAliveEffect } from '@/ai/components/AgentChatStreamKeepAliveEffect';
+import { AgentChatPrepromptEffect } from '@/ai/components/AgentChatPrepromptEffect';
 import { AgentChatStreamSubscriptionEffect } from '@/ai/components/AgentChatStreamSubscriptionEffect';
-import { AgentChatStreamingAutoScrollEffect } from '@/ai/components/AgentChatStreamingAutoScrollEffect';
-import { AgentChatStreamingPartsDiffSyncEffect } from '@/ai/components/AgentChatStreamingPartsDiffSyncEffect';
-import { hasAgentChatBeenOpenedState } from '@/ai/states/hasAgentChatBeenOpenedState';
-import { isSidePanelOpenedState } from '@/side-panel/states/isSidePanelOpenedState';
-import { sidePanelPageState } from '@/side-panel/states/sidePanelPageState';
-import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
+import { agentChatUISessionStartTimeState } from '@/ai/states/agentChatUISessionStartTimeState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
-import { useEffect } from 'react';
-import { SidePanelPages } from 'twenty-shared/types';
+import { useIsWorkspaceActivationStatusEqualsTo } from '@/workspace/hooks/useIsWorkspaceActivationStatusEqualsTo';
+import { isDefined } from 'twenty-shared/utils';
+import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
 
 export const AgentChatRuntimeEffects = () => {
-  const isSidePanelOpened = useAtomStateValue(isSidePanelOpenedState);
-  const sidePanelPage = useAtomStateValue(sidePanelPageState);
-
-  const [hasAgentChatBeenOpened, setHasAgentChatBeenOpened] = useAtomState(
-    hasAgentChatBeenOpenedState,
+  // The session starts the first time the chat is opened
+  const agentChatUISessionStartTime = useAtomStateValue(
+    agentChatUISessionStartTimeState,
+  );
+  const isWorkspaceSuspended = useIsWorkspaceActivationStatusEqualsTo(
+    WorkspaceActivationStatus.SUSPENDED,
   );
 
-  const isAgentChatOpen =
-    isSidePanelOpened && sidePanelPage === SidePanelPages.AskAI;
-
-  useEffect(() => {
-    if (isAgentChatOpen && !hasAgentChatBeenOpened) {
-      setHasAgentChatBeenOpened(true);
-    }
-  }, [isAgentChatOpen, hasAgentChatBeenOpened, setHasAgentChatBeenOpened]);
-
-  if (!hasAgentChatBeenOpened) {
+  if (!isDefined(agentChatUISessionStartTime) || isWorkspaceSuspended) {
     return null;
   }
 
@@ -37,14 +24,7 @@ export const AgentChatRuntimeEffects = () => {
     <>
       <AgentChatMessagesFetchEffect />
       <AgentChatStreamSubscriptionEffect />
-      <AgentChatStreamKeepAliveEffect />
-      <AgentChatSessionStartTimeEffect />
-      {isAgentChatOpen && (
-        <>
-          <AgentChatStreamingPartsDiffSyncEffect />
-          <AgentChatStreamingAutoScrollEffect />
-        </>
-      )}
+      <AgentChatPrepromptEffect />
     </>
   );
 };

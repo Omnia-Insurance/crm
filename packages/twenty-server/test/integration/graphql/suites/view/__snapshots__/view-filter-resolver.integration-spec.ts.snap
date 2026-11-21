@@ -10,7 +10,7 @@ exports[`View Filter Resolver createViewFilter should reject a view filter with 
           "errors": [
             {
               "code": "INVALID_VIEW_FILTER_DATA",
-              "message": "Operand "IS" is not supported on field type "TEXT". Supported operands: CONTAINS, DOES_NOT_CONTAIN, IS_EMPTY, IS_NOT_EMPTY.",
+              "message": "Operand "GREATER_THAN_OR_EQUAL" is not supported on field type "TEXT". Supported operands: CONTAINS, DOES_NOT_CONTAIN, IS, IS_NOT, IS_EMPTY, IS_NOT_EMPTY.",
               "userFriendlyMessage": "Filter operand is not supported for this field type",
             },
           ],
@@ -41,7 +41,7 @@ exports[`View Filter Resolver deleteViewFilter should throw an error when deleti
     "code": "NOT_FOUND",
     "userFriendlyMessage": "An error occurred.",
   },
-  "message": "View filter to delete not found",
+  "message": "View filter to destroy not found",
   "name": "NotFoundError",
 }
 `;

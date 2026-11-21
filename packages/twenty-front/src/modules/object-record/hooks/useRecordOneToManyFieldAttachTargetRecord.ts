@@ -1,17 +1,13 @@
-import { type Reference } from '@apollo/client';
-
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
-import { getEdgeTypename } from 'twenty-shared/utils';
 import { getRecordFromCache } from '@/object-record/cache/utils/getRecordFromCache';
-import { getRefName } from '@/object-record/cache/utils/getRefName';
-import { modifyRecordFromCache } from '@/object-record/cache/utils/modifyRecordFromCache';
 
 import { updateRecordFromCache } from '@/object-record/cache/utils/updateRecordFromCache';
 import { generateDepthRecordGqlFieldsFromRecord } from '@/object-record/graphql/record-gql-fields/utils/generateDepthRecordGqlFieldsFromRecord';
 import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
 import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
 import { CustomError, isDefined } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
 
 export const useRecordOneToManyFieldAttachTargetRecord = () => {
   const apolloCoreClient = useApolloCoreClient();
@@ -22,14 +18,12 @@ export const useRecordOneToManyFieldAttachTargetRecord = () => {
 
   const recordOneToManyFieldAttachTargetRecord = async ({
     sourceObjectNameSingular,
-    sourceFieldName,
     targetObjectNameSingular,
     targetGQLFieldName,
     sourceRecordId,
     targetRecordId,
   }: {
     sourceObjectNameSingular: string;
-    sourceFieldName: string;
     targetObjectNameSingular: string;
     targetGQLFieldName: string;
     sourceRecordId: string;
@@ -47,14 +41,18 @@ export const useRecordOneToManyFieldAttachTargetRecord = () => {
 
     if (!targetObjectMetadataItem) {
       throw new CustomError(
-        `Could not find related object metadata for ${targetObjectNameSingular}`,
+        doNotTranslate(
+          `Could not find related object metadata for ${targetObjectNameSingular}`,
+        ),
         'RELATED_OBJECT_METADATA_NOT_FOUND',
       );
     }
 
     if (!sourceObjectMetadataItem) {
       throw new CustomError(
-        `Could not find source object metadata for ${sourceObjectNameSingular}`,
+        doNotTranslate(
+          `Could not find source object metadata for ${sourceObjectNameSingular}`,
+        ),
         'SOURCE_OBJECT_METADATA_NOT_FOUND',
       );
     }
@@ -68,7 +66,7 @@ export const useRecordOneToManyFieldAttachTargetRecord = () => {
     });
 
     if (!cachedTargetRecord) {
-      throw new Error('Could not find cached related record');
+      throw new Error(doNotTranslate('Could not find cached related record'));
     }
 
     const previousRecordId = cachedTargetRecord?.[`${targetGQLFieldName}Id`];
@@ -107,53 +105,11 @@ export const useRecordOneToManyFieldAttachTargetRecord = () => {
       });
     }
 
-    // Update the source record's Apollo cache to include the newly attached
-    // target in its one-to-many edges (mirrors detach which removes from edges).
-    modifyRecordFromCache({
-      objectMetadataItem: sourceObjectMetadataItem,
-      cache: apolloCoreClient.cache,
-      fieldModifiers: {
-        [sourceFieldName]: (
-          fieldNameOnRecordObjectConnection,
-          { readField },
-        ) => {
-          const edges = readField<{ node: Reference }[]>(
-            'edges',
-            fieldNameOnRecordObjectConnection,
-          );
-
-          const targetRef = getRefName(
-            targetObjectNameSingular,
-            targetRecordId,
-          );
-
-          // Avoid duplicates
-          if (
-            edges?.some((edge) => edge.node.__ref === targetRef)
-          ) {
-            return fieldNameOnRecordObjectConnection;
-          }
-
-          const newEdge = {
-            __typename: getEdgeTypename(targetObjectNameSingular),
-            node: { __ref: targetRef },
-            cursor: '',
-          };
-
-          return {
-            ...fieldNameOnRecordObjectConnection,
-            edges: [...(edges ?? []), newEdge],
-          };
-        },
-      },
-      recordId: sourceRecordId,
-    });
-
     await updateOneRecord({
       objectNameSingular: targetObjectNameSingular,
       idToUpdate: targetRecordId,
       updateOneRecordInput: {
-        [`${targetGQLFieldName}Id`]: sourceRecordId,
+        [doNotTranslate(`${targetGQLFieldName}Id`)]: sourceRecordId,
       },
     });
   };

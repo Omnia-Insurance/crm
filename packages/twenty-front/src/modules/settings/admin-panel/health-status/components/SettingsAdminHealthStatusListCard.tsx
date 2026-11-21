@@ -9,8 +9,7 @@ import {
   IconTool,
   IconUserCircle,
 } from 'twenty-ui/icon';
-import { useContext } from 'react';
-import { ThemeContext } from 'twenty-ui/theme-constants';
+import { useTheme } from 'twenty-ui/theme';
 import {
   HealthIndicatorId,
   type SystemHealthService,
@@ -33,12 +32,11 @@ export const SettingsAdminHealthStatusListCard = ({
   services: Array<SystemHealthService>;
   loading?: boolean;
 }) => {
-  const { theme } = useContext(ThemeContext);
+  const theme = useTheme();
 
   return (
     <SettingsListCard
       items={services}
-      rounded={true}
       RowIconFn={(row) => HealthStatusIcons[row.id]}
       RowIconColor={theme.font.color.tertiary}
       getItemLabel={(service) => service.label}

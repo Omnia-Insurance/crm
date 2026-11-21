@@ -1,21 +1,38 @@
-// jest-dom adds custom jest matchers for asserting on DOM nodes.
-// allows you to do things like:
-// expect(element).toHaveTextContent(/react/i)
-// learn more: https://github.com/testing-library/jest-dom
 import '@testing-library/jest-dom';
 import {
   ReadableStream as NodeReadableStream,
   TransformStream as NodeTransformStream,
   WritableStream as NodeWritableStream,
 } from 'node:stream/web';
+import { TextDecoder, TextEncoder } from 'node:util';
 
 import { i18n } from '@lingui/core';
 import { SOURCE_LOCALE } from 'twenty-shared/translations';
 import { messages as enMessages } from '~/locales/generated/en';
 
-// Initialize i18n for all tests
 i18n.load({ [SOURCE_LOCALE]: enMessages });
 i18n.activate(SOURCE_LOCALE);
+
+// Most tests mount components without I18nProvider; fall back to the global i18n above.
+jest.mock('@lingui/react', () => {
+  const actual = jest.requireActual('@lingui/react');
+  const { useContext } = jest.requireActual('react');
+  const { i18n: globalI18n } = jest.requireActual('@lingui/core');
+  const fallbackContext = {
+    i18n: globalI18n,
+    _: globalI18n.t.bind(globalI18n),
+  };
+
+  return {
+    ...actual,
+    useLingui: () => useContext(actual.LinguiContext) ?? fallbackContext,
+  };
+});
+
+// jsdom lacks TextEncoder/TextDecoder, which @ai-sdk/provider-utils builds at import.
+if (globalThis.TextDecoder === undefined) {
+  Object.assign(globalThis, { TextDecoder, TextEncoder });
+}
 
 const globalWithWebStreams = globalThis as Record<string, unknown>;
 
@@ -38,7 +55,18 @@ if (typeof window !== 'undefined') {
   });
 }
 
-// Add Jest matchers for toThrowError and other missing methods
+// jsdom lacks ResizeObserver, which @dnd-kit/dom expects at import time.
+class ResizeObserverMock {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+if (globalThis.ResizeObserver === undefined) {
+  globalThis.ResizeObserver =
+    ResizeObserverMock as unknown as typeof ResizeObserver;
+}
+
 declare global {
   namespace jest {
     interface Matchers<R> {
@@ -54,13 +82,7 @@ declare global {
   }
 }
 
-/**
- * The structuredClone global function is not available in jsdom, it needs to be mocked for now.
- *
- * The most naive way to mock structuredClone is to use JSON.stringify and JSON.parse. This works
- * for arguments with simple types like primitives, arrays and objects, but doesn't work with functions,
- * Map, Set, etc.
- */
+// jsdom has no structuredClone; this JSON round-trip drops functions, Map, Set, etc.
 global.structuredClone = (val) => {
   return JSON.parse(JSON.stringify(val));
 };

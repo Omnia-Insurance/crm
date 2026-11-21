@@ -1,0 +1,117 @@
+---
+title: Pornire rapidă
+description: Creați prima dvs. aplicație Twenty cu CLI-ul independent.
+---
+
+import { PageBanner } from "/snippets/page-banner.mdx"
+import { CardTitle } from "/snippets/card-title.mdx"
+
+## Înainte de a începe
+
+Folosește Node.js 24 (24.5+) sau 26 (26.5.1+) și Yarn 4 (prin Corepack: `corepack enable`; pe Node 26, instalează-l mai întâi cu `npm install -g corepack`). Instalați CLI-ul la nivel global; aplicația dvs. își păstrează propriile dependențe SDK.
+
+<Note>
+Construirea aplicațiilor Twenty este acceptată oficial numai pe sistemele Unix (macOS și Linux). Pe Windows, lucrați în WSL 2.
+</Note>
+
+## Creați proiectul
+
+```bash
+npm install -g twenty
+twenty app init my-twenty-app
+cd my-twenty-app
+yarn install
+```
+
+`app init` scrie doar șablonul. Nu instalează dependențe, nu inițializează Git, nu pornește Docker, nu autentifică și nu sincronizează. Personalizați numele afișat și descrierea cu `--display-name` și `--description`; utilizați `--path` pentru o destinație diferită.
+
+## Conectați-vă la Twenty
+
+Folosiți un spațiu de lucru existent sau porniți un [server local](/ro/developers/extend/apps/getting-started/local-server), apoi autentificați-vă:
+
+```bash
+twenty auth login --url https://your-workspace.twenty.com --name dev --use
+twenty auth status --remote dev
+```
+
+`--name dev` salvează conexiunea ca `dev`; `--use` o setează ca implicită pentru comenzile de mai jos. Pentru a o viza în mod explicit, adaugă `--remote dev`. Variabilele de mediu pot suprascrie opțiunea implicită; consultă [selectarea spațiului de lucru](/ro/developers/extend/apps/operations/cli#connecting-to-a-workspace).
+
+## Sincronizați modificările
+
+Pentru prima sincronizare, permiteți explicit înregistrarea și instalarea:
+
+```bash
+twenty app apply --create
+```
+
+Apoi porniți monitorul de dezvoltare:
+
+```bash
+twenty app dev
+```
+
+Folosiți comenzi cu limite pentru scripturi și agenți:
+
+```bash
+twenty app plan
+twenty app apply
+```
+
+`plan` previzualizează modificările. `apply` încarcă și sincronizează o singură dată. Folosește `--no-prune` pentru a păstra entitățile la distanță care lipsesc din sursă sau `--yes` pentru a permite ștergerea obiectelor și a câmpurilor fără o solicitare de confirmare. Toate cele trei comenzi necesită o conexiune la distanță autentificată și drepturi de proprietate asupra înregistrării.
+
+## Ce puteți construi
+
+Aplicațiile sunt compuse din **entități** — fiecare definită într-un fișier TypeScript cu un singur `export default`:
+
+| Entitate                    | Ce face                                                                                         |
+| --------------------------- | ----------------------------------------------------------------------------------------------- |
+| **Obiecte și câmpuri**      | Modele de date personalizate (carte poștală, factură etc.) cu câmpuri tipizate                  |
+| **Funcții logice**          | TypeScript pe server declanșat de rute HTTP, programări cron sau evenimente din baza de date    |
+| **Componente front-end**    | Componente React care se afișează în UI-ul Twenty (panou lateral, widgeturi, meniul de comenzi) |
+| **Abilități și agenți**     | Capabilități AI — instrucțiuni reutilizabile și asistenți autonomi                              |
+| **Vizualizări și navigare** | Vizualizări de listă preconfigurate și elemente de meniu în bara laterală                       |
+| **Layouturi de pagină**     | Pagini personalizate de detalii ale înregistrărilor cu file și widgeturi                        |
+
+Referință completă: [Concepte](/ro/developers/extend/apps/getting-started/concepts).
+
+## Construiți cu abilități pentru agenți AI
+
+[Abilitățile pentru agenți](https://skills.sh/) oficiale Twenty îi învață pe agenții de programare întregul flux de lucru al aplicației: generarea structurii inițiale, dezvoltarea entităților, operațiuni de sincronizare și implementare, precum și publicarea pe marketplace. Acestea se instalează în Claude Code, Codex, Cursor, Pi și orice alt mediu de execuție acceptat de CLI-ul `skills` și funcționează cu orice instanță Twenty, inclusiv cu domenii personalizate auto-găzduite și localhost.
+
+```bash filename="Terminal"
+# List the available skills
+npx skills add https://github.com/twentyhq/twenty/tree/agent-skills --list
+
+# Install the scaffolding and development skills
+npx skills add https://github.com/twentyhq/twenty/tree/agent-skills --skill create-app
+npx skills add https://github.com/twentyhq/twenty/tree/agent-skills --skill develop-app
+```
+
+Fiecare abilitate se instalează cu propria documentație de referință. Ramura `agent-skills` devine disponibilă după prima publicare reușită din `main`; înainte de aceasta, urmați [instrucțiunile pentru compilarea locală](https://github.com/twentyhq/twenty/tree/main/packages/twenty-agent-skills#local-development).
+
+## Pașii următori
+
+<CardGroup cols={2} className="documentation-card-group">
+  <Card href="/ro/developers/extend/apps/config/overview" img="/images/documentation/section-overview-icons-v1/apps-config.svg">
+    <CardTitle>Configurați</CardTitle>
+    Identitatea aplicației, rolul implicit, instalați și dezinstalați hook-uri, active publice.
+  </Card>
+  <Card href="/ro/developers/extend/apps/data/overview" img="/images/documentation/section-overview-icons-v1/apps-data.svg">
+    <CardTitle>Date</CardTitle>
+    Obiecte, domenii și relații bidirecționale.
+  </Card>
+  <Card href="/ro/developers/extend/apps/logic/overview" img="/images/documentation/section-overview-icons-v1/apps-logic.svg">
+    <CardTitle>Logică</CardTitle>
+    Funcții logice, competențe, agenți, conexiuni și canale de mesagerie.
+  </Card>
+  <Card href="/ro/developers/extend/apps/layout/overview" img="/images/user-guide/halftone/layout-window-v1.svg">
+    <CardTitle>Layout</CardTitle>
+    vizualizări, navigare, layout-uri de pagini, componente din față.
+  </Card>
+  <Card href="/ro/developers/extend/apps/operations/overview" img="/images/documentation/section-overview-icons-v1/apps-operations.svg">
+    <CardTitle>Operații</CardTitle>
+    CLI, testare, telecomenzi, CI și publicarea aplicației tale.
+  </Card>
+</CardGroup>
+
+<PageBanner illustration="dev-apps" />

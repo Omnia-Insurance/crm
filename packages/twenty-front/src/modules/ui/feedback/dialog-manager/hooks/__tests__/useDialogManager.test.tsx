@@ -13,7 +13,10 @@ import {
 } from '@/ui/utilities/state/jotai/jotaiStore';
 
 const mockedUuid = 'mocked-uuid';
-jest.mock('uuid');
+jest.mock('uuid', () => ({
+  ...jest.requireActual('uuid'),
+  v4: jest.fn(),
+}));
 
 (uuidv4 as jest.Mock).mockReturnValue(mockedUuid);
 
@@ -44,7 +47,7 @@ const dialogOptionsArray: DialogOptionsArray = [
       {
         title: 'Are you sure?',
         onClick: mockOnclick,
-        variant: 'primary',
+        variant: 'outline',
         role: 'confirm',
       },
     ],
@@ -57,7 +60,7 @@ const dialogOptionsArray: DialogOptionsArray = [
       {
         title: 'Are you sure?',
         onClick: mockOnclick,
-        variant: 'primary',
+        variant: 'outline',
         role: 'confirm',
       },
     ],
@@ -70,7 +73,7 @@ const dialogOptionsArray: DialogOptionsArray = [
       {
         title: 'Are you sure?',
         onClick: mockOnclick,
-        variant: 'primary',
+        variant: 'outline',
         role: 'confirm',
       },
     ],

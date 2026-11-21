@@ -1,28 +1,25 @@
-import { type I18n } from '@lingui/core';
-
-import { generateMessageId } from 'src/engine/core-modules/i18n/utils/generateMessageId';
+import { generateMessageId } from 'twenty-shared/i18n';
 import { translateStandardLabel } from 'src/engine/core-modules/i18n/utils/translate-standard-label.util';
 
-jest.mock('src/engine/core-modules/i18n/utils/generateMessageId');
+jest.mock('twenty-shared/i18n');
 
 const mockGenerateMessageId = generateMessageId as jest.MockedFunction<
   typeof generateMessageId
 >;
 
 describe('translateStandardLabel', () => {
-  let mockI18n: jest.Mocked<I18n>;
+  let mockI18n: { _: jest.Mock };
 
   beforeEach(() => {
     jest.clearAllMocks();
     mockI18n = {
       _: jest.fn(),
-    } as unknown as jest.Mocked<I18n>;
+    };
   });
 
   it('should return the source value when it is empty', () => {
     const result = translateStandardLabel({
       sourceValue: '',
-      isStandardApp: true,
       applicationCatalog: undefined,
       i18nInstance: mockI18n,
     });
@@ -36,7 +33,6 @@ describe('translateStandardLabel', () => {
 
     const result = translateStandardLabel({
       sourceValue: 'Company',
-      isStandardApp: false,
       applicationCatalog: { 'company-id': 'Entreprise' },
       i18nInstance: mockI18n,
     });
@@ -45,12 +41,38 @@ describe('translateStandardLabel', () => {
     expect(mockI18n._).not.toHaveBeenCalled();
   });
 
-  it('should fall back to the source value when the catalog has no matching entry', () => {
+  it("should fall back to Twenty's catalog when the application catalog has no matching entry", () => {
+    mockGenerateMessageId.mockReturnValue('creation-date-id');
+    mockI18n._.mockReturnValue('Date de création');
+
+    const result = translateStandardLabel({
+      sourceValue: 'Creation date',
+      applicationCatalog: {},
+      i18nInstance: mockI18n,
+    });
+
+    expect(result).toBe('Date de création');
+  });
+
+  it("should fall back to Twenty's catalog when the application catalog entry is empty", () => {
+    mockGenerateMessageId.mockReturnValue('creation-date-id');
+    mockI18n._.mockReturnValue('Date de création');
+
+    const result = translateStandardLabel({
+      sourceValue: 'Creation date',
+      applicationCatalog: { 'creation-date-id': '' },
+      i18nInstance: mockI18n,
+    });
+
+    expect(result).toBe('Date de création');
+  });
+
+  it('should return the source value when neither catalog has a translation', () => {
     mockGenerateMessageId.mockReturnValue('missing-id');
+    mockI18n._.mockReturnValue('missing-id');
 
     const result = translateStandardLabel({
       sourceValue: 'Company',
-      isStandardApp: false,
       applicationCatalog: {},
       i18nInstance: mockI18n,
     });
@@ -64,7 +86,6 @@ describe('translateStandardLabel', () => {
 
     const result = translateStandardLabel({
       sourceValue: 'Company',
-      isStandardApp: true,
       applicationCatalog: { 'company-id': 'Entreprise' },
       i18nInstance: mockI18n,
     });
@@ -79,13 +100,17 @@ describe('translateStandardLabel', () => {
 
     const result = translateStandardLabel({
       sourceValue: 'Company',
-      isStandardApp: true,
       applicationCatalog: undefined,
       i18nInstance: mockI18n,
     });
 
     expect(result).toBe('Entreprise');
-    expect(mockI18n._).toHaveBeenCalledWith('company-id');
+    expect(mockI18n._).toHaveBeenCalledWith('company-id', {
+      objectLabel: '{objectLabel}',
+      objectLabelSingular: '{objectLabelSingular}',
+      objectLabelPlural: '{objectLabelPlural}',
+      objectIcon: '{objectIcon}',
+    });
   });
 
   it('should return the source value when the standard bundle has no translation', () => {
@@ -94,7 +119,6 @@ describe('translateStandardLabel', () => {
 
     const result = translateStandardLabel({
       sourceValue: 'Company',
-      isStandardApp: true,
       applicationCatalog: undefined,
       i18nInstance: mockI18n,
     });
@@ -102,15 +126,21 @@ describe('translateStandardLabel', () => {
     expect(result).toBe('Company');
   });
 
-  it('should return the source value for a non-standard app without a catalog', () => {
+  it('should translate a label Twenty wrote itself when the application has no catalog', () => {
+    mockGenerateMessageId.mockReturnValue('go-to-id');
+    mockI18n._.mockReturnValue('Aller à {objectLabelPlural}');
+
     const result = translateStandardLabel({
-      sourceValue: 'Company',
-      isStandardApp: false,
+      sourceValue: 'Go to {objectLabelPlural}',
+      context: 'commandMenuItem.label',
       applicationCatalog: undefined,
       i18nInstance: mockI18n,
     });
 
-    expect(result).toBe('Company');
-    expect(mockGenerateMessageId).not.toHaveBeenCalled();
+    expect(result).toBe('Aller à {objectLabelPlural}');
+    expect(mockGenerateMessageId).toHaveBeenCalledWith(
+      'Go to {objectLabelPlural}',
+      'commandMenuItem.label',
+    );
   });
 });

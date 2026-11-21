@@ -1,14 +1,13 @@
 import { type SettingsRolePermissionsSettingPermission } from '@/settings/roles/role-permissions/permission-flags/types/SettingsRolePermissionsSettingPermission';
-import { t } from '@lingui/core/macro';
 import { useMemo } from 'react';
 import {
   IconApps,
-  IconCode,
   IconCreditCard,
   IconHierarchy,
   IconKey,
-  IconLayoutSidebarRightCollapse,
-  IconLockOpen,
+  IconAppWindow,
+  IconLock,
+  IconCode,
   IconSettings,
   IconSettingsAutomation,
   IconShield,
@@ -17,6 +16,7 @@ import {
   IconUsers,
 } from 'twenty-ui/icon';
 import { PermissionFlagType } from '~/generated-metadata/graphql';
+import { useLingui } from '@lingui/react/macro';
 
 type UseSettingsRolePermissionFlagConfigParams = {
   assignmentCapabilities?: {
@@ -29,6 +29,7 @@ type UseSettingsRolePermissionFlagConfigParams = {
 export const useSettingsRolePermissionFlagConfig = ({
   assignmentCapabilities,
 }: UseSettingsRolePermissionFlagConfigParams = {}): SettingsRolePermissionsSettingPermission[] => {
+  const { t } = useLingui();
   const {
     canBeAssignedToAgents = false,
     canBeAssignedToUsers = false,
@@ -41,8 +42,8 @@ export const useSettingsRolePermissionFlagConfig = ({
     const allPermissions: SettingsRolePermissionsSettingPermission[] = [
       {
         key: PermissionFlagType.API_KEYS_AND_WEBHOOKS,
-        name: t`API Keys & Webhooks`,
-        description: t`Manage API keys and webhooks`,
+        name: t`Developers`,
+        description: t`Manage API keys, webhooks, and apps`,
         Icon: IconCode,
         isRelevantForAgents: true,
         isRelevantForApiKeys: true,
@@ -70,7 +71,7 @@ export const useSettingsRolePermissionFlagConfig = ({
         key: PermissionFlagType.ROLES,
         name: t`Roles`,
         description: t`Define user roles and access levels`,
-        Icon: IconLockOpen,
+        Icon: IconLock,
         isRelevantForAgents: true,
         isRelevantForApiKeys: true,
         isRelevantForUsers: true,
@@ -122,8 +123,8 @@ export const useSettingsRolePermissionFlagConfig = ({
       },
       {
         key: PermissionFlagType.APPLICATIONS,
-        name: t`Applications`,
-        description: t`Install and manage applications`,
+        name: t`Workspace Apps`,
+        description: t`Install and manage workspace apps`,
         Icon: IconApps,
         isRelevantForAgents: true,
         isRelevantForApiKeys: true,
@@ -133,7 +134,7 @@ export const useSettingsRolePermissionFlagConfig = ({
         key: PermissionFlagType.LAYOUTS,
         name: t`Layouts`,
         description: t`Customize page layouts and UI structure`,
-        Icon: IconLayoutSidebarRightCollapse,
+        Icon: IconAppWindow,
         isRelevantForAgents: true,
         isRelevantForApiKeys: true,
         isRelevantForUsers: true,
@@ -189,5 +190,6 @@ export const useSettingsRolePermissionFlagConfig = ({
     canBeAssignedToAgents,
     canBeAssignedToUsers,
     canBeAssignedToApiKeys,
+    t,
   ]);
 };

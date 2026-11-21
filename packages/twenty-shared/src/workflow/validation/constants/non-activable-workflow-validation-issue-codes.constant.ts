@@ -1,0 +1,24 @@
+import { type WorkflowValidationIssueCode } from '@/workflow/validation/types/WorkflowValidation';
+
+// Allowed in a draft being edited, but block activation since a run could not proceed through them.
+export const NON_ACTIVABLE_WORKFLOW_VALIDATION_ISSUE_CODES: ReadonlySet<WorkflowValidationIssueCode> =
+  new Set([
+    'MISSING_TRIGGER',
+    'MISSING_TRIGGER_TYPE',
+    'NO_STEPS',
+    'TRIGGER_HAS_NO_NEXT_STEP',
+    'IF_ELSE_INSUFFICIENT_BRANCHES',
+    'ITERATOR_MISSING_LOOP_BODY',
+    'ITERATOR_MISSING_RETURN',
+    'INCOMPLETE_PICK_RECORD_CONFIG',
+    'UPDATE_RECORD_MISSING_FIELDS_TO_UPDATE',
+    'INVALID_RECORD_FILTER_VALUE',
+    'AI_AGENT_MISSING_PROMPT',
+    'AI_AGENT_CONFLICTING_CONFIG',
+    'CONVERSATION_MISSING_KEY',
+    'CLASSIFY_MISSING_STATE',
+    'CLASSIFY_INCOMPLETE_QUESTION',
+    'VARIABLE_INVALID_PATH',
+    'VARIABLE_UNKNOWN_STEP',
+    'VARIABLE_NOT_UPSTREAM',
+  ]);

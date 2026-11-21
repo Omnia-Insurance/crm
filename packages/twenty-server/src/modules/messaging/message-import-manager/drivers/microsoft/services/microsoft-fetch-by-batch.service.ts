@@ -17,6 +17,26 @@ export class MicrosoftFetchByBatchService {
     messageIdsByBatch: string[][];
     batchResponses: MicrosoftGraphBatchResponse[];
   }> {
+    const selectedFields = [
+      'id',
+      'subject',
+      'body',
+      'receivedDateTime',
+      'internetMessageId',
+      'internetMessageHeaders',
+      'conversationId',
+      'parentFolderId',
+      'isDraft',
+      'from',
+      'replyTo',
+      'toRecipients',
+      'ccRecipients',
+      'bccRecipients',
+    ].join(',');
+
+    const expandedFields =
+      'attachments($select=id,name,contentType,size,isInline)';
+
     const batchLimit = 20;
     const batchResponses: MicrosoftGraphBatchResponse[] = [];
     const messageIdsByBatch: string[][] = [];
@@ -33,10 +53,10 @@ export class MicrosoftFetchByBatchService {
       const batchRequests = batchMessageIds.map((messageId, index) => ({
         id: (index + 1).toString(),
         method: 'GET',
-        url: `/me/messages/${messageId}`,
+        url: `/me/messages/${messageId}?$select=${selectedFields}&$expand=${expandedFields}`,
         headers: {
           'Content-Type': 'application/json',
-          Prefer: 'outlook.body-content-type="text"',
+          Prefer: 'outlook.body-content-type="text", IdType="ImmutableId"',
         },
       }));
 

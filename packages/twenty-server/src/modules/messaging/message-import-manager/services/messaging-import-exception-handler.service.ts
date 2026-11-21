@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 import { isDefined } from 'twenty-shared/utils';
 
+import { MAIL_SERVER_CERTIFICATE_INVALID_AUTH_FAILED_REASON } from 'twenty-shared/constants';
 import { MessageChannelSyncStatus } from 'twenty-shared/types';
 import { ExceptionHandlerService } from 'src/engine/core-modules/exception-handler/exception-handler.service';
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
@@ -10,8 +11,8 @@ import {
   ConnectedAccountRefreshAccessTokenExceptionCode,
 } from 'src/engine/metadata-modules/connected-account/exceptions/connected-account-refresh-tokens.exception';
 import {
-  type TwentyORMException,
-  TwentyORMExceptionCode,
+  type TwentyOrmException,
+  TwentyOrmExceptionCode,
 } from 'src/engine/twenty-orm/exceptions/twenty-orm.exception';
 import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
 import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
@@ -44,7 +45,7 @@ export class MessageImportExceptionHandlerService {
     exception:
       | MessageImportDriverException
       | Error
-      | TwentyORMException
+      | TwentyOrmException
       | ConnectedAccountRefreshAccessTokenException,
     syncStep: MessageImportSyncStep,
     messageChannel: Pick<
@@ -71,7 +72,8 @@ export class MessageImportExceptionHandlerService {
             workspaceId,
           );
           break;
-        case TwentyORMExceptionCode.QUERY_READ_TIMEOUT:
+        case TwentyOrmExceptionCode.QUERY_READ_TIMEOUT:
+        case TwentyOrmExceptionCode.TRANSIENT_DATABASE_ERROR:
         case MessageImportDriverExceptionCode.TEMPORARY_ERROR:
         case ConnectedAccountRefreshAccessTokenExceptionCode.TEMPORARY_NETWORK_ERROR:
         case MessageNetworkExceptionCode.ECONNABORTED:
@@ -105,6 +107,16 @@ export class MessageImportExceptionHandlerService {
             messageChannel,
             workspaceId,
           );
+          break;
+        case MessageImportDriverExceptionCode.SERVER_CERTIFICATE_INVALID:
+          await this.messageChannelSyncStatusService.markAsFailed({
+            messageChannelIds: [messageChannel.id],
+            workspaceId,
+            syncStatus:
+              MessageChannelSyncStatus.FAILED_INSUFFICIENT_PERMISSIONS,
+            authFailedReason:
+              MAIL_SERVER_CERTIFICATE_INVALID_AUTH_FAILED_REASON,
+          });
           break;
         case MessageImportDriverExceptionCode.SYNC_CURSOR_ERROR:
           await this.handleSyncCursorErrorException(
@@ -157,11 +169,11 @@ export class MessageImportExceptionHandlerService {
     if (
       messageChannel.throttleFailureCount >= MESSAGING_THROTTLE_MAX_ATTEMPTS
     ) {
-      await this.messageChannelSyncStatusService.markAsFailed(
-        [messageChannel.id],
+      await this.messageChannelSyncStatusService.markAsFailed({
+        messageChannelIds: [messageChannel.id],
         workspaceId,
-        MessageChannelSyncStatus.FAILED_UNKNOWN,
-      );
+        syncStatus: MessageChannelSyncStatus.FAILED_UNKNOWN,
+      });
 
       this.exceptionHandlerService.captureExceptions(
         [
@@ -231,11 +243,11 @@ export class MessageImportExceptionHandlerService {
     messageChannel: Pick<MessageChannelEntity, 'id'>,
     workspaceId: string,
   ): Promise<void> {
-    await this.messageChannelSyncStatusService.markAsFailed(
-      [messageChannel.id],
+    await this.messageChannelSyncStatusService.markAsFailed({
+      messageChannelIds: [messageChannel.id],
       workspaceId,
-      MessageChannelSyncStatus.FAILED_INSUFFICIENT_PERMISSIONS,
-    );
+      syncStatus: MessageChannelSyncStatus.FAILED_INSUFFICIENT_PERMISSIONS,
+    });
   }
 
   private async handleUnknownException(
@@ -251,11 +263,11 @@ export class MessageImportExceptionHandlerService {
       },
       workspace: { id: workspaceId },
     });
-    await this.messageChannelSyncStatusService.markAsFailed(
-      [messageChannel.id],
+    await this.messageChannelSyncStatusService.markAsFailed({
+      messageChannelIds: [messageChannel.id],
       workspaceId,
-      MessageChannelSyncStatus.FAILED_UNKNOWN,
-    );
+      syncStatus: MessageChannelSyncStatus.FAILED_UNKNOWN,
+    });
   }
 
   private async handleNotFoundException(
@@ -264,11 +276,11 @@ export class MessageImportExceptionHandlerService {
     workspaceId: string,
   ): Promise<void> {
     if (syncStep === MessageImportSyncStep.MESSAGE_LIST_FETCH) {
-      await this.messageChannelSyncStatusService.markAsFailed(
-        [messageChannel.id],
+      await this.messageChannelSyncStatusService.markAsFailed({
+        messageChannelIds: [messageChannel.id],
         workspaceId,
-        MessageChannelSyncStatus.FAILED_UNKNOWN,
-      );
+        syncStatus: MessageChannelSyncStatus.FAILED_UNKNOWN,
+      });
 
       this.exceptionHandlerService.captureExceptions(
         [

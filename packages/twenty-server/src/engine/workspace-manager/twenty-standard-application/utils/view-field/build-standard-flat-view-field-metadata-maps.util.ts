@@ -11,8 +11,11 @@ import { computeStandardCalendarEventViewFields } from 'src/engine/workspace-man
 import { computeStandardCallRecordingViewFields } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/compute-standard-call-recording-view-fields.util';
 import { computeStandardCompanyViewFields } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/compute-standard-company-view-fields.util';
 import { computeStandardDashboardViewFields } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/compute-standard-dashboard-view-fields.util';
+import { computeStandardMessageCampaignViewFields } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/compute-standard-message-campaign-view-fields.util';
 import { computeStandardMessageChannelMessageAssociationMessageFolderViewFields } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/compute-standard-message-channel-message-association-message-folder-view-fields.util';
 import { computeStandardMessageChannelMessageAssociationViewFields } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/compute-standard-message-channel-message-association-view-fields.util';
+import { computeStandardMessageListViewFields } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/compute-standard-message-list-view-fields.util';
+import { computeStandardMessageListMemberViewFields } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/compute-standard-message-list-member-view-fields.util';
 import { computeStandardMessageParticipantViewFields } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/compute-standard-message-participant-view-fields.util';
 import { computeStandardMessageThreadViewFields } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/compute-standard-message-thread-view-fields.util';
 import { computeStandardMessageViewFields } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/compute-standard-message-view-fields.util';
@@ -23,10 +26,8 @@ import { computeStandardPersonViewFields } from 'src/engine/workspace-manager/tw
 import { computeStandardTaskTargetViewFields } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/compute-standard-task-target-view-fields.util';
 import { computeStandardTaskViewFields } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/compute-standard-task-view-fields.util';
 import { computeStandardTimelineActivityViewFields } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/compute-standard-timeline-activity-view-fields.util';
-import { computeStandardWorkflowAutomatedTriggerViewFields } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/compute-standard-workflow-automated-trigger-view-fields.util';
 import { computeStandardWorkflowRunViewFields } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/compute-standard-workflow-run-view-fields.util';
 import { computeStandardWorkflowVersionViewFields } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/compute-standard-workflow-version-view-fields.util';
-import { computeStandardWorkflowViewFields } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/compute-standard-workflow-view-fields.util';
 import { computeStandardWorkspaceMemberViewFields } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/compute-standard-workspace-member-view-fields.util';
 import { type CreateStandardViewFieldArgs } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/create-standard-view-field-flat-metadata.util';
 
@@ -45,10 +46,13 @@ const STANDARD_FLAT_VIEW_FIELD_METADATA_BUILDERS_BY_OBJECT_NAME = {
   company: computeStandardCompanyViewFields,
   dashboard: computeStandardDashboardViewFields,
   message: computeStandardMessageViewFields,
+  messageCampaign: computeStandardMessageCampaignViewFields,
   messageChannelMessageAssociation:
     computeStandardMessageChannelMessageAssociationViewFields,
   messageChannelMessageAssociationMessageFolder:
     computeStandardMessageChannelMessageAssociationMessageFolderViewFields,
+  messageList: computeStandardMessageListViewFields,
+  messageListMember: computeStandardMessageListMemberViewFields,
   messageParticipant: computeStandardMessageParticipantViewFields,
   messageThread: computeStandardMessageThreadViewFields,
   note: computeStandardNoteViewFields,
@@ -58,8 +62,6 @@ const STANDARD_FLAT_VIEW_FIELD_METADATA_BUILDERS_BY_OBJECT_NAME = {
   task: computeStandardTaskViewFields,
   taskTarget: computeStandardTaskTargetViewFields,
   timelineActivity: computeStandardTimelineActivityViewFields,
-  workflow: computeStandardWorkflowViewFields,
-  workflowAutomatedTrigger: computeStandardWorkflowAutomatedTriggerViewFields,
   workflowRun: computeStandardWorkflowRunViewFields,
   workflowVersion: computeStandardWorkflowVersionViewFields,
   workspaceMember: computeStandardWorkspaceMemberViewFields,
@@ -75,8 +77,6 @@ export type BuildStandardFlatViewFieldMetadataMapsArgs = Omit<
 export const buildStandardFlatViewFieldMetadataMaps = (
   args: BuildStandardFlatViewFieldMetadataMapsArgs,
 ): FlatEntityMaps<FlatViewField> => {
-  const { flatViewMaps } = args.dependencyFlatEntityMaps;
-
   const allViewFieldMetadatas: FlatViewField[] = (
     Object.keys(
       STANDARD_FLAT_VIEW_FIELD_METADATA_BUILDERS_BY_OBJECT_NAME,
@@ -96,16 +96,8 @@ export const buildStandardFlatViewFieldMetadataMaps = (
   let flatViewFieldMaps = createEmptyFlatEntityMaps();
 
   for (const viewFieldMetadata of allViewFieldMetadatas) {
-    const parentView =
-      flatViewMaps.byUniversalIdentifier[
-        viewFieldMetadata.viewUniversalIdentifier
-      ];
-
     flatViewFieldMaps = addFlatEntityToFlatEntityMapsOrThrow({
-      flatEntity: {
-        ...viewFieldMetadata,
-        isSystemSideEffect: parentView?.isSystemSideEffect ?? false,
-      },
+      flatEntity: viewFieldMetadata,
       flatEntityMaps: flatViewFieldMaps,
     });
   }

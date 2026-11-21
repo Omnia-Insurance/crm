@@ -132,9 +132,8 @@ resolve_pipeline_id() {
   echo "$PIPELINE_ID"
 }
 
-# Trigger one pull with per-trigger date overrides. Returns the placeholder
-# log id from the resolver (used as a unique trigger marker so we can
-# distinguish "our placeholders" from "the worker logs we want to poll").
+# Trigger one pull with per-trigger date overrides. Returns the id of the
+# ingestion log the worker completes for this trigger.
 trigger_pull() {
   local start_iso="$1"
   local end_iso="$2"
@@ -144,8 +143,7 @@ trigger_pull() {
 }
 
 list_recent_logs() {
-  # Pull enough logs to cover up to PARALLELISM batches' worth of placeholders
-  # plus the corresponding worker logs (2x), with headroom for live cadence.
+  # Enough logs to cover one batch's trigger logs, with headroom for live cadence.
   local limit=$((PARALLELISM * 4 + 10))
   gql "{ ingestionLogs(pipelineId: \"$PIPELINE_ID\", limit: $limit) {
           id status triggerType totalRecordsReceived recordsCreated
@@ -216,43 +214,32 @@ echo "Remaining: ${#remaining_chunks[@]}"
 # ---------- Batch processing ----------
 
 # Process a batch of N chunks in parallel. All triggers fire, then we poll
-# for completion of all worker logs that started after our watch timestamp.
+# until the log each trigger returned reaches a terminal status.
 # Returns 0 if all chunks completed, 1 on any failure or timeout.
 process_batch() {
   local batch=("$@")
   local size=${#batch[@]}
 
-  # Capture state before triggering so we can identify NEW worker logs.
   local watch_started_at
   watch_started_at=$(date -u +%s)
-  local known_log_ids
-  known_log_ids=$(list_recent_logs | jq -c 'try [.data.ingestionLogs[].id] catch []' 2>/dev/null)
-  if ! echo "$known_log_ids" | jq -e 'type == "array"' >/dev/null 2>&1; then
-    known_log_ids='[]'
-  fi
 
-  # Trigger all chunks. Each returns a placeholder log id which we add to
-  # known_log_ids so polling only matches worker-created logs.
-  local placeholder_ids=()
+  # The worker completes the log each trigger returns, so poll those ids.
+  local trigger_log_ids=()
   for entry in "${batch[@]}"; do
     IFS='|' read -r chunk_id start_iso end_iso <<< "$entry"
     echo "  [trigger] $start_iso -> $end_iso"
-    local placeholder
-    placeholder=$(trigger_pull "$start_iso" "$end_iso")
-    if [ -z "$placeholder" ]; then
-      echo "    [warn] no placeholder id returned"
-    else
-      placeholder_ids+=("$placeholder")
+    local trigger_log_id
+    trigger_log_id=$(trigger_pull "$start_iso" "$end_iso")
+    if [ -z "$trigger_log_id" ]; then
+      echo "    [error] no log id returned; halting so resume retries this batch" >&2
+      return 1
     fi
+    trigger_log_ids+=("$trigger_log_id")
   done
 
-  # Add placeholders to known set so we don't track them as worker logs.
-  local placeholders_json
-  placeholders_json=$(printf '%s\n' "${placeholder_ids[@]}" | jq -R . | jq -sc .)
-  known_log_ids=$(echo "$known_log_ids $placeholders_json" | jq -sc 'add | unique')
+  local trigger_log_ids_json
+  trigger_log_ids_json=$(printf '%s\n' "${trigger_log_ids[@]}" | jq -R . | jq -sc .)
 
-  # Poll: wait for `size` worker logs (NEW pull logs not in known set,
-  # started after watch_started_at) to reach a terminal status.
   local elapsed=0
   local terminal_logs="[]"
   while [ "$elapsed" -lt "$CHUNK_TIMEOUT" ]; do
@@ -263,14 +250,11 @@ process_batch() {
     logs=$(list_recent_logs)
 
     terminal_logs=$(echo "$logs" | jq -c \
-      --argjson known "$known_log_ids" \
-      --argjson watch "$watch_started_at" \
+      --argjson ids "$trigger_log_ids_json" \
       '
         [.data.ingestionLogs[]
-          | select(.triggerType == "pull")
           | .id as $logId
-          | select(($known | index($logId)) | not)
-          | select(.startedAt | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601 >= ($watch - 15))
+          | select($ids | index($logId))
           | select(.status == "completed" or .status == "failed" or .status == "partial")
         ]
       ' 2>/dev/null)
@@ -301,11 +285,9 @@ process_batch() {
   if [ "$any_failed" -gt 0 ]; then
     echo "    [${elapsed}s] $any_failed of $size chunks FAILED"
     echo "$terminal_logs" | jq '[.[] | select(.status == "failed") | {id, errors}]' >&2
-    # Mark the SUCCESSFUL chunks as completed before returning failure,
-    # so resume picks up where we left off rather than retrying succeeded work.
   fi
 
-  # Aggregate stats across the worker logs.
+  # Aggregate stats across the trigger logs.
   local total_received total_created total_updated total_failed
   total_received=$(echo "$terminal_logs" | jq '[.[] | (.totalRecordsReceived // 0)] | add // 0')
   total_created=$(echo "$terminal_logs" | jq '[.[] | (.recordsCreated // 0)] | add // 0')
@@ -313,11 +295,9 @@ process_batch() {
   total_failed=$(echo "$terminal_logs" | jq '[.[] | (.recordsFailed // 0)] | add // 0')
   echo "    [${elapsed}s] batch done: received=$total_received created=$total_created updated=$total_updated failed=$total_failed"
 
-  # Mark every chunk in the batch as completed.
-  # Caveat: if a specific chunk's pull failed we can't tell which one (we
-  # don't correlate placeholder<->worker logs). For simplicity we mark all
-  # batch chunks completed iff there were no failures; on any failure the
-  # whole batch is considered halted and resume retries them all.
+  # Mark every chunk in the batch as completed iff there were no failures;
+  # on any failure the whole batch is considered halted and resume retries
+  # them all.
   if [ "$any_failed" -gt 0 ]; then
     return 1
   fi

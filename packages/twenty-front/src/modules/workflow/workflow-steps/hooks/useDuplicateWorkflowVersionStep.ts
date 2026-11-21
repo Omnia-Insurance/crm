@@ -1,57 +1,54 @@
+import { useWorkflowEditorMutationErrorHandler } from '@/workflow/hooks/useWorkflowEditorMutationErrorHandler';
+import { useSavePendingWorkflowFlow } from '@/workflow/hooks/useSavePendingWorkflowFlow';
+import { invalidateCoreWorkflowVersions } from '@/object-core/workflows/versions/utils/invalidateCoreWorkflowVersions';
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
-import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
-import { DUPLICATE_WORKFLOW_VERSION_STEP } from '@/workflow/graphql/mutations/duplicateWorkflowVersionStep';
-import { flowComponentState } from '@/workflow/states/flowComponentState';
-import { useUpdateWorkflowVersionCache } from '@/workflow/workflow-steps/hooks/useUpdateWorkflowVersionCache';
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
+import { useApplyWorkflowVersionStepChanges } from '@/workflow/workflow-steps/hooks/useApplyWorkflowVersionStepChanges';
 import { useMutation } from '@apollo/client/react';
-import { isDefined } from 'twenty-shared/utils';
 import {
-  type DuplicateWorkflowVersionStepInput,
-  type DuplicateWorkflowVersionStepMutation,
-  type DuplicateWorkflowVersionStepMutationVariables,
+  DuplicateCoreWorkflowVersionStepDocument,
+  type DuplicateCoreWorkflowVersionStepInput,
 } from '~/generated/graphql';
 
+export type DuplicateWorkflowVersionStepInput = Omit<
+  DuplicateCoreWorkflowVersionStepInput,
+  'coreWorkflowVersionId'
+> & {
+  workflowVersionId: string;
+};
+
 export const useDuplicateWorkflowVersionStep = () => {
+  const { savePendingWorkflowFlow } = useSavePendingWorkflowFlow();
   const apolloCoreClient = useApolloCoreClient();
-
-  const { updateWorkflowVersionCache } = useUpdateWorkflowVersionCache();
-
-  const setFlow = useSetAtomComponentState(flowComponentState);
-  const { enqueueErrorSnackBar } = useSnackBar();
-
-  const [mutate] = useMutation<
-    DuplicateWorkflowVersionStepMutation,
-    DuplicateWorkflowVersionStepMutationVariables
-  >(DUPLICATE_WORKFLOW_VERSION_STEP, {
+  const handleCoreMutationError = useWorkflowEditorMutationErrorHandler();
+  const [mutateCore] = useMutation(DuplicateCoreWorkflowVersionStepDocument, {
     client: apolloCoreClient,
+    onError: handleCoreMutationError,
   });
+
+  const { applyWorkflowVersionStepChanges } =
+    useApplyWorkflowVersionStepChanges();
 
   const duplicateWorkflowVersionStep = async (
     input: DuplicateWorkflowVersionStepInput,
   ) => {
-    const result = await mutate({
-      variables: { input },
-      onError: (error) => {
-        enqueueErrorSnackBar({ apolloError: error });
+    const { workflowVersionId, ...stepInput } = input;
+    await savePendingWorkflowFlow();
+
+    const result = await mutateCore({
+      variables: {
+        input: { ...stepInput, coreWorkflowVersionId: workflowVersionId },
       },
     });
 
     const workflowVersionStepChanges =
       result?.data?.duplicateWorkflowVersionStep;
 
-    const updatedWorkflowVersion = updateWorkflowVersionCache({
+    applyWorkflowVersionStepChanges({
       workflowVersionStepChanges,
-      workflowVersionId: input.workflowVersionId,
+      workflowVersionId,
     });
 
-    if (isDefined(updatedWorkflowVersion)) {
-      setFlow({
-        workflowVersionId: updatedWorkflowVersion.id,
-        trigger: updatedWorkflowVersion.trigger,
-        steps: updatedWorkflowVersion.steps,
-      });
-    }
+    await invalidateCoreWorkflowVersions(apolloCoreClient);
 
     return result;
   };

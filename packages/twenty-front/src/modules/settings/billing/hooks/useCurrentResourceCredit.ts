@@ -17,7 +17,7 @@ export const useCurrentResourceCredit = () => {
   ): BillingPriceLicensed[] => {
     const prices = currentPlan.resourceCreditProducts
       .flatMap((product) => product.prices ?? [])
-      .filter((price): price is BillingPriceLicensed => isDefined(price));
+      .filter(isDefined);
 
     return interval
       ? prices.filter((p) => p.recurringInterval === interval)
@@ -44,6 +44,13 @@ export const useCurrentResourceCredit = () => {
   return {
     currentResourceCreditSubscriptionItem,
     currentResourceCreditBillingPrice,
+    // Subscription item first: an archived package is gone from listPlans but still billed.
+    currentResourceCreditUnitAmount:
+      currentResourceCreditSubscriptionItem?.unitAmount ??
+      currentResourceCreditBillingPrice?.unitAmount,
+    currentResourceCreditAmount:
+      currentResourceCreditSubscriptionItem?.creditAmount ??
+      currentResourceCreditBillingPrice?.creditAmount,
     getResourceCreditPricesByInterval,
   };
 };

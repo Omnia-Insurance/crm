@@ -1,4 +1,9 @@
 import { useMemo } from 'react';
+import { type RecordGqlOperationFilter } from 'twenty-shared/types';
+import {
+  computeRecordGqlOperationFilter,
+  turnAnyFieldFilterIntoRecordGqlFilter,
+} from 'twenty-shared/utils';
 
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { currentRecordFilterGroupsComponentState } from '@/object-record/record-filter-group/states/currentRecordFilterGroupsComponentState';
@@ -7,33 +12,24 @@ import { anyFieldFilterValueComponentState } from '@/object-record/record-filter
 import { currentRecordFiltersComponentState } from '@/object-record/record-filter/states/currentRecordFiltersComponentState';
 import { makeAndFilterVariables } from '@/object-record/utils/makeAndFilterVariables';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
-import { type RecordGqlOperationFilter } from 'twenty-shared/types';
-import {
-  computeRecordGqlOperationFilter,
-  turnAnyFieldFilterIntoRecordGqlFilter,
-} from 'twenty-shared/utils';
 
-type Params = {
+type UseReconciliationActiveFilterParams = {
   viewBarId: string;
   reconciliationId: string;
   reviewItemMetadata: EnrichedObjectMetadataItem;
 };
 
-type Result = {
+type UseReconciliationActiveFilterResult = {
   filter: RecordGqlOperationFilter;
   hasActiveFilters: boolean;
 };
 
-/**
- * Reads native Twenty filter atoms scoped by `viewBarId` and AND-merges them
- * with the per-reconciliation `reconciliationId` filter that always applies.
- * The returned filter is suitable for `useFindManyRecords`.
- */
+// The reviewer's filters, always narrowed to this reconciliation's items.
 export const useReconciliationActiveFilter = ({
   viewBarId,
   reconciliationId,
   reviewItemMetadata,
-}: Params): Result => {
+}: UseReconciliationActiveFilterParams): UseReconciliationActiveFilterResult => {
   const currentRecordFilters = useAtomComponentStateValue(
     currentRecordFiltersComponentState,
     viewBarId,
@@ -52,7 +48,7 @@ export const useReconciliationActiveFilter = ({
   return useMemo(() => {
     const userFilter = computeRecordGqlOperationFilter({
       filterValueDependencies,
-      fieldMetadataItems: reviewItemMetadata.fields,
+      fieldMetadataItems: reviewItemMetadata.readableFields,
       recordFilters: currentRecordFilters,
       recordFilterGroups: currentRecordFilterGroups,
     });
@@ -60,7 +56,7 @@ export const useReconciliationActiveFilter = ({
     const { recordGqlOperationFilter: anyFieldFilter } =
       turnAnyFieldFilterIntoRecordGqlFilter({
         filterValue: anyFieldFilterValue,
-        fields: reviewItemMetadata.fields,
+        fields: reviewItemMetadata.readableFields,
       });
 
     const merged =
@@ -81,7 +77,7 @@ export const useReconciliationActiveFilter = ({
     currentRecordFilterGroups,
     anyFieldFilterValue,
     reconciliationId,
-    reviewItemMetadata.fields,
+    reviewItemMetadata.readableFields,
     filterValueDependencies,
   ]);
 };

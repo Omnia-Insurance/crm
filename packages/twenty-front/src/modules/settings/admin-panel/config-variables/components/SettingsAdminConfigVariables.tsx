@@ -8,18 +8,17 @@ import { configVariableGroupFilterState } from '@/settings/admin-panel/config-va
 import { configVariableSourceFilterState } from '@/settings/admin-panel/config-variables/states/configVariableSourceFilterState';
 import { showHiddenGroupVariablesState } from '@/settings/admin-panel/config-variables/states/showHiddenGroupVariablesState';
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
+import { useLingui } from '@lingui/react/macro';
 import { useMemo, useState } from 'react';
-import { H2Title } from 'twenty-ui/typography';
-import { Section } from 'twenty-ui/layout';
 import { useQuery } from '@apollo/client/react';
 import {
   ConfigSource,
   GetConfigVariablesGroupedDocument,
 } from '~/generated-admin/graphql';
-import { normalizeSearchText } from '~/utils/normalizeSearchText';
 import { ConfigVariableSearchInput } from './ConfigVariableSearchInput';
 import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
+import { Section } from 'twenty-ui/components/layout';
+import { normalizeSearchText } from 'twenty-ui/utilities';
 
 const StyledControlsContainer = styled.div`
   display: flex;
@@ -32,6 +31,8 @@ const StyledTableContainer = styled.div`
 `;
 
 export const SettingsAdminConfigVariables = () => {
+  const { t } = useLingui();
+  const { i18n } = useLingui();
   const apolloAdminClient = useApolloAdminClient();
   const { data: configVariables, loading: configVariablesLoading } = useQuery(
     GetConfigVariablesGroupedDocument,
@@ -63,7 +64,7 @@ export const SettingsAdminConfigVariables = () => {
         label: group.name,
       })),
     ],
-    [allGroups],
+    [allGroups, t],
   );
 
   const allVariables = useMemo(
@@ -88,13 +89,17 @@ export const SettingsAdminConfigVariables = () => {
         normalizeSearchText(v.name).includes(searchTerm) ||
         normalizeSearchText(v.description).includes(searchTerm);
 
-      if (isSearching && !matchesSearch) return false;
+      if (isSearching && !matchesSearch) {
+        return false;
+      }
 
       const matchesGroup = hasSelectedSpecificGroup
         ? v.groupName === configVariableGroupFilter
         : true;
 
-      if (hasSelectedSpecificGroup && !matchesGroup) return false;
+      if (hasSelectedSpecificGroup && !matchesGroup) {
+        return false;
+      }
 
       if (
         !isSearching &&
@@ -106,12 +111,15 @@ export const SettingsAdminConfigVariables = () => {
       }
 
       let matchesSource = true;
-      if (configVariableSourceFilter === 'database')
+      if (configVariableSourceFilter === 'database') {
         matchesSource = v.source === ConfigSource.DATABASE;
-      if (configVariableSourceFilter === 'environment')
+      }
+      if (configVariableSourceFilter === 'environment') {
         matchesSource = v.source === ConfigSource.ENVIRONMENT;
-      if (configVariableSourceFilter === 'default')
+      }
+      if (configVariableSourceFilter === 'default') {
         matchesSource = v.source === ConfigSource.DEFAULT;
+      }
 
       return matchesSource;
     });
@@ -125,11 +133,12 @@ export const SettingsAdminConfigVariables = () => {
 
   const activeChips = [];
   if (configVariableSourceFilter !== 'all') {
+    const sourceLabel = CONFIG_VARIABLE_SOURCE_OPTIONS.find(
+      (option) => option.value === configVariableSourceFilter,
+    )?.label;
+
     activeChips.push({
-      label:
-        CONFIG_VARIABLE_SOURCE_OPTIONS.find(
-          (o) => o.value === configVariableSourceFilter,
-        )?.label || '',
+      label: sourceLabel ? i18n._(sourceLabel) : '',
       onRemove: () => setConfigVariableSourceFilter('all'),
       variant: 'default' as const,
     });
@@ -165,8 +174,8 @@ export const SettingsAdminConfigVariables = () => {
 
   return (
     <>
-      <Section>
-        <H2Title title={t`Config Variables`} />
+      <Section.Root>
+        <Section.Header title={t`Config Variables`} />
 
         <ConfigVariableFilterContainer activeChips={activeChips}>
           <StyledControlsContainer>
@@ -182,20 +191,23 @@ export const SettingsAdminConfigVariables = () => {
             />
           </StyledControlsContainer>
         </ConfigVariableFilterContainer>
-      </Section>
+      </Section.Root>
       {groupedVariables.size === 0 && (
         <StyledTableContainer>
-          <Section>
-            <H2Title
+          <Section.Root>
+            <Section.Header
               title={t`No variables found`}
               description={t`No config variables match your current filters. Try adjusting your filters or search criteria.`}
             />
-          </Section>
+          </Section.Root>
         </StyledTableContainer>
       )}
       {[...groupedVariables.entries()].map(([groupName, groupData]) => (
         <StyledTableContainer key={groupName}>
-          <H2Title title={groupName} description={groupData.description} />
+          <Section.Header
+            title={groupName}
+            description={groupData.description}
+          />
 
           <SettingsAdminConfigVariablesTable variables={groupData.variables} />
         </StyledTableContainer>

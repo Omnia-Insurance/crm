@@ -1,0 +1,165 @@
+import { useWorkspaceRouteObjects } from '@/app/routing/components/WorkspaceRouteObjectsProvider';
+import { RouteContextStoreCoreObjectNameEffect } from '@/context-store/components/RouteContextStoreCoreObjectNameEffect';
+import { RouteContextStoreProviderEffect } from '@/context-store/components/RouteContextStoreProviderEffect';
+import { metadataStoreState } from '@/metadata-store/states/metadataStoreState';
+import { useIsSettingsPage } from '@/navigation/hooks/useIsSettingsPage';
+import { useLastVisitedView } from '@/navigation/hooks/useLastVisitedView';
+import { objectMetadataItemsSelector } from '@/object-metadata/states/objectMetadataItemsSelector';
+import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { viewsSelector } from '@/views/states/selectors/viewsSelector';
+import { computeObjectViewTargetIds } from '@/views/utils/computeObjectViewTargetIds';
+import { isUsableLastVisitedView } from '@/views/utils/isUsableLastVisitedView';
+import { matchRoutes, useLocation, useSearchParams } from 'react-router-dom';
+import { AppPath, StandardObjectNameSingular } from 'twenty-shared/types';
+import { isDefined } from 'twenty-shared/utils';
+import { ViewType } from '~/generated-metadata/graphql';
+import { isMatchingLocation } from '~/utils/isMatchingLocation';
+
+const getViewId = ({
+  viewIdFromQueryParams,
+  indexViewId,
+  lastVisitedViewId,
+  firstSelectableViewId,
+}: {
+  viewIdFromQueryParams: string | null;
+  indexViewId?: string;
+  lastVisitedViewId?: string;
+  firstSelectableViewId?: string;
+}) => {
+  if (isDefined(viewIdFromQueryParams)) {
+    return viewIdFromQueryParams;
+  }
+
+  if (isDefined(lastVisitedViewId)) {
+    return lastVisitedViewId;
+  }
+
+  if (isDefined(firstSelectableViewId)) {
+    return firstSelectableViewId;
+  }
+
+  if (isDefined(indexViewId)) {
+    return indexViewId;
+  }
+
+  return undefined;
+};
+
+export const RouteContextStoreProvider = () => {
+  const location = useLocation();
+  const routeObjects = useWorkspaceRouteObjects();
+  const isCoreWorkflowIndexPage = isMatchingLocation(
+    location,
+    AppPath.WorkflowIndexPage,
+  );
+  const isRecordIndexPage =
+    isCoreWorkflowIndexPage ||
+    isMatchingLocation(location, AppPath.RecordIndexPage);
+  const isCoreWorkflowShowPage = isMatchingLocation(
+    location,
+    AppPath.WorkflowCoreShowPage,
+  );
+  const isCoreWorkflowPage = isCoreWorkflowIndexPage || isCoreWorkflowShowPage;
+  const routeParams = matchRoutes(routeObjects, location)?.at(-1)?.params;
+  // The chat page and the whole inbox act on chats: the chat on screen, or
+  // the chats selected in the inbox list
+  const isAiChatPage =
+    isMatchingLocation(location, AppPath.AiChat) ||
+    isMatchingLocation(location, AppPath.AiChatInbox);
+  const isRecordShowPage =
+    isCoreWorkflowShowPage ||
+    isAiChatPage ||
+    isMatchingLocation(location, AppPath.RecordShowPage);
+  const isStandalonePage = isMatchingLocation(location, AppPath.PageLayoutPage);
+  const isCoreAgentPage =
+    isMatchingLocation(location, AppPath.AgentIndexPage) ||
+    isMatchingLocation(location, AppPath.AgentShowPage);
+  const isSettingsPage = useIsSettingsPage();
+
+  const objectNamePlural = routeParams?.objectNamePlural;
+  const objectNameSingular = isAiChatPage
+    ? StandardObjectNameSingular.AgentChatThread
+    : routeParams?.objectNameSingular;
+
+  const [searchParams] = useSearchParams();
+  const viewIdQueryParamRaw = searchParams.get('viewId');
+
+  const objectMetadataItems = useAtomStateValue(objectMetadataItemsSelector);
+  const metadataStore = useAtomFamilyStateValue(metadataStoreState, 'views');
+  const views = useAtomStateValue(viewsSelector);
+
+  const objectMetadataItem = objectMetadataItems.find(
+    (objectMetadataItem) =>
+      objectMetadataItem.namePlural === objectNamePlural ||
+      objectMetadataItem.nameSingular === objectNameSingular,
+  );
+
+  const { getLastVisitedViewIdFromObjectNamePlural } = useLastVisitedView();
+
+  const viewIdQueryParamView = views.find(
+    (view) =>
+      view.id === viewIdQueryParamRaw &&
+      view.objectMetadataId === objectMetadataItem?.id,
+  );
+
+  const viewIdQueryParam =
+    isDefined(viewIdQueryParamView) &&
+    viewIdQueryParamView.type !== ViewType.FIELDS_WIDGET
+      ? viewIdQueryParamRaw
+      : null;
+
+  const lastVisitedViewIdRaw = getLastVisitedViewIdFromObjectNamePlural(
+    objectMetadataItem?.namePlural ?? '',
+  );
+
+  const lastVisitedView = views.find(
+    (view) => view.id === lastVisitedViewIdRaw,
+  );
+
+  const lastVisitedViewId = isUsableLastVisitedView({
+    lastVisitedView,
+  })
+    ? lastVisitedViewIdRaw
+    : undefined;
+
+  const { firstSelectableViewId, indexViewId } = computeObjectViewTargetIds({
+    views,
+    objectMetadataId: objectMetadataItem?.id,
+  });
+
+  const viewId = getViewId({
+    viewIdFromQueryParams: viewIdQueryParam,
+    indexViewId,
+    lastVisitedViewId,
+    firstSelectableViewId,
+  });
+
+  const shouldComputeContextStore =
+    (isRecordIndexPage ||
+      isRecordShowPage ||
+      isStandalonePage ||
+      isSettingsPage ||
+      isCoreAgentPage) &&
+    metadataStore.status === 'up-to-date';
+
+  const coreObjectName =
+    isCoreWorkflowIndexPage || isCoreWorkflowShowPage ? 'workflow' : null;
+
+  // Set on every route: pages without a context store (e.g. /agents) must not keep a previous core object.
+  return (
+    <>
+      <RouteContextStoreCoreObjectNameEffect coreObjectName={coreObjectName} />
+      {shouldComputeContextStore && (
+        <RouteContextStoreProviderEffect
+          viewId={isCoreWorkflowPage || isAiChatPage ? undefined : viewId}
+          objectMetadataItem={objectMetadataItem}
+          isRecordIndexPage={isRecordIndexPage}
+          isRecordShowPage={isRecordShowPage}
+          isStandalonePage={isStandalonePage}
+          isSettingsPage={isSettingsPage}
+        />
+      )}
+    </>
+  );
+};

@@ -1,13 +1,10 @@
+import { getDefaultObjectPermissions } from '@/object-metadata/utils/getDefaultObjectPermissions';
 import { isObjectMetadataReadOnly } from '@/object-record/read-only/utils/isObjectMetadataReadOnly';
 
 describe('isObjectMetadataReadOnly', () => {
   it('should return false if object can be updated and is not UI read only and is not remote', () => {
     const result = isObjectMetadataReadOnly({
-      objectPermissions: {
-        canUpdateObjectRecords: true,
-        objectMetadataId: '123',
-        restrictedFields: {},
-      },
+      objectPermissions: getDefaultObjectPermissions(),
       objectMetadataItem: {
         isUIEditable: true,
         isRemote: false,
@@ -20,9 +17,8 @@ describe('isObjectMetadataReadOnly', () => {
   it('should return true if object cannot be updated and is not UI read only and is not remote', () => {
     const result = isObjectMetadataReadOnly({
       objectPermissions: {
-        canUpdateObjectRecords: false,
-        objectMetadataId: '123',
-        restrictedFields: {},
+        ...getDefaultObjectPermissions(),
+        canUpdateAllRecords: false,
       },
       objectMetadataItem: {
         isUIEditable: true,
@@ -35,11 +31,7 @@ describe('isObjectMetadataReadOnly', () => {
 
   it('should return true if object metadata is UI read only', () => {
     const result = isObjectMetadataReadOnly({
-      objectPermissions: {
-        canUpdateObjectRecords: true,
-        objectMetadataId: '123',
-        restrictedFields: {},
-      },
+      objectPermissions: getDefaultObjectPermissions(),
       objectMetadataItem: {
         isUIEditable: false,
         isRemote: false,
@@ -51,11 +43,7 @@ describe('isObjectMetadataReadOnly', () => {
 
   it('should return true if object metadata is remote', () => {
     const result = isObjectMetadataReadOnly({
-      objectPermissions: {
-        canUpdateObjectRecords: true,
-        objectMetadataId: '123',
-        restrictedFields: {},
-      },
+      objectPermissions: getDefaultObjectPermissions(),
       objectMetadataItem: {
         isUIEditable: true,
         isRemote: true,
@@ -65,22 +53,9 @@ describe('isObjectMetadataReadOnly', () => {
     expect(result).toBe(true);
   });
 
-  it('should return false if object is managed by application', () => {
+  it('should return false without object permissions when the object is OPEN', () => {
     const result = isObjectMetadataReadOnly({
       objectMetadataItem: {
-        applicationId: 'applicationId',
-        isUIEditable: true,
-        isRemote: false,
-      },
-    });
-
-    expect(result).toBe(false);
-  });
-
-  it('should return false if object is custom', () => {
-    const result = isObjectMetadataReadOnly({
-      objectMetadataItem: {
-        applicationId: undefined,
         isUIEditable: true,
         isRemote: false,
       },

@@ -1,44 +1,47 @@
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
+import { isNonEmptyString, isNumber } from '@sniptt/guards';
 import { useState } from 'react';
-import { H2Title } from 'twenty-ui/typography';
-import { Button } from 'twenty-ui/input';
-import { Section } from 'twenty-ui/layout';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { doNotTranslate } from 'twenty-shared/i18n';
+import { isDefined, isPlainObject } from 'twenty-shared/utils';
+import { useToast } from 'twenty-ui/components/feedback';
+import { Section } from 'twenty-ui/components/layout';
+import { Button } from 'twenty-ui/primitives/input';
+import { themeCssVariables } from 'twenty-ui/theme';
 
+import { getToastOptionsFromError } from '@/error-handler/utils/getToastOptionsFromError';
 import { useIngestionPipelineTest } from '@/settings/ingestion-pipeline/hooks/useIngestionPipelineTest';
+import { TextArea } from '@/ui/input/components/TextArea';
+import { type TestIngestionPipelineMutation } from '~/generated-metadata/graphql';
 
 type IngestionTestSectionProps = {
   pipelineId: string;
 };
 
-const StyledTextarea = styled.textarea`
-  background: ${themeCssVariables.background.primary};
-  border: 1px solid ${themeCssVariables.border.color.medium};
-  border-radius: ${themeCssVariables.border.radius.sm};
-  box-sizing: border-box;
-  color: ${themeCssVariables.font.color.primary};
-  font-family: monospace;
-  font-size: ${themeCssVariables.font.size.sm};
-  min-height: 120px;
-  padding: ${themeCssVariables.spacing[3]};
-  resize: vertical;
-  width: 100%;
+type TestIngestionPipelineResult =
+  TestIngestionPipelineMutation['testIngestionPipeline'];
 
-  &:focus {
-    border-color: ${themeCssVariables.color.blue};
-    outline: none;
-  }
-
-  &::placeholder {
-    color: ${themeCssVariables.font.color.light};
-  }
-`;
+const SAMPLE_RECORDS_PLACEHOLDER = doNotTranslate(
+  '[{"first_name": "John", "last_name": "Doe", "email": "john@example.com"}]',
+);
 
 const StyledButtonRow = styled.div`
   display: flex;
   justify-content: flex-end;
   padding-top: ${themeCssVariables.spacing[2]};
+`;
+
+const StyledParseError = styled.div`
+  color: ${themeCssVariables.font.color.danger};
+  font-size: ${themeCssVariables.font.size.sm};
+  margin-top: ${themeCssVariables.spacing[1]};
+`;
+
+const StyledResultContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: ${themeCssVariables.spacing[2]};
+  margin-top: ${themeCssVariables.spacing[3]};
 `;
 
 const StyledResultSummary = styled.div`
@@ -53,8 +56,9 @@ const StyledPreviewBlock = styled.pre`
   background: ${themeCssVariables.background.tertiary};
   border-radius: ${themeCssVariables.border.radius.sm};
   color: ${themeCssVariables.font.color.primary};
+  font-family: ${themeCssVariables.code.font.family};
   font-size: ${themeCssVariables.font.size.sm};
-  margin: ${themeCssVariables.spacing[1]} 0;
+  margin: 0;
   overflow-x: auto;
   padding: ${themeCssVariables.spacing[3]};
   white-space: pre-wrap;
@@ -64,55 +68,45 @@ const StyledPreviewBlock = styled.pre`
 const StyledErrorItem = styled.div`
   background: ${themeCssVariables.background.danger};
   border-radius: ${themeCssVariables.border.radius.sm};
-  color: ${themeCssVariables.color.red};
+  color: ${themeCssVariables.font.color.danger};
   font-size: ${themeCssVariables.font.size.sm};
-  margin-top: ${themeCssVariables.spacing[1]};
   padding: ${themeCssVariables.spacing[2]};
 `;
 
-const StyledResultContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: ${themeCssVariables.spacing[2]};
-  margin-top: ${themeCssVariables.spacing[3]};
-`;
+const parseSampleRecords = (
+  sampleJson: string,
+): Record<string, unknown>[] | null => {
+  try {
+    const parsedValue: unknown = JSON.parse(sampleJson);
+    const sampleRecords: unknown[] = Array.isArray(parsedValue)
+      ? parsedValue
+      : [parsedValue];
 
-const StyledParseError = styled.div`
-  color: ${themeCssVariables.color.red};
-  font-size: ${themeCssVariables.font.size.sm};
-  margin-top: ${themeCssVariables.spacing[1]};
-`;
-
-type TestResult = {
-  success: boolean;
-  totalRecords: number;
-  validRecords: number;
-  invalidRecords: number;
-  previewRecords: Record<string, unknown>[] | null;
-  errors: Record<string, unknown>[] | null;
+    return sampleRecords.every(isPlainObject) ? sampleRecords : null;
+  } catch {
+    return null;
+  }
 };
 
 export const IngestionTestSection = ({
   pipelineId,
 }: IngestionTestSectionProps) => {
   const { t } = useLingui();
+  const { enqueueToast } = useToast();
   const { testPipeline, isTestRunning } = useIngestionPipelineTest();
 
   const [sampleJson, setSampleJson] = useState('');
   const [parseError, setParseError] = useState<string | null>(null);
-  const [testResult, setTestResult] = useState<TestResult | null>(null);
+  const [testResult, setTestResult] =
+    useState<TestIngestionPipelineResult | null>(null);
 
   const handleRunTest = async () => {
     setParseError(null);
     setTestResult(null);
 
-    let parsed: Record<string, unknown>[];
+    const sampleRecords = parseSampleRecords(sampleJson);
 
-    try {
-      const value = JSON.parse(sampleJson);
-
-      parsed = Array.isArray(value) ? value : [value];
-    } catch {
+    if (!isDefined(sampleRecords)) {
       setParseError(
         t`Invalid JSON. Please enter a valid JSON array or object.`,
       );
@@ -120,50 +114,69 @@ export const IngestionTestSection = ({
       return;
     }
 
-    const result = await testPipeline(pipelineId, parsed);
-
-    setTestResult(result);
+    try {
+      setTestResult(await testPipeline(pipelineId, sampleRecords));
+    } catch (error) {
+      enqueueToast(getToastOptionsFromError({ error }));
+    }
   };
 
+  const validRecords = testResult?.validRecords ?? 0;
+  const invalidRecords = testResult?.invalidRecords ?? 0;
+  const totalRecords = testResult?.totalRecords ?? 0;
+
   return (
-    <Section>
-      <H2Title
-        title={t`Test Pipeline`}
+    <Section.Root>
+      <Section.Header
+        title={t`Test pipeline`}
         description={t`Paste sample JSON data to preview how records will be transformed`}
       />
-      <StyledTextarea
-        placeholder={t`[{"first_name": "John", "last_name": "Doe", "email": "john@example.com"}]`}
+      <TextArea
+        textAreaId="ingestion-pipeline-test-sample-json"
+        placeholder={SAMPLE_RECORDS_PLACEHOLDER}
+        minRows={5}
+        maxRows={15}
         value={sampleJson}
-        onChange={(e) => setSampleJson(e.target.value)}
+        onChange={setSampleJson}
       />
-      {parseError && <StyledParseError>{parseError}</StyledParseError>}
+      {isNonEmptyString(parseError) && (
+        <StyledParseError>{parseError}</StyledParseError>
+      )}
       <StyledButtonRow>
         <Button
-          title={isTestRunning ? t`Running...` : t`Run Test`}
-          variant="secondary"
-          size="small"
+          size="sm"
+          variant="outline"
+          loading={isTestRunning}
+          disabled={!isNonEmptyString(sampleJson.trim())}
           onClick={handleRunTest}
-          disabled={!sampleJson.trim() || isTestRunning}
-        />
+        >{t`Run test`}</Button>
       </StyledButtonRow>
-      {testResult && (
+      {isDefined(testResult) && (
         <StyledResultContainer>
           <StyledResultSummary>
-            {t`${testResult.validRecords} valid, ${testResult.invalidRecords} invalid out of ${testResult.totalRecords} records`}
+            {t`${validRecords} valid, ${invalidRecords} invalid out of ${totalRecords} records`}
           </StyledResultSummary>
-          {testResult.previewRecords?.map((record, index) => (
+          {testResult.previewRecords?.map((previewRecord, index) => (
             <StyledPreviewBlock key={index}>
-              {JSON.stringify(record, null, 2)}
+              {JSON.stringify(previewRecord, null, 2)}
             </StyledPreviewBlock>
           ))}
-          {testResult.errors?.map((error, index) => (
-            <StyledErrorItem key={index}>
-              {t`Record ${(error.recordIndex as number) ?? index}`}:{' '}
-              {(error.message as string) ?? t`Unknown error`}
-            </StyledErrorItem>
-          ))}
+          {testResult.errors?.map((testError, index) => {
+            const recordIndex = isNumber(testError?.recordIndex)
+              ? testError.recordIndex
+              : index;
+            const errorMessage = isNonEmptyString(testError?.message)
+              ? testError.message
+              : t`Unknown error`;
+
+            return (
+              <StyledErrorItem key={index}>
+                {t`Record ${recordIndex}: ${errorMessage}`}
+              </StyledErrorItem>
+            );
+          })}
         </StyledResultContainer>
       )}
-    </Section>
+    </Section.Root>
   );
 };

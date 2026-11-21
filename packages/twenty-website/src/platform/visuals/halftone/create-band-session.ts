@@ -187,7 +187,7 @@ function getMeshFootprintScale({
 
 // The band-variant model scene: transmission material (solid or glass),
 // breathe/float/rotate-preset/spring/parallax animation, per-frame mesh
-// footprint, blur chain, band dash composite. Ported from the old
+// footprint, band dash composite. Ported from the old
 // HalftoneCanvas shape mode.
 export async function createBandSession({
   container,
@@ -291,8 +291,8 @@ export async function createBandSession({
         value: new THREE.Vector2(getVirtualWidth(), getVirtualHeight()),
       },
       tile: { value: halftoneSettings.scale },
-      s_3: { value: halftoneSettings.power },
-      s_4: { value: halftoneSettings.width },
+      halftonePower: { value: halftoneSettings.power },
+      halftoneWidth: { value: halftoneSettings.width },
       applyToDarkAreas: {
         value: halftoneSettings.toneTarget === 'dark' ? 1 : 0,
       },

@@ -8,13 +8,25 @@ import {
   email,
   mocks,
   password,
+  queries,
   results,
   token,
 } from '@/auth/hooks/__mocks__/useAuth';
+import { affiliatePartnerNameState } from '@/auth/states/affiliatePartnerNameState';
+import { isEmailVerificationRequiredState } from '@/client-config/states/isEmailVerificationRequiredState';
+import {
+  type CurrentUser,
+  currentUserState,
+} from '@/auth/states/currentUserState';
+import {
+  type CurrentWorkspace,
+  currentWorkspaceState,
+} from '@/auth/states/currentWorkspaceState';
 import { returnToPathState } from '@/auth/states/returnToPathState';
-import { SnackBarComponentInstanceContext } from '@/ui/feedback/snack-bar-manager/contexts/SnackBarComponentInstanceContext';
-import { renderHook } from '@testing-library/react';
+import { renderHook, waitFor } from '@testing-library/react';
 import { getDefaultStore } from 'jotai';
+import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
+import { ToastProvider } from 'twenty-ui/components/feedback';
 
 const redirectSpy = jest.fn();
 
@@ -60,14 +72,18 @@ jest.mock('@/domain-manager/hooks/useLastAuthenticatedWorkspaceDomain', () => ({
   })),
 }));
 
+// OMNIA-CUSTOM: sign-out must finish wiping the IndexedDB metadata store
+const mockClearMetadataStoreStorage = jest.fn();
+
+jest.mock('@/metadata-store/storage/metadataStoreStorage', () => ({
+  ...jest.requireActual('@/metadata-store/storage/metadataStoreStorage'),
+  clearMetadataStoreStorage: () => mockClearMetadataStoreStorage(),
+}));
+
 const Wrapper = ({ children }: { children: ReactNode }) => (
   <MockedProvider mocks={Object.values(mocks)}>
     <MemoryRouter>
-      <SnackBarComponentInstanceContext.Provider
-        value={{ instanceId: 'test-instance-id' }}
-      >
-        {children}
-      </SnackBarComponentInstanceContext.Provider>
+      <ToastProvider>{children}</ToastProvider>
     </MemoryRouter>
   </MockedProvider>
 );
@@ -88,6 +104,8 @@ describe('useAuth', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     getDefaultStore().set(returnToPathState.atom, '');
+    getDefaultStore().set(affiliatePartnerNameState.atom, null);
+    getDefaultStore().set(isEmailVerificationRequiredState.atom, false);
   });
 
   it('should return login token object', async () => {
@@ -184,6 +202,13 @@ describe('useAuth', () => {
 
   it('should handle sign-out', async () => {
     sessionStorage.setItem('lingering-key', 'should-be-cleared');
+    getDefaultStore().set(currentWorkspaceState.atom, {
+      id: 'workspace-id',
+      activationStatus: WorkspaceActivationStatus.SUSPENDED,
+    } as CurrentWorkspace);
+    getDefaultStore().set(currentUserState.atom, {
+      id: 'user-id',
+    } as CurrentUser);
 
     const { result } = renderHooks();
 
@@ -192,6 +217,80 @@ describe('useAuth', () => {
     });
 
     expect(sessionStorage.length).toBe(0);
+    expect(getDefaultStore().get(currentWorkspaceState.atom)).toBeNull();
+    expect(getDefaultStore().get(currentUserState.atom)).toBeNull();
+  });
+
+  // OMNIA-CUSTOM: RLS predicates, roles and view filters must not stay at rest
+  it('should wipe the metadata store before the sign-out reload', async () => {
+    let finishMetadataStoreClear: () => void = () => {};
+
+    mockClearMetadataStoreStorage.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finishMetadataStoreClear = resolve;
+      }),
+    );
+    localStorage.setItem('metadataStoreState__roles', '[]');
+    getDefaultStore().set(currentUserState.atom, {
+      id: 'user-id',
+    } as CurrentUser);
+
+    const { result } = renderHooks();
+
+    let signOutPromise: Promise<void> = Promise.resolve();
+
+    act(() => {
+      signOutPromise = result.current.signOut();
+    });
+
+    await waitFor(() =>
+      expect(mockClearMetadataStoreStorage).toHaveBeenCalledTimes(1),
+    );
+
+    expect(getDefaultStore().get(currentUserState.atom)).not.toBeNull();
+
+    await act(async () => {
+      finishMetadataStoreClear();
+      await signOutPromise;
+    });
+
+    expect(getDefaultStore().get(currentUserState.atom)).toBeNull();
+    expect(localStorage.getItem('metadataStoreState__roles')).toBeNull();
+  });
+
+  // OMNIA-CUSTOM: trusted https sibling URL (omniaagent.com dashboard)
+  it('should forward a trusted https sibling returnToPath over an app path', async () => {
+    getDefaultStore().set(returnToPathState.atom, '/objects/people');
+
+    const { result } = renderHooks();
+
+    await act(async () => {
+      await result.current.signInWithGoogle({
+        action: 'list-available-workspaces',
+        returnToPath: 'https://localhost/retention',
+      });
+    });
+
+    const calledWithUrl = redirectSpy.mock.calls[0]?.[0] as string;
+
+    expect(new URL(calledWithUrl).searchParams.get('returnToPath')).toBe(
+      'https://localhost/retention',
+    );
+  });
+
+  it('should not forward an http sibling returnToPath', async () => {
+    const { result } = renderHooks();
+
+    await act(async () => {
+      await result.current.signInWithMicrosoft({
+        action: 'list-available-workspaces',
+        returnToPath: 'http://localhost/retention',
+      });
+    });
+
+    const calledWithUrl = redirectSpy.mock.calls[0]?.[0] as string;
+
+    expect(new URL(calledWithUrl).searchParams.has('returnToPath')).toBe(false);
   });
 
   it('should handle credential sign-up', async () => {
@@ -205,5 +304,64 @@ describe('useAuth', () => {
     });
 
     expect(mocks.signUpInWorkspace.result).toHaveBeenCalled();
+  });
+
+  it('should send the stored partner with a credential sign-up', async () => {
+    getDefaultStore().set(affiliatePartnerNameState.atom, {
+      partner: 'northwind',
+    });
+    getDefaultStore().set(isEmailVerificationRequiredState.atom, true);
+
+    const signUpResult = jest.fn(() => ({
+      data: {
+        signUp: {
+          __typename: 'AvailableWorkspacesAndAccessTokens',
+          availableWorkspaces: {
+            __typename: 'AvailableWorkspaces',
+            availableWorkspacesForSignIn: [],
+            availableWorkspacesForSignUp: [],
+          },
+          tokens: {
+            __typename: 'AuthTokenPair',
+            accessOrWorkspaceAgnosticToken: {
+              __typename: 'AuthToken',
+              token,
+              expiresAt: 'expiresAt',
+            },
+            refreshToken: {
+              __typename: 'AuthToken',
+              token,
+              expiresAt: 'expiresAt',
+            },
+          },
+        },
+      },
+    }));
+
+    const { result } = renderHook(() => useAuth(), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <MockedProvider
+          mocks={[
+            {
+              request: { query: queries.signup, variables: () => true },
+              result: signUpResult,
+            },
+          ]}
+        >
+          <MemoryRouter>
+            <ToastProvider>{children}</ToastProvider>
+          </MemoryRouter>
+        </MockedProvider>
+      ),
+    });
+
+    await act(async () => {
+      await result.current.signUpWithCredentials(email, password);
+    });
+
+    expect(signUpResult).toHaveBeenCalledTimes(1);
+    expect(signUpResult).toHaveBeenCalledWith(
+      expect.objectContaining({ email, affiliatePartnerName: 'northwind' }),
+    );
   });
 });

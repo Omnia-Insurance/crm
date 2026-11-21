@@ -1,4 +1,3 @@
-import { AdvancedSettingsWrapper } from '@/settings/components/AdvancedSettingsWrapper';
 import { SettingsNavigationDrawerItem } from '@/settings/components/SettingsNavigationDrawerItem';
 import {
   type SettingsNavigationItem,
@@ -10,7 +9,7 @@ import { NavigationDrawerItemGroup } from '@/ui/navigation/navigation-drawer/com
 import { getNavigationSubItemLeftAdornment } from '@/ui/navigation/navigation-drawer/utils/getNavigationSubItemLeftAdornment';
 import { styled } from '@linaria/react';
 import { matchPath, resolvePath, useLocation } from 'react-router-dom';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
 import { getSettingsPath } from 'twenty-shared/utils';
 
 const StyledSectionsContainer = styled.div`
@@ -114,15 +113,6 @@ export const SettingsNavigationDrawerItems = () => {
             key={section.label}
             sectionId={`settings/${section.label}`}
             label={section.label}
-            wrapTitle={
-              section.isAdvanced
-                ? (titleNode) => (
-                    <AdvancedSettingsWrapper hideDot>
-                      {titleNode}
-                    </AdvancedSettingsWrapper>
-                  )
-                : undefined
-            }
           >
             {section.items.map((item, index) =>
               renderSectionItem(

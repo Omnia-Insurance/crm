@@ -1,5 +1,4 @@
 import { type RowLevelPermissionPredicateManifest } from 'twenty-shared/application';
-import { RowLevelPermissionPredicateScope } from 'twenty-shared/types';
 
 import { type UniversalFlatRowLevelPermissionPredicate } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/types/universal-flat-row-level-permission-predicate.type';
 
@@ -24,8 +23,8 @@ export const fromRowLevelPermissionPredicateManifestToUniversalFlatRowLevelPermi
         rowLevelPermissionPredicateManifest.objectUniversalIdentifier,
       fieldMetadataUniversalIdentifier:
         rowLevelPermissionPredicateManifest.fieldUniversalIdentifier,
+      relationFieldMetadataUniversalIdentifier: null,
       operand: rowLevelPermissionPredicateManifest.operand,
-      scope: RowLevelPermissionPredicateScope.ALL,
       value: rowLevelPermissionPredicateManifest.value ?? null,
       subFieldName: rowLevelPermissionPredicateManifest.subFieldName ?? null,
       workspaceMemberFieldMetadataUniversalIdentifier:
@@ -36,6 +35,7 @@ export const fromRowLevelPermissionPredicateManifestToUniversalFlatRowLevelPermi
       rowLevelPermissionPredicateGroupUniversalIdentifier:
         rowLevelPermissionPredicateManifest.predicateGroupUniversalIdentifier ??
         null,
+      rowLevelPermissionRuleUniversalIdentifier: null,
       positionInRowLevelPermissionPredicateGroup:
         rowLevelPermissionPredicateManifest.position ?? null,
       createdAt: now,

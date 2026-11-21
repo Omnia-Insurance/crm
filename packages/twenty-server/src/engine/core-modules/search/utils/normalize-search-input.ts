@@ -1,24 +1,32 @@
-const PHONE_FORMATTING_CHARS = /[().\-\s]/g;
-const LOOKS_LIKE_PHONE = /^[+\d()\-.\s]+$/;
-const MIN_PHONE_DIGITS = 3;
+const PHONE_CHARACTERS_ONLY_PATTERN = /^[+\d()\-.\s]+$/;
+const GROUPED_PHONE_DIGITS_PATTERN = /^\d{3}[\s.-]\d{3}([\s.-]\d{1,4})?$/;
+const NON_DIGIT_PATTERN = /\D/g;
+const MIN_PHONE_DIGIT_COUNT = 3;
+const FULL_PHONE_DIGIT_COUNTS = [10, 11];
+
+// Hyphenated or spaced policy and application numbers ("123456-01", "1234 5678") are
+// tokenized as typed, so only phone-shaped input may collapse to digits.
+const isPhoneShaped = (trimmedSearchInput: string, digits: string) =>
+  /[()]/.test(trimmedSearchInput) ||
+  trimmedSearchInput.startsWith('+') ||
+  GROUPED_PHONE_DIGITS_PATTERN.test(trimmedSearchInput) ||
+  FULL_PHONE_DIGIT_COUNTS.includes(digits.length);
 
 export const normalizeSearchInput = (searchInput: string): string => {
-  const trimmed = searchInput.trim();
+  const trimmedSearchInput = searchInput.trim();
 
-  if (!trimmed) {
-    return trimmed;
+  if (!PHONE_CHARACTERS_ONLY_PATTERN.test(trimmedSearchInput)) {
+    return trimmedSearchInput;
   }
 
-  // If the input consists only of digits and phone formatting characters
-  // (+, parentheses, dashes, dots, spaces), strip the formatting
-  if (LOOKS_LIKE_PHONE.test(trimmed)) {
-    const stripped = trimmed.replace(PHONE_FORMATTING_CHARS, '');
-    const digitCount = (stripped.match(/\d/g) || []).length;
+  const digits = trimmedSearchInput.replace(NON_DIGIT_PATTERN, '');
 
-    if (digitCount >= MIN_PHONE_DIGITS) {
-      return stripped;
-    }
+  if (
+    digits.length < MIN_PHONE_DIGIT_COUNT ||
+    !isPhoneShaped(trimmedSearchInput, digits)
+  ) {
+    return trimmedSearchInput;
   }
 
-  return trimmed;
+  return trimmedSearchInput.startsWith('+') ? `+${digits}` : digits;
 };

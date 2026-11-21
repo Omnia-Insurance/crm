@@ -3,10 +3,15 @@ import { timingSafeEqual } from 'crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
+import { type LifecycleEventType } from '@microsoft/microsoft-graph-types';
 import { isNonEmptyString } from '@sniptt/guards';
+import { type AssertUnreachable } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import { In, Repository } from 'typeorm';
 
+import { ExceptionHandlerService } from 'src/engine/core-modules/exception-handler/exception-handler.service';
+import { MetricsService } from 'src/engine/core-modules/metrics/metrics.service';
+import { MetricsKeys } from 'src/engine/core-modules/metrics/types/metrics-keys.type';
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
 import { MessagingWebhookSubscriptionService } from 'src/modules/connected-account/webhook-subscription-manager/services/messaging-webhook-subscription.service';
 import { WebhookSyncTriggerService } from 'src/modules/connected-account/webhook-subscription-manager/services/webhook-sync-trigger.service';
@@ -26,9 +31,18 @@ export class MicrosoftMessagingNotificationHandler implements WebhookNotificatio
     private readonly messageChannelRepository: Repository<MessageChannelEntity>,
     private readonly messagingWebhookSubscriptionService: MessagingWebhookSubscriptionService,
     private readonly webhookSyncTriggerService: WebhookSyncTriggerService,
+    private readonly metricsService: MetricsService,
+    private readonly exceptionHandlerService: ExceptionHandlerService,
   ) {}
 
   async handle(notifications: MicrosoftGraphNotification[]): Promise<void> {
+    if (notifications.length > 0) {
+      this.metricsService.incrementCounterBy({
+        key: MetricsKeys.ConnectedAccountSyncWebhookReceivedMessaging,
+        amount: notifications.length,
+      });
+    }
+
     const subscriptionIds = notifications
       .map((notification) => notification.subscriptionId)
       .filter(isNonEmptyString);
@@ -81,13 +95,20 @@ export class MicrosoftMessagingNotificationHandler implements WebhookNotificatio
         continue;
       }
 
-      if (
-        isNonEmptyString(notification.lifecycleEvent) &&
-        notification.lifecycleEvent !== 'missed'
-      ) {
-        await this.messagingWebhookSubscriptionService.renewSubscription(
+      if (isNonEmptyString(notification.lifecycleEvent)) {
+        await this.handleLifecycleEvent({
+          lifecycleEvent: notification.lifecycleEvent,
+          removedSubscriptionId: notification.subscriptionId,
           messageChannel,
-        );
+        }).catch((error) => {
+          this.logger.error(
+            `Failed to handle ${notification.lifecycleEvent} lifecycle event for message channel ${messageChannel.id}`,
+            error,
+          );
+          this.exceptionHandlerService.captureExceptions([error], {
+            workspace: { id: messageChannel.workspaceId },
+          });
+        });
         continue;
       }
 
@@ -95,6 +116,55 @@ export class MicrosoftMessagingNotificationHandler implements WebhookNotificatio
         messageChannel.id,
         messageChannel.workspaceId,
       );
+
+      this.logger.log(
+        `Triggered messaging sync for message channel ${messageChannel.id} from Microsoft notification`,
+      );
+    }
+  }
+
+  private async handleLifecycleEvent({
+    lifecycleEvent,
+    removedSubscriptionId,
+    messageChannel,
+  }: {
+    lifecycleEvent: LifecycleEventType;
+    removedSubscriptionId: string;
+    messageChannel: MessageChannelEntity;
+  }): Promise<void> {
+    switch (lifecycleEvent) {
+      case 'subscriptionRemoved':
+        await this.messagingWebhookSubscriptionService.recreateSubscription({
+          messageChannelId: messageChannel.id,
+          workspaceId: messageChannel.workspaceId,
+          removedSubscriptionId,
+        });
+        await this.webhookSyncTriggerService.triggerMessagingSync(
+          messageChannel.id,
+          messageChannel.workspaceId,
+        );
+        break;
+      case 'reauthorizationRequired':
+        await this.messagingWebhookSubscriptionService.renewSubscription({
+          messageChannelId: messageChannel.id,
+          workspaceId: messageChannel.workspaceId,
+        });
+        break;
+      case 'missed':
+        await this.webhookSyncTriggerService.triggerMessagingSync(
+          messageChannel.id,
+          messageChannel.workspaceId,
+        );
+        break;
+      default: {
+        const unhandledLifecycleEvent: AssertUnreachable<
+          typeof lifecycleEvent
+        > = lifecycleEvent;
+
+        this.logger.warn(
+          `Ignored unrecognized lifecycle event ${unhandledLifecycleEvent} for message channel ${messageChannel.id}`,
+        );
+      }
     }
   }
 }

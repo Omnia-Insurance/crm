@@ -1,18 +1,17 @@
-import { useCallback, useContext, useState } from 'react';
 import { useSpreadsheetImportInternal } from '@/spreadsheet-import/hooks/useSpreadsheetImportInternal';
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
-import { ModalContent } from 'twenty-ui/surfaces';
-
 import { ImportDataStep } from '@/spreadsheet-import/steps/components/ImportDataStep';
 import { type SpreadsheetImportStep } from '@/spreadsheet-import/steps/types/SpreadsheetImportStep';
 import { SpreadsheetImportStepType } from '@/spreadsheet-import/steps/types/SpreadsheetImportStepType';
-import { CircularProgressBar } from 'twenty-ui/feedback';
+import { useCallback, useState } from 'react';
+import { useToast } from 'twenty-ui/components/feedback';
+import { Loader } from 'twenty-ui/primitives/feedback';
+import { SpreadsheetImportStepBody } from '@/spreadsheet-import/components/SpreadsheetImportStepBody';
 import { MatchColumnsStep } from './MatchColumnsStep/MatchColumnsStep';
 import { SelectHeaderStep } from './SelectHeaderStep/SelectHeaderStep';
 import { SelectSheetStep } from './SelectSheetStep/SelectSheetStep';
 import { UploadStep } from './UploadStep/UploadStep';
 import { ValidationStep } from './ValidationStep/ValidationStep';
-import { ThemeContext } from 'twenty-ui/theme-constants';
+import { doNotTranslate } from 'twenty-shared/i18n';
 
 type SpreadsheetImportStepperProps = {
   nextStep: () => void;
@@ -23,7 +22,6 @@ export const SpreadsheetImportStepper = ({
   nextStep,
   prevStep,
 }: SpreadsheetImportStepperProps) => {
-  const { theme } = useContext(ThemeContext);
   const { initialStepState } = useSpreadsheetImportInternal();
 
   const [currentStepState, setCurrentStepState] =
@@ -37,15 +35,13 @@ export const SpreadsheetImportStepper = ({
 
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
 
-  const { enqueueErrorSnackBar } = useSnackBar();
+  const { enqueueToast } = useToast();
 
   const handleError = useCallback(
     (description: string) => {
-      enqueueErrorSnackBar({
-        message: description,
-      });
+      enqueueToast({ status: 'error', children: description });
     },
-    [enqueueErrorSnackBar],
+    [enqueueToast],
   );
 
   const handleBack = useCallback(() => {
@@ -103,7 +99,7 @@ export const SpreadsheetImportStepper = ({
       );
     case SpreadsheetImportStepType.validateData:
       if (!uploadedFile) {
-        throw new Error('File not found');
+        throw new Error(doNotTranslate('File not found'));
       }
       return (
         <ValidationStep
@@ -128,13 +124,13 @@ export const SpreadsheetImportStepper = ({
     case SpreadsheetImportStepType.loading:
     default:
       return (
-        <ModalContent isVerticallyCentered isHorizontallyCentered>
-          <CircularProgressBar
-            size={80}
-            barWidth={8}
-            barColor={theme.font.color.primary}
-          />
-        </ModalContent>
+        <SpreadsheetImportStepBody
+          padding="large"
+          isCenteredHorizontally
+          isCenteredVertically
+        >
+          <Loader />
+        </SpreadsheetImportStepBody>
       );
   }
 };

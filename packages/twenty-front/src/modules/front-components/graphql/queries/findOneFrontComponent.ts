@@ -6,20 +6,18 @@ export const FIND_ONE_FRONT_COMPONENT = gql`
       id
       name
       applicationId
+      applicationName
+      applicationGrantedCapabilities
+      applicationGrantedIframeMediaPermissions {
+        origin
+        microphone
+        camera
+      }
       builtComponentChecksum
       isHeadless
       usesSdkClient
+      frontComponentSharedDependenciesChecksum
       applicationVariables
-      applicationTokenPair {
-        applicationAccessToken {
-          token
-          expiresAt
-        }
-        applicationRefreshToken {
-          token
-          expiresAt
-        }
-      }
     }
   }
 `;

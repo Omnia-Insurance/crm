@@ -1,38 +1,34 @@
-import {
-  PageLayoutTabLayoutMode,
-  PageLayoutType,
-} from '~/generated-metadata/graphql';
-import { type WidgetCardVariant } from '~/modules/page-layout/widgets/types/WidgetCardVariant';
+import { PageLayoutType } from '~/generated-metadata/graphql';
+import { type TabPresentation } from '@/page-layout/types/TabPresentation';
+import { type WidgetCardVariant } from '@/page-layout/widgets/types/WidgetCardVariant';
+import { isFullPageWidget } from '@/page-layout/widgets/utils/isFullPageWidget';
 
 type GetWidgetCardVariantParams = {
-  layoutMode: PageLayoutTabLayoutMode;
-  isInPinnedTab: boolean;
+  isSideColumnContext: boolean;
   pageLayoutType: PageLayoutType | null;
-  isMobile: boolean;
-  isInSidePanel: boolean;
+  presentation: TabPresentation;
 };
 
 export const getWidgetCardVariant = ({
-  layoutMode,
-  isInPinnedTab,
+  isSideColumnContext,
   pageLayoutType,
-  isMobile,
-  isInSidePanel,
+  presentation,
 }: GetWidgetCardVariantParams): WidgetCardVariant => {
-  if (layoutMode === PageLayoutTabLayoutMode.CANVAS) {
-    return 'canvas';
+  if (
+    isSideColumnContext ||
+    isFullPageWidget({ pageLayoutType, presentation })
+  ) {
+    return 'flush';
   }
-
-  const isSideColumnContext = isInPinnedTab || isMobile || isInSidePanel;
 
   switch (pageLayoutType) {
     case PageLayoutType.DASHBOARD:
-      return 'dashboard';
     case PageLayoutType.STANDALONE_PAGE:
-      return 'standalone';
+      return 'framed';
     case PageLayoutType.RECORD_PAGE:
     case PageLayoutType.RECORD_INDEX:
+    case PageLayoutType.RECORD_FORM:
     case null:
-      return isSideColumnContext ? 'side-column' : 'record-page';
+      return 'flush';
   }
 };

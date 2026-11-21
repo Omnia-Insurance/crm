@@ -1,4 +1,6 @@
 import { useIsPageLayoutInEditMode } from '@/page-layout/hooks/useIsPageLayoutInEditMode';
+import { pageLayoutDraggingWidgetIdComponentState } from '@/page-layout/states/pageLayoutDraggingWidgetIdComponentState';
+import { pageLayoutResizingWidgetIdComponentState } from '@/page-layout/states/pageLayoutResizingWidgetIdComponentState';
 import { PageLayoutWidgetErrorDisplay } from '@/page-layout/widgets/components/PageLayoutWidgetErrorDisplay';
 import { WidgetSkeletonLoader } from '@/page-layout/widgets/components/WidgetSkeletonLoader';
 import { GraphWidgetChartHasTooManyGroupsEffect } from '@/page-layout/widgets/graph/components/GraphWidgetChartHasTooManyGroupsEffect';
@@ -7,10 +9,12 @@ import { type BarChartSlice } from '@/page-layout/widgets/graph/graph-widget-bar
 import { assertBarChartWidgetOrThrow } from '@/page-layout/widgets/graph/utils/assertBarChartWidget';
 import { buildChartDrilldownQueryParams } from '@/page-layout/widgets/graph/utils/buildChartDrilldownQueryParams';
 import { generateChartAggregateFilterKey } from '@/page-layout/widgets/graph/utils/generateChartAggregateFilterKey';
+import { getChartValueFormatOptions } from '@/page-layout/widgets/graph/utils/getChartValueFormatOptions';
 import { isFilteredViewRedirectionSupported } from '@/page-layout/widgets/graph/utils/isFilteredViewRedirectionSupported';
 import { useCurrentWidget } from '@/page-layout/widgets/hooks/useCurrentWidget';
 import { useUserFirstDayOfTheWeek } from '@/ui/input/components/internal/date/hooks/useUserFirstDayOfTheWeek';
 import { useUserTimezone } from '@/ui/input/components/internal/date/hooks/useUserTimezone';
+import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useAtomFamilySelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilySelectorValue';
 import { indexViewIdFromObjectMetadataItemFamilySelector } from '@/views/states/selectors/indexViewIdFromObjectMetadataItemFamilySelector';
 import { lazy, Suspense } from 'react';
@@ -60,6 +64,19 @@ export const GraphWidgetBarChartRenderer = () => {
   const navigate = useNavigate();
   const configuration = widget.configuration;
   const isPageLayoutInEditMode = useIsPageLayoutInEditMode();
+  const pageLayoutDraggingWidgetId = useAtomComponentStateValue(
+    pageLayoutDraggingWidgetIdComponentState,
+  );
+  const pageLayoutResizingWidgetId = useAtomComponentStateValue(
+    pageLayoutResizingWidgetIdComponentState,
+  );
+
+  const chartValueFormatOptions = getChartValueFormatOptions({
+    aggregateOperation: configuration.aggregateOperation,
+    aggregateFieldMetadataId: configuration.aggregateFieldMetadataId,
+    fieldMetadataItems: objectMetadataItem.fields,
+    numberFormat: configuration.numberFormat,
+  });
 
   const axisNameDisplay = configuration.axisNameDisplay;
 
@@ -139,11 +156,19 @@ export const GraphWidgetBarChartRenderer = () => {
         yAxisLabel={yAxisLabelToDisplay}
         showValues={showDataLabels}
         showLegend={showLegend}
+        isLegendInteractive={!isPageLayoutInEditMode}
         layout={layout}
         groupMode={groupMode}
         colorMode={colorMode}
         id={widget.id}
-        displayType="shortNumber"
+        isWidgetMoving={
+          pageLayoutDraggingWidgetId === widget.id ||
+          pageLayoutResizingWidgetId === widget.id
+        }
+        decimals={chartValueFormatOptions.decimals}
+        displayType={chartValueFormatOptions.displayType}
+        axisDisplayType="shortNumber"
+        tooltipDisplayType="number"
         rangeMin={configuration.rangeMin ?? undefined}
         rangeMax={configuration.rangeMax ?? undefined}
         omitNullValues={configuration.omitNullValues ?? false}

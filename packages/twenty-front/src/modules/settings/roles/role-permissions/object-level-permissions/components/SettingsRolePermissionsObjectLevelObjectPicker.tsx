@@ -6,15 +6,14 @@ import { useFilterObjectMetadataItemsWithPermissionOverride } from '@/settings/r
 import { useObjectMetadataItemsThatCanHavePermission } from '@/settings/roles/role-permissions/object-level-permissions/hooks/useObjectMetadataItemsThatCanHavePermission';
 import { SettingsTextInput } from '@/ui/input/components/SettingsTextInput';
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
-import { useContext, useState } from 'react';
+import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { SettingsPath } from 'twenty-shared/types';
+import { Section } from 'twenty-ui/components/layout';
 import { IconSearch } from 'twenty-ui/icon';
-import { H2Title } from 'twenty-ui/typography';
-import { Section } from 'twenty-ui/layout';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
 import { useNavigateSettings } from '~/hooks/useNavigateSettings';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledTypeSelectContainer = styled.div`
   display: flex;
@@ -54,7 +53,8 @@ export const SettingsRolePermissionsObjectLevelObjectPicker = ({
 }: {
   roleId: string;
 }) => {
-  const { theme } = useContext(ThemeContext);
+  const { t } = useLingui();
+  const theme = useTheme();
   const navigate = useNavigateSettings();
   const getIsMetadataItemCustom = useGetIsMetadataItemCustom();
   const [searchParams] = useSearchParams();
@@ -104,7 +104,7 @@ export const SettingsRolePermissionsObjectLevelObjectPicker = ({
 
   return (
     <StyledTypeSelectContainer>
-      <Section>
+      <Section.Root>
         <StyledSearchContainer>
           <StyledSearchInputContainer>
             <SettingsTextInput
@@ -118,22 +118,17 @@ export const SettingsRolePermissionsObjectLevelObjectPicker = ({
             />
           </StyledSearchInputContainer>
         </StyledSearchContainer>
-      </Section>
+      </Section.Root>
 
       {standardObjects.length > 0 && (
-        <Section>
-          <H2Title
+        <Section.Root>
+          <Section.Header
             title={t`Standard`}
             description={t`All the standard objects`}
           />
           <StyledContainer>
             {standardObjects.map((objectMetadataItem) => (
-              <StyledCardContainer
-                key={objectMetadataItem.id}
-                onClick={() =>
-                  handleSelectObjectMetadata(objectMetadataItem.id)
-                }
-              >
+              <StyledCardContainer key={objectMetadataItem.id}>
                 <SettingsCard
                   Icon={
                     <ObjectMetadataIcon
@@ -143,23 +138,24 @@ export const SettingsRolePermissionsObjectLevelObjectPicker = ({
                     />
                   }
                   title={objectMetadataItem.labelPlural}
+                  onClick={() =>
+                    handleSelectObjectMetadata(objectMetadataItem.id)
+                  }
                 />
               </StyledCardContainer>
             ))}
           </StyledContainer>
-        </Section>
+        </Section.Root>
       )}
       {customObjects.length > 0 && (
-        <Section>
-          <H2Title title={t`Custom`} description={t`All your custom objects`} />
+        <Section.Root>
+          <Section.Header
+            title={t`Custom`}
+            description={t`All your custom objects`}
+          />
           <StyledContainer>
             {customObjects.map((objectMetadataItem) => (
-              <StyledCardContainer
-                key={objectMetadataItem.id}
-                onClick={() =>
-                  handleSelectObjectMetadata(objectMetadataItem.id)
-                }
-              >
+              <StyledCardContainer key={objectMetadataItem.id}>
                 <SettingsCard
                   Icon={
                     <ObjectMetadataIcon
@@ -169,11 +165,14 @@ export const SettingsRolePermissionsObjectLevelObjectPicker = ({
                     />
                   }
                   title={objectMetadataItem.labelPlural}
+                  onClick={() =>
+                    handleSelectObjectMetadata(objectMetadataItem.id)
+                  }
                 />
               </StyledCardContainer>
             ))}
           </StyledContainer>
-        </Section>
+        </Section.Root>
       )}
     </StyledTypeSelectContainer>
   );

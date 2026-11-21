@@ -14,6 +14,7 @@ export type RawAuthContext = {
   workspaceMember?: WorkspaceMemberWorkspaceEntity;
   workspace?: FlatWorkspace;
   application?: FlatApplication | null | undefined;
+  agentId?: string;
   userWorkspaceId?: string;
   userWorkspace?: FlatUserWorkspace;
   authProvider?: AuthProviderEnum;
@@ -22,4 +23,6 @@ export type RawAuthContext = {
     impersonatedUserWorkspaceId?: string;
   };
   tokenType?: JwtTokenTypeEnum;
+  // Sessions only: a JWT's iat is its renewal time, not when the user authenticated
+  authenticatedAt?: Date;
 };

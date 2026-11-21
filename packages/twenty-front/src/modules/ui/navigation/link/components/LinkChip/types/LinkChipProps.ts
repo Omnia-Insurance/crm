@@ -1,0 +1,14 @@
+import { type TriggerEventType } from '@/ui/navigation/types/TriggerEventType';
+import { type ComponentPropsWithRef, type MouseEvent } from 'react';
+import { type ChipProps } from 'twenty-ui/primitives/data-display';
+
+export type LinkChipProps = Omit<
+  ChipProps,
+  'render' | 'ref' | 'onClick' | 'onMouseDown'
+> &
+  Pick<ComponentPropsWithRef<'a'>, 'target' | 'ref'> & {
+    to: string;
+    onClick?: (event: MouseEvent<HTMLElement>) => void;
+    onMouseDown?: (event: MouseEvent<HTMLElement>) => void;
+    triggerEvent?: TriggerEventType;
+  };

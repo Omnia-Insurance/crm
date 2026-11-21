@@ -1,61 +1,193 @@
-import { Inject, UseGuards, UseInterceptors } from '@nestjs/common';
-import { Args, Mutation, Query } from '@nestjs/graphql';
+import { Inject, UseGuards, UseInterceptors, UseFilters } from '@nestjs/common';
+import {
+  Args,
+  Info,
+  Mutation,
+  Parent,
+  Query,
+  ResolveField,
+} from '@nestjs/graphql';
 
+import { type GraphQLResolveInfo } from 'graphql';
+import graphqlFields from 'graphql-fields';
+import { type ApplicationCapability } from 'twenty-shared/application';
 import { PermissionFlagType } from 'twenty-shared/constants';
+import { type IframeMediaPermission } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
+import { ApplicationExceptionFilter } from 'src/engine/core-modules/application/application-exception-filter';
+import { ApplicationTokenPairDTO } from 'src/engine/core-modules/application/application-oauth/dtos/application-token-pair.dto';
+import { ApplicationService } from 'src/engine/core-modules/application/application.service';
+import { UserApplicationVariableValueService } from 'src/engine/core-modules/application/application-variable/user-application-variable-value.service';
+import { ApplicationVariableEntityService } from 'src/engine/core-modules/application/application-variable/application-variable.service';
+import { type FlatApplication } from 'src/engine/core-modules/application/types/flat-application.type';
+import { canCallerReachApplication } from 'src/engine/core-modules/application/utils/can-caller-reach-application.util';
 import { ApplicationTokenService } from 'src/engine/core-modules/auth/token/services/application-token.service';
 import { type AuthContextUser } from 'src/engine/core-modules/auth/types/auth-context.type';
+import { IframeMediaPermissionDTO } from 'src/engine/core-modules/workspace/dtos/iframe-media-permission.dto';
+import { AuthGraphqlApiExceptionFilter } from 'src/engine/core-modules/auth/filters/auth-graphql-api-exception.filter';
 import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { AuthApplication } from 'src/engine/decorators/auth/auth-application.decorator';
 import { AuthUserWorkspaceId } from 'src/engine/decorators/auth/auth-user-workspace-id.decorator';
 import { AuthUser } from 'src/engine/decorators/auth/auth-user.decorator';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
-import { NoPermissionGuard } from 'src/engine/guards/no-permission.guard';
-import { SettingsPermissionGuard } from 'src/engine/guards/settings-permission.guard';
-import { UserAuthGuard } from 'src/engine/guards/user-auth.guard';
-import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
+import { AllowSuspendedWorkspace } from 'src/engine/decorators/auth/allow-suspended-workspace.decorator';
 import { fromFlatFrontComponentToFrontComponentDto } from 'src/engine/metadata-modules/flat-front-component/utils/from-flat-front-component-to-front-component-dto.util';
 import { CreateFrontComponentInput } from 'src/engine/metadata-modules/front-component/dtos/create-front-component.input';
 import { FrontComponentDTO } from 'src/engine/metadata-modules/front-component/dtos/front-component.dto';
 import { UpdateFrontComponentInput } from 'src/engine/metadata-modules/front-component/dtos/update-front-component.input';
 import { FrontComponentService } from 'src/engine/metadata-modules/front-component/front-component.service';
 import { FrontComponentGraphqlApiExceptionInterceptor } from 'src/engine/metadata-modules/front-component/interceptors/front-component-graphql-api-exception.interceptor';
-import { stripSecretFromApplicationVariables } from 'src/engine/metadata-modules/front-component/utils/strip-secret-from-application-variables';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { WorkspaceMigrationGraphqlApiExceptionInterceptor } from 'src/engine/workspace-manager/workspace-migration/interceptors/workspace-migration-graphql-api-exception.interceptor';
+import { FRONT_COMPONENT_READ_ACCESS_POLICY } from 'src/engine/metadata-modules/front-component/constants/front-component-read-access-policy.constant';
+import { AccessPolicyGuard } from 'src/engine/guards/access-policy.guard';
+import { type AccessPolicy } from 'src/engine/guards/types/access-policy.type';
 
-@UseGuards(WorkspaceAuthGuard)
+const FRONT_COMPONENT_USER_SESSION_ACCESS_POLICY: AccessPolicy = {
+  authPrincipals: {
+    userSession: {
+      standard: true,
+      impersonated: true,
+      playground: false,
+      workspaceAgnostic: false,
+    },
+    apiKey: false,
+    oauthClient: false,
+    application: false,
+  },
+  requiredPermissionFlags: [],
+};
+
+const FRONT_COMPONENT_WRITE_ACCESS_POLICY: AccessPolicy = {
+  authPrincipals: {
+    userSession: {
+      standard: true,
+      impersonated: true,
+      playground: true,
+      workspaceAgnostic: false,
+    },
+    apiKey: true,
+    oauthClient: true,
+    application: false,
+  },
+  requiredPermissionFlags: [PermissionFlagType.APPLICATIONS],
+};
+
 @UseInterceptors(
   WorkspaceMigrationGraphqlApiExceptionInterceptor,
   FrontComponentGraphqlApiExceptionInterceptor,
 )
 @MetadataResolver(() => FrontComponentDTO)
+@UseFilters(AuthGraphqlApiExceptionFilter)
 export class FrontComponentResolver {
   constructor(
     @Inject(FrontComponentService)
     private readonly frontComponentService: FrontComponentService,
     @Inject(ApplicationTokenService)
     private readonly applicationTokenService: ApplicationTokenService,
+    private readonly applicationVariableService: ApplicationVariableEntityService,
+    private readonly userApplicationVariableValueService: UserApplicationVariableValueService,
     private readonly workspaceCacheService: WorkspaceCacheService,
+    private readonly applicationService: ApplicationService,
   ) {}
 
+  @ResolveField(() => String, { nullable: true })
+  async frontComponentSharedDependenciesChecksum(
+    @Parent() frontComponent: FrontComponentDTO,
+    @AuthWorkspace() workspace: WorkspaceEntity,
+  ): Promise<string | null> {
+    const { flatApplicationMaps } =
+      await this.workspaceCacheService.getOrRecompute(workspace.id, [
+        'flatApplicationMaps',
+      ]);
+
+    return (
+      flatApplicationMaps.byId[frontComponent.applicationId]
+        ?.frontComponentSharedDependenciesChecksum ?? null
+    );
+  }
+
+  @ResolveField(() => String, { nullable: true })
+  async applicationName(
+    @Parent() frontComponent: FrontComponentDTO,
+    @AuthWorkspace() workspace: WorkspaceEntity,
+  ): Promise<string | undefined> {
+    const { flatApplicationMaps } =
+      await this.workspaceCacheService.getOrRecompute(workspace.id, [
+        'flatApplicationMaps',
+      ]);
+
+    return flatApplicationMaps.byId[frontComponent.applicationId]?.name;
+  }
+
+  @ResolveField(() => [String], { nullable: true })
+  async applicationGrantedCapabilities(
+    @Parent() frontComponent: FrontComponentDTO,
+    @AuthWorkspace() workspace: WorkspaceEntity,
+  ): Promise<ApplicationCapability[]> {
+    const { flatApplicationMaps } =
+      await this.workspaceCacheService.getOrRecompute(workspace.id, [
+        'flatApplicationMaps',
+      ]);
+
+    return (
+      flatApplicationMaps.byId[frontComponent.applicationId]
+        ?.grantedCapabilities ?? []
+    );
+  }
+
+  @ResolveField(() => [IframeMediaPermissionDTO], { nullable: true })
+  async applicationGrantedIframeMediaPermissions(
+    @Parent() frontComponent: FrontComponentDTO,
+    @AuthWorkspace()
+    { id: workspaceId, workspaceCustomApplicationId }: WorkspaceEntity,
+    @AuthApplication({ allowUndefined: true })
+    callingApplication: FlatApplication | undefined,
+  ): Promise<IframeMediaPermission[]> {
+    const application =
+      await this.applicationService.findReadableInstalledFlatApplication({
+        applicationId: frontComponent.applicationId,
+        workspaceId,
+        workspaceCustomApplicationId,
+        callingApplication,
+      });
+
+    return application?.grantedIframeMediaPermissions ?? [];
+  }
+
   @Query(() => [FrontComponentDTO])
-  @UseGuards(NoPermissionGuard)
+  @UseGuards(AccessPolicyGuard(FRONT_COMPONENT_READ_ACCESS_POLICY))
+  @AllowSuspendedWorkspace()
   async frontComponents(
     @AuthWorkspace() workspace: WorkspaceEntity,
+    @AuthApplication({ allowUndefined: true })
+    callingApplication: FlatApplication | undefined,
   ): Promise<FrontComponentDTO[]> {
-    return await this.frontComponentService.findAll(workspace.id);
+    const frontComponents = await this.frontComponentService.findAll(
+      workspace.id,
+    );
+
+    return frontComponents.filter((frontComponent) =>
+      canCallerReachApplication({
+        callingApplication,
+        applicationId: frontComponent.applicationId,
+        operation: 'read',
+        workspaceCustomApplicationId: workspace.workspaceCustomApplicationId,
+      }),
+    );
   }
 
   @Query(() => FrontComponentDTO, { nullable: true })
-  @UseGuards(UserAuthGuard, NoPermissionGuard)
+  @UseGuards(AccessPolicyGuard(FRONT_COMPONENT_USER_SESSION_ACCESS_POLICY))
   async frontComponent(
     @Args('id', { type: () => UUIDScalarType }) id: string,
     @AuthWorkspace() workspace: WorkspaceEntity,
     @AuthUser() user: AuthContextUser,
     @AuthUserWorkspaceId() userWorkspaceId: string,
+    @Info() info: GraphQLResolveInfo,
   ): Promise<FrontComponentDTO | null> {
     const dto = await this.frontComponentService.findById(id, workspace.id);
 
@@ -63,44 +195,53 @@ export class FrontComponentResolver {
       return null;
     }
 
-    const tokenPair =
-      await this.applicationTokenService.generateApplicationTokenPair({
-        applicationId: dto.applicationId,
-        workspaceId: workspace.id,
-        userWorkspaceId,
-        userId: user.id,
-      });
+    const selectedFields = graphqlFields(info);
 
-    const { applicationVariableMaps } =
-      await this.workspaceCacheService.getOrRecompute(workspace.id, [
-        'applicationVariableMaps',
-      ]);
-
-    const variableUniversalIdentifiers =
-      applicationVariableMaps.universalIdentifiersByApplicationId[
-        dto.applicationId
-      ] ?? [];
-
-    const flatApplicationVariables = variableUniversalIdentifiers
-      .map(
-        (universalIdentifier) =>
-          applicationVariableMaps.byUniversalIdentifier[universalIdentifier],
-      )
-      .filter(isDefined);
-
-    const applicationVariables = stripSecretFromApplicationVariables(
-      flatApplicationVariables,
-    );
+    const [applicationTokenPair, applicationVariables] = await Promise.all([
+      isDefined(selectedFields.applicationTokenPair)
+        ? this.applicationTokenService.generateApplicationTokenPair({
+            applicationId: dto.applicationId,
+            workspaceId: workspace.id,
+            userWorkspaceId,
+            userId: user.id,
+          })
+        : undefined,
+      isDefined(selectedFields.applicationVariables)
+        ? this.getPublicApplicationVariables({
+            workspaceId: workspace.id,
+            applicationId: dto.applicationId,
+            userWorkspaceId,
+          })
+        : undefined,
+    ]);
 
     return {
       ...dto,
-      applicationTokenPair: tokenPair,
+      applicationTokenPair,
       applicationVariables,
     };
   }
 
+  @Mutation(() => ApplicationTokenPairDTO)
+  @UseGuards(AccessPolicyGuard(FRONT_COMPONENT_USER_SESSION_ACCESS_POLICY))
+  @UseFilters(ApplicationExceptionFilter)
+  async generateFrontComponentApplicationTokenPair(
+    @Args('applicationId', { type: () => UUIDScalarType })
+    applicationId: string,
+    @AuthWorkspace() workspace: WorkspaceEntity,
+    @AuthUser() user: AuthContextUser,
+    @AuthUserWorkspaceId() userWorkspaceId: string,
+  ): Promise<ApplicationTokenPairDTO> {
+    return this.applicationTokenService.generateApplicationTokenPair({
+      applicationId,
+      workspaceId: workspace.id,
+      userWorkspaceId,
+      userId: user.id,
+    });
+  }
+
   @Mutation(() => FrontComponentDTO)
-  @UseGuards(SettingsPermissionGuard(PermissionFlagType.APPLICATIONS))
+  @UseGuards(AccessPolicyGuard(FRONT_COMPONENT_WRITE_ACCESS_POLICY))
   async createFrontComponent(
     @Args('input') input: CreateFrontComponentInput,
     @AuthWorkspace() workspace: WorkspaceEntity,
@@ -114,7 +255,7 @@ export class FrontComponentResolver {
   }
 
   @Mutation(() => FrontComponentDTO)
-  @UseGuards(SettingsPermissionGuard(PermissionFlagType.APPLICATIONS))
+  @UseGuards(AccessPolicyGuard(FRONT_COMPONENT_WRITE_ACCESS_POLICY))
   async updateFrontComponent(
     @Args('input') input: UpdateFrontComponentInput,
     @AuthWorkspace() workspace: WorkspaceEntity,
@@ -129,7 +270,7 @@ export class FrontComponentResolver {
   }
 
   @Mutation(() => FrontComponentDTO)
-  @UseGuards(SettingsPermissionGuard(PermissionFlagType.APPLICATIONS))
+  @UseGuards(AccessPolicyGuard(FRONT_COMPONENT_WRITE_ACCESS_POLICY))
   async deleteFrontComponent(
     @Args('id', { type: () => UUIDScalarType }) id: string,
     @AuthWorkspace() workspace: WorkspaceEntity,
@@ -140,5 +281,29 @@ export class FrontComponentResolver {
     });
 
     return fromFlatFrontComponentToFrontComponentDto(flatFrontComponent);
+  }
+
+  private async getPublicApplicationVariables({
+    workspaceId,
+    applicationId,
+    userWorkspaceId,
+  }: {
+    workspaceId: string;
+    applicationId: string;
+    userWorkspaceId: string;
+  }): Promise<Record<string, string>> {
+    const [workspaceVariables, userVariables] = await Promise.all([
+      this.applicationVariableService.getPublicEnvVariables({
+        workspaceId,
+        applicationId,
+      }),
+      this.userApplicationVariableValueService.getPublicEnvVariables({
+        workspaceId,
+        applicationId,
+        userWorkspaceId,
+      }),
+    ]);
+
+    return { ...workspaceVariables, ...userVariables };
   }
 }

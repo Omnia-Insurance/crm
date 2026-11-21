@@ -1,4 +1,4 @@
-import { makeMetadataAPIRequest } from 'test/integration/metadata/suites/utils/make-metadata-api-request.util';
+import { makeMetadataApiRequest } from 'test/integration/metadata/suites/utils/make-metadata-api-request.util';
 import { findViewsQueryFactory } from 'test/integration/metadata/suites/view/utils/find-views-query-factory.util';
 import { type CommonResponseBody } from 'test/integration/metadata/types/common-response-body.type';
 import { warnIfErrorButNotExpectedToFail } from 'test/integration/metadata/utils/warn-if-error-but-not-expected-to-fail.util';
@@ -6,7 +6,7 @@ import { warnIfNoErrorButExpectedToFail } from 'test/integration/metadata/utils/
 
 import { type ViewEntity } from 'src/engine/metadata-modules/view/entities/view.entity';
 
-export const findViews = async ({
+export const findViews = async <TView = ViewEntity>({
   objectMetadataId,
   gqlFields,
   expectToFail,
@@ -15,14 +15,14 @@ export const findViews = async ({
   gqlFields?: string;
   expectToFail?: boolean;
 }): CommonResponseBody<{
-  getViews: ViewEntity[];
+  getViews: TView[];
 }> => {
   const graphqlOperation = findViewsQueryFactory({
     objectMetadataId,
     gqlFields,
   });
 
-  const response = await makeMetadataAPIRequest(graphqlOperation);
+  const response = await makeMetadataApiRequest(graphqlOperation);
 
   if (expectToFail === true) {
     warnIfNoErrorButExpectedToFail({

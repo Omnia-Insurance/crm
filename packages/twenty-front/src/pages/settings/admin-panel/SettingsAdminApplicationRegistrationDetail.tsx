@@ -5,10 +5,11 @@ import { getSettingsPath, isDefined } from 'twenty-shared/utils';
 import { SettingsPath } from 'twenty-shared/types';
 import { useLingui } from '@lingui/react/macro';
 import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
+import { SettingsTabBar } from '@/settings/components/layout/SettingsTabBar';
 import { useApolloAdminClient } from '@/settings/admin-panel/apollo/hooks/useApolloAdminClient';
 import { APPLICATION_REGISTRATION_ADMIN_PATH } from '@/settings/admin-panel/apps/constants/ApplicationRegistrationAdminPath';
 import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
-import { Avatar } from 'twenty-ui/data-display';
+import { Avatar } from 'twenty-ui/primitives/data-display';
 import {
   IconInfoCircle,
   IconKey,
@@ -20,7 +21,7 @@ import { SettingsApplicationRegistrationConfigTab } from '~/pages/settings/appli
 import { SettingsApplicationRegistrationOAuthTab } from '~/pages/settings/applications/tabs/SettingsApplicationRegistrationOAuthTab';
 import { SettingsApplicationRegistrationDistributionTab } from '~/pages/settings/applications/tabs/SettingsApplicationRegistrationDistributionTab';
 import { SettingsApplicationRegistrationGeneralTab } from '~/pages/settings/applications/tabs/SettingsApplicationRegistrationGeneralTab';
-import { TabList } from '@/ui/layout/tab-list/components/TabList';
+import { SettingsAdminApplicationRegistrationConfigurationIssues } from '~/pages/settings/admin-panel/SettingsAdminApplicationRegistrationConfigurationIssues';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { activeTabIdComponentState } from '@/ui/layout/tab-list/states/activeTabIdComponentState';
 
@@ -40,18 +41,15 @@ export const SettingsAdminApplicationRegistrationDetail = () => {
     applicationRegistrationId: string;
   }>();
 
-  const { data, loading } = useQuery(
-    FindOneAdminApplicationRegistrationDocument,
-    {
-      client: apolloAdminClient,
-      variables: { id: applicationRegistrationId },
-      skip: !applicationRegistrationId,
-    },
-  );
+  const { data } = useQuery(FindOneAdminApplicationRegistrationDocument, {
+    client: apolloAdminClient,
+    variables: { id: applicationRegistrationId },
+    skip: !applicationRegistrationId,
+  });
 
   const registration = data?.findOneAdminApplicationRegistration;
 
-  if (loading || !isDefined(registration)) {
+  if (!isDefined(registration)) {
     return null;
   }
 
@@ -68,7 +66,7 @@ export const SettingsAdminApplicationRegistrationDetail = () => {
         return (
           <SettingsApplicationRegistrationConfigTab
             registration={registration}
-            fromAdmin
+            isAdminView
           />
         );
       case 'oauth':
@@ -81,15 +79,21 @@ export const SettingsAdminApplicationRegistrationDetail = () => {
         return (
           <SettingsApplicationRegistrationDistributionTab
             registration={registration}
+            isAdminView
           />
         );
       case 'general':
       default:
         return (
-          <SettingsApplicationRegistrationGeneralTab
-            registration={registration}
-            fromAdmin
-          />
+          <>
+            <SettingsAdminApplicationRegistrationConfigurationIssues
+              registration={registration}
+            />
+            <SettingsApplicationRegistrationGeneralTab
+              registration={registration}
+              isAdminView
+            />
+          </>
         );
     }
   };
@@ -99,11 +103,12 @@ export const SettingsAdminApplicationRegistrationDetail = () => {
       title={registration.name}
       icon={
         <Avatar
-          type="app"
+          shape="square"
+          variant="outline"
           size="md"
-          avatarUrl={getAbsoluteImageUrl(registration.logoUrl ?? undefined)}
-          placeholder={registration.name}
-          placeholderColorSeed={registration.name}
+          src={getAbsoluteImageUrl(registration.logoUrl ?? undefined)}
+          name={registration.name}
+          colorSeed={registration.name}
         />
       }
       links={[
@@ -117,14 +122,15 @@ export const SettingsAdminApplicationRegistrationDetail = () => {
         },
         { children: registration.name },
       ]}
-    >
-      <SettingsPageContainer>
-        <TabList
+      secondaryBar={
+        <SettingsTabBar
+          aria-label={t`Application registration`}
           tabs={tabs}
           componentInstanceId={REGISTRATION_DETAIL_TAB_LIST_ID}
         />
-        {renderActiveTabContent()}
-      </SettingsPageContainer>
+      }
+    >
+      <SettingsPageContainer>{renderActiveTabContent()}</SettingsPageContainer>
     </SettingsPageLayout>
   );
 };

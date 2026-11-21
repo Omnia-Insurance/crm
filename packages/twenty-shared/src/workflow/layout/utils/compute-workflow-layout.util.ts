@@ -15,7 +15,7 @@ export type WorkflowLayoutEdge = {
 
 export type WorkflowLayoutPosition = {
   id: string;
-  position: { x: number; y: number };
+  centerPosition: { x: number; y: number };
 };
 
 export type WorkflowLayoutOptions = {
@@ -56,14 +56,15 @@ export const computeWorkflowLayout = ({
     }
   });
 
-  Dagre.layout(graph);
+  // Dagre's crossing reduction can swap sibling subtrees as a branch grows, so branches keep their order instead
+  Dagre.layout(graph, { disableOptimalOrderHeuristic: true });
 
   return nodes.map((node) => {
     const layoutedNode = graph.node(node.id);
 
-    const x = layoutedNode.x - layoutedNode.width / 2;
-    const y = layoutedNode.y - layoutedNode.height / 2;
-
-    return { id: node.id, position: { x, y } };
+    return {
+      id: node.id,
+      centerPosition: { x: layoutedNode.x, y: layoutedNode.y },
+    };
   });
 };

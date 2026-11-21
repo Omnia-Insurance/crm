@@ -1,0 +1,173 @@
+import { AppPath } from 'twenty-shared/types';
+import { getAppPath, isDefined } from 'twenty-shared/utils';
+import { IconSettingsAutomation } from 'twenty-ui/icon';
+
+import { CommandMenuContextProvider } from '@/command-menu-item/contexts/CommandMenuContextProvider';
+import { getCommandMenuIdFromRecordIndexId } from '@/command-menu-item/utils/getCommandMenuIdFromRecordIndexId';
+import { CommandMenuComponentInstanceContext } from '@/command-menu/states/contexts/CommandMenuComponentInstanceContext';
+import { PinnedCommandMenuItemButtons } from '@/command-menu-item/display/components/PinnedCommandMenuItemButtons';
+import { CommandMenuItemContainerType } from '@/command-menu-item/types/CommandMenuItemContainerType';
+import { CoreObjectIndexPageLayout } from '@/object-core/components/CoreObjectIndexPageLayout';
+import { CoreObjectTable } from '@/object-core/components/CoreObjectTable';
+import { CoreObjectTableAddNewRow } from '@/object-core/components/CoreObjectTableAddNewRow';
+import { useCoreWorkflowsSelection } from '@/object-core/workflows/hooks/useCoreWorkflowsSelection';
+import { useListenToCoreWorkflowEvents } from '@/object-core/workflows/hooks/useListenToCoreWorkflowEvents';
+import { useListenToCoreWorkflowRunEvents } from '@/object-core/workflows/hooks/useListenToCoreWorkflowRunEvents';
+import { useCreateCoreWorkflow } from '@/object-core/workflows/hooks/useCreateCoreWorkflow';
+import { coreWorkflowsFilterSettingsState } from '@/object-core/workflows/states/coreWorkflowsFilterSettingsState';
+import { hasAppliedCoreObjectFilters } from '@/object-core/filters/utils/hasAppliedCoreObjectFilters';
+import { CORE_WORKFLOW_FILTER_FIELDS } from '@/object-core/workflows/constants/CoreWorkflowFilterFields';
+import { CORE_WORKFLOWS_DEFAULT_FILTER_SETTINGS } from '@/object-core/workflows/constants/CoreWorkflowsDefaultFilterSettings';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { CoreWorkflowsFilterButton } from '@/object-core/workflows/components/CoreWorkflowsFilterButton';
+import { CoreWorkflowsSelectionToContextStoreEffect } from '@/object-core/workflows/components/CoreWorkflowsSelectionToContextStoreEffect';
+import { WORKFLOW_CORE_TABLE_COLUMNS } from '@/object-core/workflows/constants/WorkflowCoreTableColumns';
+import {
+  CORE_WORKFLOWS_INITIAL_SORT,
+  CORE_WORKFLOWS_TABLE_ID,
+  useCoreWorkflows,
+} from '@/object-core/workflows/hooks/useCoreWorkflows';
+import { type CoreWorkflowTableRow } from '@/object-core/workflows/types/CoreWorkflowTableRow';
+import { buildCoreWorkflowTableRows } from '@/object-core/workflows/utils/buildCoreWorkflowTableRows';
+import { CoreWorkflowsPermissionGate } from '@/object-core/workflows/components/CoreWorkflowsPermissionGate';
+import { SidePanelToggleButton } from '@/side-panel/components/SidePanelToggleButton';
+import { ColoredIcon } from '@/ui/icon/components/ColoredIcon';
+import { useWorkspaceSurfaceScopedComponentInstanceId } from '@/ui/layout/hooks/useWorkspaceSurfaceScopedComponentInstanceId';
+import { useLingui } from '@lingui/react/macro';
+
+const getCoreWorkflowLink = (workflow: Pick<CoreWorkflowTableRow, 'id'>) =>
+  getAppPath(AppPath.WorkflowCoreShowPage, { coreWorkflowId: workflow.id });
+
+const WorkflowCoreIndexContent = () => {
+  const { t } = useLingui();
+  const tableId = useWorkspaceSurfaceScopedComponentInstanceId(
+    CORE_WORKFLOWS_TABLE_ID,
+  );
+
+  const {
+    coreWorkflows,
+    runSummaryByCoreWorkflowId,
+    hasNextPage,
+    loading,
+    isInitialLoading,
+    error,
+    fetchNextPage,
+    refetchLoadedCoreWorkflows,
+  } = useCoreWorkflows({ tableId });
+
+  const { createCoreWorkflow, canCreateCoreWorkflow, isCreatingCoreWorkflow } =
+    useCreateCoreWorkflow();
+
+  const {
+    displayedCoreWorkflows,
+    selectedRowIds,
+    selectedCoreWorkflows,
+    selectedRowCount,
+    toggleRow,
+    selectRows,
+  } = useCoreWorkflowsSelection({ coreWorkflows });
+
+  useListenToCoreWorkflowEvents({ refetch: refetchLoadedCoreWorkflows });
+  useListenToCoreWorkflowRunEvents({
+    coreWorkflowIds: coreWorkflows.map(({ id }) => id),
+    queryId: `core-workflows-run-events-${tableId}`,
+    onRunsChanged: refetchLoadedCoreWorkflows,
+  });
+
+  const coreWorkflowTableRows = buildCoreWorkflowTableRows({
+    coreWorkflows: displayedCoreWorkflows,
+    runSummaryByCoreWorkflowId,
+  });
+
+  const coreWorkflowsFilterSettings = useAtomStateValue(
+    coreWorkflowsFilterSettingsState,
+  );
+
+  const hasAppliedFilters = hasAppliedCoreObjectFilters({
+    filterSettings: coreWorkflowsFilterSettings,
+    defaultFilterSettings: CORE_WORKFLOWS_DEFAULT_FILTER_SETTINGS,
+    filterFields: CORE_WORKFLOW_FILTER_FIELDS,
+  });
+
+  const hasError = isDefined(error);
+
+  const isEmpty =
+    !isInitialLoading &&
+    !hasError &&
+    !hasNextPage &&
+    displayedCoreWorkflows.length === 0;
+
+  return (
+    <CoreObjectIndexPageLayout
+      labelPlural={t`Workflows`}
+      icon={<ColoredIcon Icon={IconSettingsAutomation} color="gray" />}
+      numberOfSelectedRecords={selectedRowCount}
+      actionButton={
+        <>
+          <CommandMenuComponentInstanceContext.Provider
+            value={{
+              instanceId: getCommandMenuIdFromRecordIndexId(tableId),
+            }}
+          >
+            <CommandMenuContextProvider
+              displayType="button"
+              containerType={CommandMenuItemContainerType.IndexPageHeader}
+            >
+              <PinnedCommandMenuItemButtons />
+            </CommandMenuContextProvider>
+          </CommandMenuComponentInstanceContext.Provider>
+          <CoreWorkflowsFilterButton isFilterActive={hasAppliedFilters} />
+          <SidePanelToggleButton />
+        </>
+      }
+      isInitialLoading={isInitialLoading}
+      hasError={hasError}
+      isEmpty={isEmpty}
+      emptyState={{
+        hasAppliedFilters,
+        title: hasAppliedFilters
+          ? t`No Workflows found`
+          : t`Add your first Workflow`,
+        subTitle: hasAppliedFilters
+          ? t`No Workflows match your filters. Try removing some of them.`
+          : t`Create a Workflow to automate your work.`,
+        buttonTitle: t`Add a Workflow`,
+        onButtonClick: canCreateCoreWorkflow ? createCoreWorkflow : undefined,
+      }}
+      hasNextPage={hasNextPage}
+      isFetchingNextPage={loading}
+      onFetchNextPage={fetchNextPage}
+    >
+      <CoreWorkflowsSelectionToContextStoreEffect
+        selectedCoreWorkflows={selectedCoreWorkflows}
+      />
+      <CoreObjectTable
+        tableId={tableId}
+        columns={WORKFLOW_CORE_TABLE_COLUMNS}
+        items={coreWorkflowTableRows}
+        getItemKey={(workflow) => workflow.id}
+        getItemLink={getCoreWorkflowLink}
+        initialSort={CORE_WORKFLOWS_INITIAL_SORT}
+        selection={{
+          selectedRowIds,
+          onToggleRow: toggleRow,
+          onToggleAllRows: selectRows,
+        }}
+      />
+      {canCreateCoreWorkflow && (
+        <CoreObjectTableAddNewRow
+          label={t`New Workflow`}
+          onClick={createCoreWorkflow}
+          disabled={isCreatingCoreWorkflow}
+          hasCheckboxColumn
+        />
+      )}
+    </CoreObjectIndexPageLayout>
+  );
+};
+
+export const WorkflowCoreIndexPage = () => (
+  <CoreWorkflowsPermissionGate>
+    <WorkflowCoreIndexContent />
+  </CoreWorkflowsPermissionGate>
+);

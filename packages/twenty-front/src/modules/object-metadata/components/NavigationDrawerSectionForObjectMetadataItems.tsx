@@ -1,5 +1,5 @@
 import { NavigationDrawerItemForObjectMetadataItem } from '@/navigation-menu-item/display/object/components/NavigationDrawerItemForObjectMetadataItem';
-import { CoreObjectNameSingular } from 'twenty-shared/types';
+import { StandardObjectNameSingular } from 'twenty-shared/types';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { getObjectPermissionsForObject } from '@/object-metadata/utils/getObjectPermissionsForObject';
 import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
@@ -9,27 +9,24 @@ import { NavigationDrawerSectionTitle } from '@/ui/navigation/navigation-drawer/
 import { useNavigationSection } from '@/ui/navigation/navigation-drawer/hooks/useNavigationSection';
 import { isNavigationSectionOpenFamilyState } from '@/ui/navigation/navigation-drawer/states/isNavigationSectionOpenFamilyState';
 import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
-import { isDefined } from 'twenty-shared/utils';
+import { canReachSomeRecords, isDefined } from 'twenty-shared/utils';
 
-// OMNIA-CUSTOM: member workspace sidebar order — Dashboards first, then
-// Leads (Person), Policies, Notes, Tasks (call is hidden by permission).
 const ORDERED_FIRST_STANDARD_OBJECTS: string[] = [
-  CoreObjectNameSingular.Dashboard,
-  CoreObjectNameSingular.Person,
-  'call',
-  'policy',
-  CoreObjectNameSingular.Note,
-  CoreObjectNameSingular.Task,
+  StandardObjectNameSingular.Person,
+  StandardObjectNameSingular.Company,
+  StandardObjectNameSingular.Opportunity,
+  StandardObjectNameSingular.Task,
+  StandardObjectNameSingular.Note,
 ];
 
-const ORDERED_LAST_STANDARD_OBJECTS: string[] = [];
+const ORDERED_LAST_STANDARD_OBJECTS: string[] = [
+  StandardObjectNameSingular.Dashboard,
+];
 
 type NavigationDrawerSectionForObjectMetadataItemsProps = {
   sectionTitle: string;
   objectMetadataItems: EnrichedObjectMetadataItem[];
   rightIcon?: React.ReactNode;
-  respectProvidedOrder?: boolean;
-  ignoreShowInSidebar?: boolean;
   selectedObjectMetadataItemId?: string | null;
   onObjectMetadataItemClick?: (
     objectMetadataItem: EnrichedObjectMetadataItem,
@@ -43,8 +40,6 @@ export const NavigationDrawerSectionForObjectMetadataItems = ({
   sectionTitle,
   objectMetadataItems,
   rightIcon,
-  respectProvidedOrder = false,
-  ignoreShowInSidebar = false,
   selectedObjectMetadataItemId = null,
   onObjectMetadataItemClick,
   onActiveObjectMetadataItemClick,
@@ -58,72 +53,66 @@ export const NavigationDrawerSectionForObjectMetadataItems = ({
 
   const { objectPermissionsByObjectMetadataId } = useObjectPermissions();
 
-  const objectMetadataItemsForNavigationItems = respectProvidedOrder
-    ? objectMetadataItems
-    : (() => {
-        const sortedStandardObjectMetadataItems = [...objectMetadataItems]
-          .filter(
-            (item) =>
-              ORDERED_FIRST_STANDARD_OBJECTS.includes(item.nameSingular) &&
-              !ORDERED_LAST_STANDARD_OBJECTS.includes(item.nameSingular),
-          )
-          .sort((objectMetadataItemA, objectMetadataItemB) => {
-            const indexA = ORDERED_FIRST_STANDARD_OBJECTS.indexOf(
-              objectMetadataItemA.nameSingular,
-            );
-            const indexB = ORDERED_FIRST_STANDARD_OBJECTS.indexOf(
-              objectMetadataItemB.nameSingular,
-            );
-            if (indexA === -1 || indexB === -1) {
-              return objectMetadataItemA.nameSingular.localeCompare(
-                objectMetadataItemB.nameSingular,
-              );
-            }
-            return indexA - indexB;
-          });
-
-        const sortedCustomObjectMetadataItems = [...objectMetadataItems]
-          .filter(
-            (item) =>
-              !ORDERED_FIRST_STANDARD_OBJECTS.includes(item.nameSingular) &&
-              !ORDERED_LAST_STANDARD_OBJECTS.includes(item.nameSingular),
-          )
-          .sort((objectMetadataItemA, objectMetadataItemB) => {
-            return new Date(objectMetadataItemA.createdAt) <
-              new Date(objectMetadataItemB.createdAt)
-              ? 1
-              : -1;
-          });
-
-        const sortedLastStandardObjectMetadataItems =
-          ORDERED_LAST_STANDARD_OBJECTS.map((nameSingular) => {
-            return objectMetadataItems.find(
-              (item) => item.nameSingular === nameSingular,
-            );
-          }).filter(isDefined);
-
-        return [
-          ...sortedStandardObjectMetadataItems,
-          ...sortedCustomObjectMetadataItems,
-          ...sortedLastStandardObjectMetadataItems,
-        ];
-      })();
-
-  const objectMetadataItemsForNavigationItemsWithReadPermission =
-    objectMetadataItemsForNavigationItems.filter((objectMetadataItem) => {
-      const permissions = getObjectPermissionsForObject(
-        objectPermissionsByObjectMetadataId,
-        objectMetadataItem.id,
+  const sortedStandardObjectMetadataItems = [...objectMetadataItems]
+    .filter(
+      (item) =>
+        ORDERED_FIRST_STANDARD_OBJECTS.includes(item.nameSingular) &&
+        !ORDERED_LAST_STANDARD_OBJECTS.includes(item.nameSingular),
+    )
+    .sort((objectMetadataItemA, objectMetadataItemB) => {
+      const indexA = ORDERED_FIRST_STANDARD_OBJECTS.indexOf(
+        objectMetadataItemA.nameSingular,
       );
-
-      return (
-        permissions.canReadObjectRecords &&
-        (ignoreShowInSidebar || permissions.showInSidebar)
+      const indexB = ORDERED_FIRST_STANDARD_OBJECTS.indexOf(
+        objectMetadataItemB.nameSingular,
       );
+      if (indexA === -1 || indexB === -1) {
+        return objectMetadataItemA.nameSingular.localeCompare(
+          objectMetadataItemB.nameSingular,
+        );
+      }
+      return indexA - indexB;
     });
 
+  const sortedCustomObjectMetadataItems = [...objectMetadataItems]
+    .filter(
+      (item) =>
+        !ORDERED_FIRST_STANDARD_OBJECTS.includes(item.nameSingular) &&
+        !ORDERED_LAST_STANDARD_OBJECTS.includes(item.nameSingular),
+    )
+    .sort((objectMetadataItemA, objectMetadataItemB) => {
+      return new Date(objectMetadataItemA.createdAt) <
+        new Date(objectMetadataItemB.createdAt)
+        ? 1
+        : -1;
+    });
+
+  const sortedLastStandardObjectMetadataItems =
+    ORDERED_LAST_STANDARD_OBJECTS.map((nameSingular) => {
+      return objectMetadataItems.find(
+        (item) => item.nameSingular === nameSingular,
+      );
+    }).filter(isDefined);
+
+  const objectMetadataItemsForNavigationItems = [
+    ...sortedStandardObjectMetadataItems,
+    ...sortedCustomObjectMetadataItems,
+    ...sortedLastStandardObjectMetadataItems,
+  ];
+
+  const objectMetadataItemsForNavigationItemsWithReadPermission =
+    objectMetadataItemsForNavigationItems.filter((objectMetadataItem) =>
+      canReachSomeRecords({
+        objectRecordsPermissions: getObjectPermissionsForObject(
+          objectPermissionsByObjectMetadataId,
+          objectMetadataItem.id,
+        ),
+        operationType: 'read',
+      }),
+    );
+
   return (
-    objectMetadataItemsForNavigationItemsWithReadPermission.length > 0 && (
+    objectMetadataItems.length > 0 && (
       <NavigationDrawerSection>
         <NavigationDrawerAnimatedCollapseWrapper>
           <NavigationDrawerSectionTitle

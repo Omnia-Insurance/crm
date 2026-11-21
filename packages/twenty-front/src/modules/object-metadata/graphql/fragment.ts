@@ -14,6 +14,7 @@ export const OBJECT_METADATA_FRAGMENT = gql`
     isRemote
     isActive
     isSystem
+    isAuditLogged
     isUIEditable
     isUICreatable
     createdAt
@@ -24,6 +25,7 @@ export const OBJECT_METADATA_FRAGMENT = gql`
     shortcut
     isLabelSyncedWithName
     isSearchable
+    openRecordIn
     duplicateCriteria
     searchFieldMetadataList {
       id
@@ -41,7 +43,8 @@ export const OBJECT_METADATA_FRAGMENT = gql`
       indexWhereClause
       indexType
       isUnique
-      isCustom
+      applicationId
+      isSystemSideEffect
       indexFieldMetadataList {
         id
         fieldMetadataId
@@ -62,8 +65,11 @@ export const OBJECT_METADATA_FRAGMENT = gql`
       isActive
       isSystem
       isUIEditable
+      isSystemSideEffect
       isNullable
       isUnique
+      isSearchable
+      # OMNIA-CUSTOM: soft required-field rules (contract C5)
       requiredCondition
       createdAt
       updatedAt

@@ -1,31 +1,60 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 
-import { isString } from '@sniptt/guards';
 import { Request } from 'express';
+import { isLogicFunctionHttpResponse } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
-import { Repository } from 'typeorm';
+import { type SelectQueryBuilder } from 'typeorm';
 
+import { isUsageRefusedError } from 'src/engine/core-modules/billing/utils/is-usage-refused-error.util';
+import { ApplicationRepeatedEventRecorderService } from 'src/engine/core-modules/event-logs/emit/application-repeated-event-recorder.service';
 import {
   LogicFunctionExecutionException,
   LogicFunctionExecutionExceptionCode,
   LogicFunctionExecutorService,
 } from 'src/engine/core-modules/logic-function/logic-function-executor/logic-function-executor.service';
-import { buildLogicFunctionEvent } from 'src/engine/core-modules/logic-function/logic-function-trigger/triggers/route/utils/build-logic-function-event.util';
 import {
-  type RouteTriggerResponse,
+  LogicFunctionTriggerJob,
+  type LogicFunctionTriggerJobData,
+} from 'src/engine/core-modules/logic-function/logic-function-trigger/jobs/logic-function-trigger.job';
+import { LOGIC_FUNCTION_QUEUE_RETRY_BACKOFF } from 'src/engine/core-modules/logic-function/logic-function-trigger/constants/logic-function-queue-retry-backoff.constant';
+import { buildLogicFunctionEvent } from 'src/engine/core-modules/logic-function/logic-function-trigger/triggers/route/utils/build-logic-function-event.util';
+import { InjectMessageQueue } from 'src/engine/core-modules/message-queue/decorators/message-queue.decorator';
+import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
+import { MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
+import {
   buildRouteTriggerResponse,
+  type RouteTriggerResponse,
 } from 'src/engine/core-modules/logic-function/logic-function-trigger/triggers/route/utils/route-trigger-response.util';
+import { DEFAULT_SERVER_ROUTE_HTTP_METHODS } from 'src/engine/core-modules/server-route-trigger/constants/default-server-route-http-methods.constant';
+import { SERVER_ROUTE_DISPATCH_JOB_PRIORITY } from 'src/engine/core-modules/server-route-trigger/constants/server-route-dispatch-job-priority.constant';
 import {
   ServerRouteTriggerException,
   ServerRouteTriggerExceptionCode,
 } from 'src/engine/core-modules/server-route-trigger/exceptions/server-route-trigger.exception';
+import { ServerRouteAuthorizationHeaderService } from 'src/engine/core-modules/server-route-trigger/server-route-authorization-header.service';
+import { buildServerRouteFailureLogEntry } from 'src/engine/core-modules/server-route-trigger/utils/build-server-route-failure-log-entry.util';
+import { isAppFacingServerRouteError } from 'src/engine/core-modules/server-route-trigger/utils/is-app-facing-server-route-error.util';
+import { isUuidShaped } from 'src/engine/core-modules/server-route-trigger/utils/is-uuid-shaped.util';
+import { parseResolverDispatchResultOrThrow } from 'src/engine/core-modules/server-route-trigger/utils/parse-resolver-dispatch-result-or-throw.util';
+import { SERVER_ROUTE_FORWARDABLE_CREDENTIAL_HEADER_NAME } from 'src/engine/metadata-modules/logic-function/constants/server-route-forwardable-credential-header-name.constant';
 import { LogicFunctionEntity } from 'src/engine/metadata-modules/logic-function/logic-function.entity';
+import {
+  LogicFunctionException,
+  LogicFunctionExceptionCode,
+} from 'src/engine/metadata-modules/logic-function/logic-function.exception';
+import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
+import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 
-type ResolverResult = {
-  workspaceId: string;
-  targetLogicFunctionUniversalIdentifier: string;
-  payload?: object;
+const QUEUED_TARGET_RETRY_LIMIT = 3;
+
+export type ServerRouteTriggerResult = {
+  response: RouteTriggerResponse;
+  isResolvedThroughDeprecatedRoute: boolean;
+};
+
+type ResolvedServerRouteResolver = {
+  resolver: LogicFunctionEntity;
+  isResolvedThroughDeprecatedRoute: boolean;
 };
 
 @Injectable()
@@ -33,132 +62,275 @@ export class ServerRouteTriggerService {
   private readonly logger = new Logger(ServerRouteTriggerService.name);
 
   constructor(
-    @InjectRepository(LogicFunctionEntity)
-    private readonly logicFunctionRepository: Repository<LogicFunctionEntity>,
+    @InjectWorkspaceScopedRepository(LogicFunctionEntity)
+    private readonly logicFunctionRepository: WorkspaceScopedRepository<LogicFunctionEntity>,
     private readonly logicFunctionExecutorService: LogicFunctionExecutorService,
+    @InjectMessageQueue(MessageQueue.logicFunctionQueue)
+    private readonly messageQueueService: MessageQueueService,
+    private readonly serverRouteAuthorizationHeaderService: ServerRouteAuthorizationHeaderService,
+    private readonly applicationRepeatedEventRecorderService: ApplicationRepeatedEventRecorderService,
   ) {}
 
   async handle({
     request,
-    resolverLogicFunctionUniversalIdentifier,
+    resolverLogicFunctionIdentifier,
+    resolverApplicationRegistrationId,
   }: {
     request: Request;
-    resolverLogicFunctionUniversalIdentifier: string;
-  }): Promise<RouteTriggerResponse> {
-    const resolver = await this.findResolver({
-      logicFunctionUniversalIdentifier:
-        resolverLogicFunctionUniversalIdentifier,
-    });
-
-    if (!isDefined(resolver)) {
-      throw new ServerRouteTriggerException(
-        `Server resolver function ${resolverLogicFunctionUniversalIdentifier} not found`,
-        ServerRouteTriggerExceptionCode.LOGIC_FUNCTION_NOT_FOUND,
-      );
-    }
+    resolverLogicFunctionIdentifier: string;
+    resolverApplicationRegistrationId?: string;
+  }): Promise<ServerRouteTriggerResult> {
+    const { resolver, isResolvedThroughDeprecatedRoute } = isDefined(
+      resolverApplicationRegistrationId,
+    )
+      ? await this.findRegistrationResolverOrThrow({
+          applicationRegistrationId: resolverApplicationRegistrationId,
+          logicFunctionUniversalIdentifier: resolverLogicFunctionIdentifier,
+        })
+      : await this.findResolverOrThrow(resolverLogicFunctionIdentifier);
 
     const applicationRegistrationId =
       resolver.application?.applicationRegistration?.id;
 
     if (!isDefined(applicationRegistrationId)) {
       throw new ServerRouteTriggerException(
-        `Server resolver function ${resolverLogicFunctionUniversalIdentifier} is not linked to an application registration`,
+        `Server resolver function ${resolverLogicFunctionIdentifier} is not linked to an application registration`,
         ServerRouteTriggerExceptionCode.LOGIC_FUNCTION_NOT_FOUND,
       );
     }
 
-    const event = buildLogicFunctionEvent({
-      request,
-      pathParameters: {},
-      forwardedRequestHeaders:
-        resolver.serverRouteTriggerSettings?.forwardedRequestHeaders ?? [],
-      userWorkspaceId: null,
-    });
+    try {
+      const allowedHttpMethods =
+        resolver.serverRouteTriggerSettings?.httpMethods ??
+        DEFAULT_SERVER_ROUTE_HTTP_METHODS;
 
-    const resolverResult = await this.runFunction({
-      logicFunctionUniversalIdentifier: resolver.universalIdentifier,
-      workspaceId: resolver.workspaceId,
-      payload: event,
-    });
-    const resolved = this.parseResolverResult(resolverResult);
+      if (
+        !allowedHttpMethods.some((httpMethod) => httpMethod === request.method)
+      ) {
+        throw new ServerRouteTriggerException(
+          `Server resolver function ${resolverLogicFunctionIdentifier} does not accept ${request.method} requests`,
+          ServerRouteTriggerExceptionCode.METHOD_NOT_ALLOWED,
+        );
+      }
 
-    const targetResult = await this.runFunction({
-      logicFunctionUniversalIdentifier:
-        resolved.targetLogicFunctionUniversalIdentifier,
-      workspaceId: resolved.workspaceId,
-      payload: resolved.payload ?? event,
-      applicationRegistrationId,
-    });
+      if (resolver.httpRouteTriggerSettings?.isAuthRequired === true) {
+        throw new ServerRouteTriggerException(
+          `Server resolver function ${resolverLogicFunctionIdentifier} requires authentication and cannot be dispatched through the public server route`,
+          ServerRouteTriggerExceptionCode.RESOLVER_REQUIRES_AUTHENTICATION,
+        );
+      }
 
-    if (isDefined(targetResult.error)) {
-      throw new ServerRouteTriggerException(
-        targetResult.error.errorMessage,
-        ServerRouteTriggerExceptionCode.SERVER_ROUTE_USER_UNCAUGHT_ERROR,
+      const forwardedRequestHeaders =
+        resolver.serverRouteTriggerSettings?.forwardedRequestHeaders ?? [];
+
+      const isAuthorizationHeaderForwardable =
+        forwardedRequestHeaders.some(
+          (headerName) =>
+            headerName.toLowerCase() ===
+            SERVER_ROUTE_FORWARDABLE_CREDENTIAL_HEADER_NAME,
+        ) &&
+        (await this.serverRouteAuthorizationHeaderService.isForwardable(
+          request.headers[SERVER_ROUTE_FORWARDABLE_CREDENTIAL_HEADER_NAME],
+        ));
+
+      const event = buildLogicFunctionEvent({
+        request,
+        pathParameters: {},
+        forwardedRequestHeaders,
+        forwardableCredentialHeaderName: isAuthorizationHeaderForwardable
+          ? SERVER_ROUTE_FORWARDABLE_CREDENTIAL_HEADER_NAME
+          : undefined,
+        userWorkspaceId: null,
+      });
+
+      const resolverResult = await this.runFunction({
+        logicFunctionUniversalIdentifier: resolver.universalIdentifier,
+        workspaceId: resolver.workspaceId,
+        payload: event,
+      });
+
+      if (isDefined(resolverResult.error)) {
+        throw new ServerRouteTriggerException(
+          resolverResult.error.errorMessage,
+          ServerRouteTriggerExceptionCode.SERVER_ROUTE_USER_UNCAUGHT_ERROR,
+        );
+      }
+
+      if (isLogicFunctionHttpResponse(resolverResult.data)) {
+        return {
+          response: buildRouteTriggerResponse(resolverResult.data),
+          isResolvedThroughDeprecatedRoute,
+        };
+      }
+
+      const dispatchResult = parseResolverDispatchResultOrThrow(
+        resolverResult.data,
+      );
+
+      return {
+        response: await this.enqueueTargetFunction({
+          logicFunctionUniversalIdentifier:
+            dispatchResult.targetLogicFunctionUniversalIdentifier,
+          workspaceId: dispatchResult.workspaceId,
+          payload: dispatchResult.payload ?? event,
+          applicationRegistrationId,
+        }),
+        isResolvedThroughDeprecatedRoute,
+      };
+    } catch (error) {
+      this.recordServerRouteFailure({
+        resolver,
+        applicationRegistrationId,
+        error,
+      });
+
+      throw error;
+    }
+  }
+
+  private recordServerRouteFailure({
+    resolver,
+    applicationRegistrationId,
+    error,
+  }: {
+    resolver: LogicFunctionEntity;
+    applicationRegistrationId: string;
+    error: unknown;
+  }) {
+    if (
+      error instanceof ServerRouteTriggerException &&
+      error.code ===
+        ServerRouteTriggerExceptionCode.SERVER_ROUTE_USER_UNCAUGHT_ERROR
+    ) {
+      return;
+    }
+
+    if (!isAppFacingServerRouteError(error)) {
+      this.logger.error(
+        `Server route ${resolver.id} failed with a platform error`,
+        error,
       );
     }
 
-    return buildRouteTriggerResponse(targetResult.data);
+    this.applicationRepeatedEventRecorderService.record({
+      entry: buildServerRouteFailureLogEntry({
+        resolver,
+        applicationRegistrationId,
+        error,
+      }),
+    });
   }
 
-  private async findResolver({
+  private createResolverQueryBuilder(): SelectQueryBuilder<LogicFunctionEntity> {
+    return this.logicFunctionRepository
+      .createQueryBuilder('logicFunction')
+      .innerJoinAndSelect('logicFunction.application', 'application')
+      .innerJoinAndSelect(
+        'application.applicationRegistration',
+        'applicationRegistration',
+      )
+      .where('logicFunction.serverRouteTriggerSettings IS NOT NULL')
+      .andWhere(
+        'logicFunction.workspaceId = applicationRegistration.ownerWorkspaceId',
+      );
+  }
+
+  private async findRegistrationResolverOrThrow({
+    applicationRegistrationId,
     logicFunctionUniversalIdentifier,
   }: {
+    applicationRegistrationId: string;
     logicFunctionUniversalIdentifier: string;
-  }): Promise<LogicFunctionEntity | null> {
-    const candidates = await this.logicFunctionRepository.find({
-      where: { universalIdentifier: logicFunctionUniversalIdentifier },
-      relations: { application: { applicationRegistration: true } },
-    });
-
-    return (
-      candidates.find(
-        (candidate) =>
-          isDefined(candidate.application?.applicationRegistration) &&
-          candidate.workspaceId ===
-            candidate.application.applicationRegistration.ownerWorkspaceId,
-      ) ?? null
-    );
-  }
-
-  private parseResolverResult(result: {
-    data: object | null;
-    error?: { errorMessage: string };
-  }): ResolverResult {
-    if (isDefined(result.error)) {
-      throw new ServerRouteTriggerException(
-        result.error.errorMessage,
-        ServerRouteTriggerExceptionCode.SERVER_ROUTE_USER_UNCAUGHT_ERROR,
+  }): Promise<ResolvedServerRouteResolver> {
+    const buildNotFoundException = () =>
+      new ServerRouteTriggerException(
+        `Server resolver function ${logicFunctionUniversalIdentifier} not found in application registration ${applicationRegistrationId}`,
+        ServerRouteTriggerExceptionCode.LOGIC_FUNCTION_NOT_FOUND,
       );
-    }
-
-    const data = result.data as {
-      workspaceId?: unknown;
-      targetLogicFunctionUniversalIdentifier?: unknown;
-      payload?: unknown;
-    };
 
     if (
-      !isString(data?.workspaceId) ||
-      !isString(data?.targetLogicFunctionUniversalIdentifier)
+      !isUuidShaped(applicationRegistrationId) ||
+      !isUuidShaped(logicFunctionUniversalIdentifier)
     ) {
+      throw buildNotFoundException();
+    }
+
+    const resolver = await this.createResolverQueryBuilder()
+      .andWhere('applicationRegistration.id = :applicationRegistrationId', {
+        applicationRegistrationId,
+      })
+      .andWhere(
+        'logicFunction.universalIdentifier = :logicFunctionUniversalIdentifier',
+        { logicFunctionUniversalIdentifier },
+      )
+      .getOne();
+
+    if (!isDefined(resolver)) {
+      throw buildNotFoundException();
+    }
+
+    return { resolver, isResolvedThroughDeprecatedRoute: false };
+  }
+
+  // TODO(@charlesBochet): drop the single-identifier routes (id and universalIdentifier) after 2026-11-29.
+  private async findResolverOrThrow(
+    identifier: string,
+  ): Promise<ResolvedServerRouteResolver> {
+    const resolverById = await this.createResolverQueryBuilder()
+      .andWhere('logicFunction.id = :id', { id: identifier })
+      .getOne();
+
+    if (isDefined(resolverById)) {
+      this.logger.warn(
+        `Server route ${identifier} resolved through the deprecated logic function id form; the registered URL should move to /webhooks/server/${resolverById.application?.applicationRegistration?.id}/${resolverById.universalIdentifier}`,
+      );
+
+      return {
+        resolver: resolverById,
+        isResolvedThroughDeprecatedRoute: true,
+      };
+    }
+
+    const legacyCandidates = await this.createResolverQueryBuilder()
+      .andWhere('logicFunction.universalIdentifier = :universalIdentifier', {
+        universalIdentifier: identifier,
+      })
+      .limit(2)
+      .getMany();
+
+    if (legacyCandidates.length > 1) {
+      this.logger.error(
+        `Server route ${identifier} is claimed by several application registrations (owner workspaces: ${legacyCandidates
+          .map((candidate) => candidate.workspaceId)
+          .join(', ')}); refusing to dispatch`,
+      );
+
       throw new ServerRouteTriggerException(
-        'Resolver logic function must return { workspaceId: string; targetLogicFunctionUniversalIdentifier: string; payload?: object }',
-        ServerRouteTriggerExceptionCode.RESOLVER_INVALID_RESULT,
+        `Server route ${identifier} is claimed by several application registrations`,
+        ServerRouteTriggerExceptionCode.AMBIGUOUS_SERVER_ROUTE,
       );
     }
 
+    const [legacyResolver] = legacyCandidates;
+
+    if (!isDefined(legacyResolver)) {
+      throw new ServerRouteTriggerException(
+        `Server resolver function ${identifier} not found`,
+        ServerRouteTriggerExceptionCode.LOGIC_FUNCTION_NOT_FOUND,
+      );
+    }
+
+    this.logger.warn(
+      `Server route ${identifier} resolved through the deprecated universalIdentifier form (application registration ${legacyResolver.application?.applicationRegistration?.universalIdentifier}, owner workspace ${legacyResolver.workspaceId}); the registered URL should move to /webhooks/server/${legacyResolver.application?.applicationRegistration?.id}/${legacyResolver.universalIdentifier}`,
+    );
+
     return {
-      workspaceId: data.workspaceId,
-      targetLogicFunctionUniversalIdentifier:
-        data.targetLogicFunctionUniversalIdentifier,
-      payload:
-        typeof data.payload === 'object' && data.payload !== null
-          ? (data.payload as object)
-          : undefined,
+      resolver: legacyResolver,
+      isResolvedThroughDeprecatedRoute: true,
     };
   }
 
-  private async runFunction({
+  private async enqueueTargetFunction({
     logicFunctionUniversalIdentifier,
     workspaceId,
     payload,
@@ -167,20 +339,57 @@ export class ServerRouteTriggerService {
     logicFunctionUniversalIdentifier: string;
     workspaceId: string;
     payload: object;
-    applicationRegistrationId?: string;
-  }): Promise<{ data: object | null; error?: { errorMessage: string } }> {
-    const logicFunction = await this.logicFunctionRepository.findOne({
-      where: {
-        universalIdentifier: logicFunctionUniversalIdentifier,
+    applicationRegistrationId: string;
+  }): Promise<RouteTriggerResponse> {
+    const logicFunction = await this.findLogicFunctionOrFail({
+      logicFunctionUniversalIdentifier,
+      workspaceId,
+      applicationRegistrationId,
+    });
+
+    await this.messageQueueService.add<LogicFunctionTriggerJobData>(
+      LogicFunctionTriggerJob.name,
+      {
+        logicFunctionId: logicFunction.id,
         workspaceId,
+        payload,
+      },
+      {
+        retryLimit: QUEUED_TARGET_RETRY_LIMIT,
+        backoff: LOGIC_FUNCTION_QUEUE_RETRY_BACKOFF,
+        priority: SERVER_ROUTE_DISPATCH_JOB_PRIORITY,
+        workspaceId,
+        applicationUniversalIdentifier:
+          logicFunction.application.universalIdentifier,
+      },
+    );
+
+    return { statusCode: 200, headers: {}, body: { queued: true } };
+  }
+
+  private async findLogicFunctionOrFail({
+    logicFunctionUniversalIdentifier,
+    workspaceId,
+    applicationRegistrationId,
+  }: {
+    logicFunctionUniversalIdentifier: string;
+    workspaceId: string;
+    applicationRegistrationId?: string;
+  }): Promise<LogicFunctionEntity> {
+    const logicFunction = await this.logicFunctionRepository.findOne(
+      workspaceId,
+      {
+        where: {
+          universalIdentifier: logicFunctionUniversalIdentifier,
+          ...(isDefined(applicationRegistrationId)
+            ? { application: { applicationRegistrationId } }
+            : {}),
+        },
         ...(isDefined(applicationRegistrationId)
-          ? { application: { applicationRegistrationId } }
+          ? { relations: { application: true } }
           : {}),
       },
-      ...(isDefined(applicationRegistrationId)
-        ? { relations: { application: true } }
-        : {}),
-    });
+    );
 
     if (!isDefined(logicFunction)) {
       throw new ServerRouteTriggerException(
@@ -189,6 +398,23 @@ export class ServerRouteTriggerService {
       );
     }
 
+    return logicFunction;
+  }
+
+  private async runFunction({
+    logicFunctionUniversalIdentifier,
+    workspaceId,
+    payload,
+  }: {
+    logicFunctionUniversalIdentifier: string;
+    workspaceId: string;
+    payload: object;
+  }): Promise<{ data: object | null; error?: { errorMessage: string } }> {
+    const logicFunction = await this.findLogicFunctionOrFail({
+      logicFunctionUniversalIdentifier,
+      workspaceId,
+    });
+
     try {
       return await this.logicFunctionExecutorService.execute({
         logicFunctionId: logicFunction.id,
@@ -196,6 +422,10 @@ export class ServerRouteTriggerService {
         payload,
       });
     } catch (error) {
+      if (isUsageRefusedError(error)) {
+        throw error;
+      }
+
       this.logger.error(
         `Server logic function ${logicFunction.id} failed in workspace ${workspaceId}: ${error instanceof Error ? error.message : String(error)}`,
         error instanceof Error ? error.stack : undefined,
@@ -217,6 +447,8 @@ export class ServerRouteTriggerService {
         return 'Rate limit exceeded';
       case ServerRouteTriggerExceptionCode.LOGIC_FUNCTION_NOT_FOUND:
         return 'Logic function not found';
+      case ServerRouteTriggerExceptionCode.LOGIC_FUNCTION_DISABLED:
+        return 'Logic function execution is disabled';
       default:
         return 'An unexpected error occurred while handling the server route';
     }
@@ -225,6 +457,13 @@ export class ServerRouteTriggerService {
   private mapExecutorErrorToServerRouteCode(
     error: unknown,
   ): ServerRouteTriggerExceptionCode {
+    if (
+      error instanceof LogicFunctionException &&
+      error.code === LogicFunctionExceptionCode.LOGIC_FUNCTION_DISABLED
+    ) {
+      return ServerRouteTriggerExceptionCode.LOGIC_FUNCTION_DISABLED;
+    }
+
     if (!(error instanceof LogicFunctionExecutionException)) {
       return ServerRouteTriggerExceptionCode.SERVER_ROUTE_PLATFORM_ERROR;
     }

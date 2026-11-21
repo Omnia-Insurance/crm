@@ -1,6 +1,5 @@
 import { isDefined } from 'twenty-shared/utils';
 import {
-  IF_ELSE_BRANCH_POSITION_OFFSETS,
   TRIGGER_STEP_ID,
   type StepIfElseBranch,
   WorkflowActionType,
@@ -29,11 +28,7 @@ const computeUpdatedNextStepIds = ({
     : [];
 
   return [
-    ...new Set([
-      ...filteredNextStepIds,
-      // We automatically link parent and child steps together
-      ...(stepToDeleteChildrenIds || []),
-    ]),
+    ...new Set([...filteredNextStepIds, ...(stepToDeleteChildrenIds || [])]),
   ];
 };
 
@@ -53,19 +48,9 @@ export const getEmptyChildStepIdsForIfElse = ({
   });
 };
 
-const createReplacementEmptyNode = ({
-  ifElseStep,
-  isIfBranch,
-  deletedStepPosition,
-}: {
-  ifElseStep: WorkflowAction;
-  isIfBranch: boolean;
-  deletedStepPosition?: { x: number; y: number };
-}): WorkflowAction => {
-  const offset = isIfBranch
-    ? IF_ELSE_BRANCH_POSITION_OFFSETS.IF
-    : IF_ELSE_BRANCH_POSITION_OFFSETS.ELSE;
-
+const createReplacementEmptyNode = (
+  deletedStepPosition: WorkflowAction['position'],
+): WorkflowAction => {
   return {
     id: v4(),
     name: 'Add an Action',
@@ -75,14 +60,11 @@ const createReplacementEmptyNode = ({
       outputSchema: {},
       errorHandlingOptions: {
         continueOnFailure: { value: false },
-        retryOnFailure: { value: false },
+        retryOnFailure: { value: 0 },
       },
       input: {},
     },
-    position: deletedStepPosition ?? {
-      x: (ifElseStep.position?.x ?? 0) + offset.x,
-      y: (ifElseStep.position?.y ?? 0) + offset.y,
-    },
+    position: deletedStepPosition,
   };
 };
 
@@ -128,11 +110,7 @@ const updateIfElseStepOnDeletion = ({
         branchIndex === totalBranches - 1 && !isDefined(branch.filterGroupId);
 
       if ((isIfBranch || isElseBranch) && finalNextStepIds.length === 0) {
-        const emptyNode = createReplacementEmptyNode({
-          ifElseStep: step,
-          isIfBranch,
-          deletedStepPosition,
-        });
+        const emptyNode = createReplacementEmptyNode(deletedStepPosition);
 
         replacementEmptyNodes.push(emptyNode);
 
@@ -172,6 +150,7 @@ const updateIfElseStepOnDeletion = ({
 
   return {
     ...step,
+    nextStepIds: [],
     settings: {
       ...step.settings,
       input: {

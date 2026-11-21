@@ -1,60 +1,46 @@
-import {
-  DragDropContext,
-  type DragStart,
-  type DropResult,
-} from '@hello-pangea/dnd';
-import { type ReactNode, useCallback } from 'react';
-
-import { useRecordIndexContextOrThrow } from '@/object-record/record-index/contexts/RecordIndexContext';
-import { useRecordTableContextOrThrow } from '@/object-record/record-table/contexts/RecordTableContext';
-import { useAtomComponentSelectorCallbackState } from '@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorCallbackState';
 import { useStore } from 'jotai';
+import { type ReactNode } from 'react';
 
-import { useEndRecordDrag } from '@/object-record/record-drag/hooks/useEndRecordDrag';
-import { useProcessTableWithoutGroupRecordDrop } from '@/object-record/record-drag/hooks/useProcessTableWithoutGroupRecordDrop';
-import { useStartRecordDrag } from '@/object-record/record-drag/hooks/useStartRecordDrag';
-import { selectedRowIdsComponentSelector } from '@/object-record/record-table/states/selectors/selectedRowIdsComponentSelector';
+import { RecordDragDropContextProvider } from '@/object-record/record-drag/components/RecordDragDropContextProvider';
+import { useProcessRecordWithoutGroupDrop } from '@/object-record/record-drag/hooks/useProcessRecordWithoutGroupDrop';
+import { useTriggerTableWithoutGroupDragAndDropOptimisticUpdate } from '@/object-record/record-drag/hooks/useTriggerTableWithoutGroupDragAndDropOptimisticUpdate';
+import { useRecordTableContextOrThrow } from '@/object-record/record-table/contexts/RecordTableContext';
+import { RecordTableRowDragOverlayContent } from '@/object-record/record-table/record-table-row/components/RecordTableRowDragOverlayContent';
+import { totalNumberOfRowsComponentState } from '@/object-record/record-table/virtualization/states/totalNumberOfRowsComponentState';
+import { useAtomComponentStateCallbackState } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateCallbackState';
+
+type RecordTableBodyNoRecordGroupDragDropContextProviderProps = {
+  children: ReactNode;
+};
 
 export const RecordTableBodyNoRecordGroupDragDropContextProvider = ({
   children,
-}: {
-  children: ReactNode;
-}) => {
-  const { recordIndexId } = useRecordIndexContextOrThrow();
+}: RecordTableBodyNoRecordGroupDragDropContextProviderProps) => {
   const { recordTableId } = useRecordTableContextOrThrow();
 
-  const selectedRowIds = useAtomComponentSelectorCallbackState(
-    selectedRowIdsComponentSelector,
+  const totalNumberOfRows = useAtomComponentStateCallbackState(
+    totalNumberOfRowsComponentState,
     recordTableId,
   );
 
   const store = useStore();
 
-  const { startRecordDrag } = useStartRecordDrag(recordIndexId);
-  const { endRecordDrag } = useEndRecordDrag(recordIndexId);
-  const { processTableWithoutGroupRecordDrop } =
-    useProcessTableWithoutGroupRecordDrop();
+  const { triggerTableWithoutGroupDragAndDropOptimisticUpdate } =
+    useTriggerTableWithoutGroupDragAndDropOptimisticUpdate();
 
-  const handleDragStart = useCallback(
-    (start: DragStart) => {
-      const currentSelectedRecordIds = store.get(selectedRowIds) as string[];
-
-      startRecordDrag(start, currentSelectedRecordIds);
-    },
-    [selectedRowIds, startRecordDrag, store],
-  );
-
-  const handleDragEnd = useCallback(
-    (result: DropResult) => {
-      processTableWithoutGroupRecordDrop(result);
-      endRecordDrag();
-    },
-    [endRecordDrag, processTableWithoutGroupRecordDrop],
-  );
+  const { processRecordWithoutGroupDrop } = useProcessRecordWithoutGroupDrop({
+    onBeforeRecordsUpdate: triggerTableWithoutGroupDragAndDropOptimisticUpdate,
+  });
 
   return (
-    <DragDropContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+    <RecordDragDropContextProvider
+      getDroppableItemCount={() => store.get(totalNumberOfRows) ?? 0}
+      onRecordDrop={processRecordWithoutGroupDrop}
+      renderDragOverlay={(source) => (
+        <RecordTableRowDragOverlayContent source={source} />
+      )}
+    >
       {children}
-    </DragDropContext>
+    </RecordDragDropContextProvider>
   );
 };

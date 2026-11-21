@@ -1,5 +1,5 @@
-import { type DropResult, type ResponderProvided } from '@hello-pangea/dnd';
-
+import { DraggableListRow } from '@/ui/layout/draggable-list/components/DraggableListRow';
+import { ApplicationStackIcon } from '@/applications/components/ApplicationStackIcon';
 import { useGetFieldMetadataItemByIdOrThrow } from '@/object-metadata/hooks/useGetFieldMetadataItemById';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { getLabelIdentifierFieldMetadataItem } from '@/object-metadata/utils/getLabelIdentifierFieldMetadataItem';
@@ -8,21 +8,27 @@ import { useProcessOptionDropdownDragEnd } from '@/object-record/object-options-
 import { ObjectOptionsDropdownContext } from '@/object-record/object-options-dropdown/states/contexts/ObjectOptionsDropdownContext';
 import { useChangeRecordFieldVisibility } from '@/object-record/record-field/hooks/useChangeRecordFieldVisibility';
 import { visibleRecordFieldsComponentSelector } from '@/object-record/record-field/states/visibleRecordFieldsComponentSelector';
-import { getFieldLabelWithSubField } from '@/side-panel/pages/page-layout/utils/getFieldLabelWithSubField';
+import { type RecordField } from '@/object-record/record-field/types/RecordField';
+import { getRecordFieldColumnKey } from '@/object-record/record-field/utils/getRecordFieldColumnKey';
+import { getRelationSubFieldMetadataItem } from '@/object-record/record-field/utils/getRelationSubFieldMetadataItem';
 import { DraggableItem } from '@/ui/layout/draggable-list/components/DraggableItem';
 import { DraggableList } from '@/ui/layout/draggable-list/components/DraggableList';
+import { type DraggableListDropResult } from '@/ui/layout/draggable-list/types/DraggableListDropResult';
 import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
-import { dropdownYPositionComponentState } from '@/ui/layout/dropdown/states/internal/dropdownYPositionComponentState';
 import { useAtomComponentSelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorValue';
-import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { ViewType } from '@/views/types/ViewType';
+import { getRelationSubFieldColumnLabel } from '@/views/utils/getRelationSubFieldColumnLabel';
+import { isNonEmptyString } from '@sniptt/guards';
 import { useContext } from 'react';
 import { isDefined } from 'twenty-shared/utils';
-import { IconEyeOff, useIcons } from 'twenty-ui/icon';
-import { MenuItemDraggable } from 'twenty-ui/navigation';
+import { LightIconButton } from 'twenty-ui/components/input';
+import { IconEyeOff } from 'twenty-ui/icon';
+import { useIcons } from 'twenty-ui/icon/provider';
 import { sortByProperty } from '~/utils/array/sortByProperty';
+import { useLingui } from '@lingui/react/macro';
 
 export const ViewFieldsVisibleDropdownSection = () => {
+  const { t } = useLingui();
   const { viewType, objectMetadataItem, recordIndexId } = useContext(
     ObjectOptionsDropdownContext,
   );
@@ -53,10 +59,6 @@ export const ViewFieldsVisibleDropdownSection = () => {
       ? handleBoardFieldVisibilityChange
       : changeRecordFieldVisibility;
 
-  const handleDragEnd = (result: DropResult, provided: ResponderProvided) => {
-    handleReorderFields(result, provided);
-  };
-
   const { getIcon } = useIcons();
   const { objectMetadataItems } = useObjectMetadataItems();
 
@@ -81,21 +83,62 @@ export const ViewFieldsVisibleDropdownSection = () => {
     )
     .toSorted(sortByProperty('position'));
 
-  const dropdownYPosition = useAtomComponentStateValue(
-    dropdownYPositionComponentState,
-  );
+  const handleDragEnd = (result: DraggableListDropResult) => {
+    if (!isDefined(result.destination)) {
+      return;
+    }
+
+    const recordFieldToMove = draggableRecordFields[result.source.index];
+
+    // OMNIA-CUSTOM: the board handlers find a field by fieldMetadataItemId, which a sub-field column shares with
+    // its relation, so a sub-field column (kept when a table view becomes a board) always uses the record-field hooks
+    const handleReorderRecordField = isNonEmptyString(
+      recordFieldToMove.subFieldName,
+    )
+      ? processOptionDropdownDragEnd
+      : handleReorderFields;
+
+    handleReorderRecordField({
+      recordFieldToMove,
+      targetRecordField: draggableRecordFields[result.destination.index],
+    });
+  };
+
+  // OMNIA-CUSTOM: a sub-field column is hidden by its (field, sub-field) pair, for the same reason
+  const handleHideRecordField = (recordField: RecordField) => {
+    if (isNonEmptyString(recordField.subFieldName)) {
+      changeRecordFieldVisibility({
+        fieldMetadataId: recordField.fieldMetadataItemId,
+        isVisible: false,
+        subFieldName: recordField.subFieldName,
+      });
+
+      return;
+    }
+
+    handleChangeFieldVisibility({
+      fieldMetadataId: recordField.fieldMetadataItemId,
+      isVisible: false,
+    });
+  };
 
   return (
     <>
       <DropdownMenuItemsContainer>
         {fieldMetadataItemLabelIdentifier && (
-          <MenuItemDraggable
-            LeftIcon={getIcon(fieldMetadataItemLabelIdentifier.icon)}
-            text={fieldMetadataItemLabelIdentifier.label}
-            accent="placeholder"
-            gripMode="always"
+          <DraggableListRow
+            startIcon={
+              <ApplicationStackIcon
+                Icon={getIcon(fieldMetadataItemLabelIdentifier.icon)}
+                applicationId={fieldMetadataItemLabelIdentifier.applicationId}
+              />
+            }
+            isMuted
+            dragHandleVisibility="always"
             isDragDisabled
-          />
+          >
+            {fieldMetadataItemLabelIdentifier.label}
+          </DraggableListRow>
         )}
         {draggableRecordFields.length > 0 && (
           <DraggableList
@@ -103,52 +146,60 @@ export const ViewFieldsVisibleDropdownSection = () => {
             draggableItems={
               <>
                 {draggableRecordFields.map((recordField, index) => {
-                  const fieldIndex =
-                    index +
-                    (isDefined(fieldMetadataItemLabelIdentifier) ? 1 : 0);
-
                   const { fieldMetadataItem } = getFieldMetadataItemByIdOrThrow(
                     recordField.fieldMetadataItemId,
                   );
 
-                  const draggableKey = recordField.subFieldName
-                    ? `${recordField.fieldMetadataItemId}-${recordField.subFieldName}`
-                    : recordField.fieldMetadataItemId;
-
-                  const fieldLabel = getFieldLabelWithSubField({
-                    field: fieldMetadataItem,
-                    subFieldName: recordField.subFieldName ?? undefined,
-                    objectMetadataItems,
-                  });
+                  // OMNIA-CUSTOM: sub-field columns share fieldMetadataItemId with their relation, so they are keyed
+                  // by column key and labelled "Lead / Date of Birth" like the table header
+                  const columnKey = getRecordFieldColumnKey(recordField);
+                  const { subFieldName } = recordField;
+                  const subFieldMetadataItem = isNonEmptyString(subFieldName)
+                    ? getRelationSubFieldMetadataItem({
+                        targetObjectMetadataId:
+                          fieldMetadataItem.relation?.targetObjectMetadata.id,
+                        subFieldName,
+                        objectMetadataItems,
+                      })
+                    : null;
+                  const fieldLabel = isNonEmptyString(subFieldName)
+                    ? getRelationSubFieldColumnLabel({
+                        relationFieldLabel: fieldMetadataItem.label,
+                        subFieldLabel:
+                          subFieldMetadataItem?.label ?? subFieldName,
+                      })
+                    : fieldMetadataItem.label;
+                  const fieldIconMetadataItem =
+                    subFieldMetadataItem ?? fieldMetadataItem;
 
                   return (
                     <DraggableItem
-                      key={draggableKey}
-                      draggableId={draggableKey}
-                      index={fieldIndex + 1}
-                      isInsideScrollableContainer
-                      containerOffsetY={dropdownYPosition}
+                      key={columnKey}
+                      draggableId={columnKey}
+                      index={index}
                       itemComponent={
-                        <MenuItemDraggable
-                          key={draggableKey}
-                          LeftIcon={getIcon(fieldMetadataItem.icon)}
-                          iconButtons={[
-                            {
-                              Icon: IconEyeOff,
-                              onClick: () => {
-                                handleChangeFieldVisibility({
-                                  fieldMetadataId:
-                                    recordField.fieldMetadataItemId,
-                                  isVisible: false,
-                                  subFieldName:
-                                    recordField.subFieldName ?? undefined,
-                                });
-                              },
-                            },
-                          ]}
-                          text={fieldLabel}
-                          gripMode="always"
-                        />
+                        <DraggableListRow
+                          key={columnKey}
+                          startIcon={
+                            <ApplicationStackIcon
+                              Icon={getIcon(fieldIconMetadataItem.icon)}
+                              applicationId={
+                                fieldIconMetadataItem.applicationId
+                              }
+                            />
+                          }
+                          actions={
+                            <LightIconButton
+                              aria-label={t`Hide field`}
+                              onClick={() => handleHideRecordField(recordField)}
+                            >
+                              <IconEyeOff />
+                            </LightIconButton>
+                          }
+                          dragHandleVisibility="always"
+                        >
+                          {fieldLabel}
+                        </DraggableListRow>
                       }
                     />
                   );

@@ -1,14 +1,13 @@
-import { TableRow } from '@/ui/layout/table/components/TableRow';
-import { TableBody } from '@/ui/layout/table/components/TableBody';
 import { Table } from '@/ui/layout/table/components/Table';
-import { styled } from '@linaria/react';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
-import { TableHeader } from '@/ui/layout/table/components/TableHeader';
-import { t } from '@lingui/core/macro';
+import { TableBody } from '@/ui/layout/table/components/TableBody';
 import { TableCell } from '@/ui/layout/table/components/TableCell';
+import { TableHeader } from '@/ui/layout/table/components/TableHeader';
+import { TableRow } from '@/ui/layout/table/components/TableRow';
+import { styled } from '@linaria/react';
+import { OverflowingTextWithTooltip } from 'twenty-ui/primitives/typography';
 import { IconChevronRight } from 'twenty-ui/icon';
-import { OverflowingTextWithTooltip } from 'twenty-ui/surfaces';
-import { useContext } from 'react';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledTableBodyContainer = styled.div`
   border-bottom: 1px solid ${themeCssVariables.border.color.light};
@@ -28,7 +27,8 @@ type ConfigVariableTableProps = { configVariables: ConfigVariable[] };
 export const ConfigVariableTable = ({
   configVariables,
 }: ConfigVariableTableProps) => {
-  const { theme } = useContext(ThemeContext);
+  const { t } = useLingui();
+  const theme = useTheme();
 
   return (
     <Table>

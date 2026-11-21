@@ -1,11 +1,10 @@
 /* @license Enterprise */
 
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
 import { isDefined } from 'twenty-shared/utils';
 import { IconFilter, IconPlus } from 'twenty-ui/icon';
-import { Button } from 'twenty-ui/input';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { Button } from 'twenty-ui/primitives/input';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 import { CommandMenuButton } from '@/command-menu/components/CommandMenuButton';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
@@ -27,7 +26,7 @@ import { useAtomComponentSelectorValue } from '@/ui/utilities/state/jotai/hooks/
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
-import { type RowLevelPermissionPredicateScope } from '@/settings/roles/types/OmniaRoleExtensions';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledContainer = styled.div`
   align-items: start;
@@ -50,16 +49,15 @@ const StyledActionButtonWrapper = styled.div`
 type SettingsRolePermissionsObjectLevelRecordLevelPermissionFilterBuilderContentProps =
   {
     roleId: string;
-    scope: RowLevelPermissionPredicateScope;
     objectMetadataItem: EnrichedObjectMetadataItem;
   };
 
 export const SettingsRolePermissionsObjectLevelRecordLevelPermissionFilterBuilderContent =
   ({
     roleId,
-    scope,
     objectMetadataItem,
   }: SettingsRolePermissionsObjectLevelRecordLevelPermissionFilterBuilderContentProps) => {
+    const { t } = useLingui();
     const settingsDraftRole = useAtomFamilyStateValue(
       settingsDraftRoleFamilyState,
       roleId,
@@ -97,24 +95,26 @@ export const SettingsRolePermissionsObjectLevelRecordLevelPermissionFilterBuilde
         recordFilterGroupId: rootRecordFilterGroup?.id,
       });
 
-    const { hasInitialized } = useRecordLevelPermissionFilterInitialization({
-      roleId,
-      scope,
-      objectMetadataItem,
-      settingsDraftRole,
-      filterableFieldMetadataItems,
-      setCurrentRecordFilters,
-      setCurrentRecordFilterGroups,
-      setRecordFilterUsedInAdvancedFilterDropdownRow,
-    });
+    // OMNIA-CUSTOM: rows stored without a group (the C2 hop) render under a root group that the sync leaves unsaved
+    const { hasInitialized, ungroupedRecordFiltersRootGroup } =
+      useRecordLevelPermissionFilterInitialization({
+        roleId,
+        objectMetadataItem,
+        settingsDraftRole,
+        filterableFieldMetadataItems,
+        setCurrentRecordFilters,
+        setCurrentRecordFilterGroups,
+        setRecordFilterUsedInAdvancedFilterDropdownRow,
+      });
 
     useRecordLevelPermissionSyncToDraftRole({
       roleId,
-      scope,
       objectMetadataItem,
       currentRecordFilters,
       currentRecordFilterGroups,
       hasInitialized,
+      // OMNIA-CUSTOM: see initialization above (contract C2)
+      ungroupedRecordFiltersRootGroup,
     });
 
     const { handleCreateFirstFilter, handleAddFilter } =
@@ -155,14 +155,12 @@ export const SettingsRolePermissionsObjectLevelRecordLevelPermissionFilterBuilde
           </StyledContainer>
         ) : (
           <Button
-            Icon={IconFilter}
-            size="small"
-            variant="secondary"
-            accent="default"
+            startIcon={<IconFilter />}
+            size="sm"
             onClick={handleCreateFirstFilter}
-            ariaLabel={t`Add filter`}
-            title={t`Add filter`}
-          />
+            aria-label={t`Add filter`}
+            variant="outline"
+          >{t`Add filter`}</Button>
         )}
       </AdvancedFilterContext.Provider>
     );

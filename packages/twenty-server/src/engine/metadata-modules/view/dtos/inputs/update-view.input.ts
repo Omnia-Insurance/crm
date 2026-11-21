@@ -1,15 +1,18 @@
 import { Field, InputType, Int } from '@nestjs/graphql';
 
+import { Type } from 'class-transformer';
 import {
   IsBoolean,
   IsEnum,
   IsInt,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
   Max,
   Min,
+  ValidateNested,
 } from 'class-validator';
 import {
   AggregateOperations,
@@ -20,21 +23,22 @@ import {
 } from 'twenty-shared/types';
 
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
-import { IsValidMetadataName } from 'src/engine/decorators/metadata/is-valid-metadata-name.decorator';
+import { MetadataTranslationOverrideInput } from 'src/engine/metadata-modules/metadata-translation/dtos/metadata-translation-override.input';
 import { KANBAN_COLUMN_MAX_WIDTH } from 'src/engine/metadata-modules/view/constants/kanban-column-max-width.constant';
 import { KANBAN_COLUMN_MIN_WIDTH } from 'src/engine/metadata-modules/view/constants/kanban-column-min-width.constant';
+import { VIEW_OPEN_RECORD_IN_DEPRECATION } from 'src/engine/metadata-modules/view/constants/view-open-record-in-deprecation.constant';
 
-// TODO: this should be refactored like for view-field.input.ts
-// This is a temporary fix as we were extending the CreateViewInput class which was adding default values for the non filled fields
+// TODO: refactor like view-field.input.ts; extending CreateViewInput added defaults for unset fields
 @InputType()
 export class UpdateViewInput {
+  @IsOptional()
   @IsUUID()
   @Field(() => UUIDScalarType, { nullable: true })
   id: string;
 
   @IsOptional()
+  @IsString()
   @IsNotEmpty()
-  @IsValidMetadataName()
   @Field({ nullable: true })
   name?: string;
 
@@ -49,7 +53,7 @@ export class UpdateViewInput {
   icon?: string;
 
   @IsOptional()
-  @IsBoolean()
+  @IsNumber()
   @Field({ nullable: true })
   position?: number;
 
@@ -62,6 +66,7 @@ export class UpdateViewInput {
   @IsEnum(ViewOpenRecordIn)
   @Field(() => ViewOpenRecordIn, {
     nullable: true,
+    description: `Deprecated: ${VIEW_OPEN_RECORD_IN_DEPRECATION}`,
   })
   openRecordIn?: ViewOpenRecordIn;
 
@@ -88,7 +93,12 @@ export class UpdateViewInput {
   @IsOptional()
   @IsUUID()
   @Field(() => UUIDScalarType, { nullable: true })
-  calendarFieldMetadataId?: string;
+  calendarFieldMetadataId?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  @Field(() => UUIDScalarType, { nullable: true })
+  calendarEndFieldMetadataId?: string | null;
 
   @IsOptional()
   @IsEnum(ViewVisibility)
@@ -106,9 +116,24 @@ export class UpdateViewInput {
   shouldHideEmptyGroups?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  @Field({ nullable: true })
+  shouldDisplayGroupsAsTabs?: boolean;
+
+  @IsOptional()
   @IsInt()
   @Min(KANBAN_COLUMN_MIN_WIDTH)
   @Max(KANBAN_COLUMN_MAX_WIDTH)
   @Field(() => Int, { nullable: true })
   kanbanColumnWidth?: number | null;
+
+  @IsOptional()
+  @Field(() => Int, { nullable: true })
+  groupLoadLimit?: number | null;
+
+  @Type(() => MetadataTranslationOverrideInput)
+  @ValidateNested({ each: true })
+  @IsOptional()
+  @Field(() => [MetadataTranslationOverrideInput], { nullable: true })
+  translations?: MetadataTranslationOverrideInput[] | null;
 }

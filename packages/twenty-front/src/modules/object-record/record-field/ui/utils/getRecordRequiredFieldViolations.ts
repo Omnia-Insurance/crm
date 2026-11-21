@@ -1,81 +1,92 @@
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
-import { formatFieldMetadataItemAsFieldDefinition } from '@/object-metadata/utils/formatFieldMetadataItemAsFieldDefinition';
+import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { isFieldValueEmpty } from '@/object-record/record-field/ui/utils/isFieldValueEmpty';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
+import { type RequiredCondition } from 'twenty-shared/types';
+import { isDefined } from 'twenty-shared/utils';
 
 export type FieldViolation = {
   fieldMetadataId: string;
   fieldLabel: string;
 };
 
+const isRecordFieldValueEmpty = (
+  record: ObjectRecord,
+  fieldMetadataItem: FieldMetadataItem,
+) => {
+  try {
+    return isFieldValueEmpty({
+      fieldDefinition: { type: fieldMetadataItem.type },
+      fieldValue: record[fieldMetadataItem.name],
+    });
+  } catch {
+    // isFieldValueEmpty throws on field types it does not support
+    return true;
+  }
+};
+
+const isRequiredConditionMet = ({
+  record,
+  requiredCondition,
+  fieldMetadataItems,
+}: {
+  record: ObjectRecord;
+  requiredCondition: RequiredCondition;
+  fieldMetadataItems: FieldMetadataItem[];
+}) => {
+  if (requiredCondition.type === 'always') {
+    return true;
+  }
+
+  const conditionFieldMetadataItem = fieldMetadataItems.find(
+    (fieldMetadataItem) => fieldMetadataItem.id === requiredCondition.fieldId,
+  );
+
+  if (!isDefined(conditionFieldMetadataItem)) {
+    return false;
+  }
+
+  const isConditionFieldEmpty = isRecordFieldValueEmpty(
+    record,
+    conditionFieldMetadataItem,
+  );
+
+  // Stored as JSON, so an unknown type must not fall through to required
+  return (
+    (requiredCondition.type === 'fieldEmpty' && isConditionFieldEmpty) ||
+    (requiredCondition.type === 'fieldNotEmpty' && !isConditionFieldEmpty)
+  );
+};
+
 export const getRecordRequiredFieldViolations = (
   record: ObjectRecord | null | undefined,
   objectMetadataItem: EnrichedObjectMetadataItem,
 ): FieldViolation[] => {
-  if (!record || record.deletedAt) return [];
-
-  const violations: FieldViolation[] = [];
-
-  for (const field of objectMetadataItem.fields) {
-    const requiredCondition = field.requiredCondition as
-      | { type: string; fieldId?: string }
-      | null
-      | undefined;
-
-    if (!requiredCondition) continue;
-
-    const fieldDefinition = formatFieldMetadataItemAsFieldDefinition({
-      field,
-      objectMetadataItem,
-    });
-
-    const fieldValue = record[field.name];
-
-    let fieldEmpty: boolean;
-    try {
-      fieldEmpty = isFieldValueEmpty({ fieldDefinition, fieldValue });
-    } catch {
-      fieldEmpty = true;
-    }
-
-    if (!fieldEmpty) continue;
-
-    if (requiredCondition.type === 'always') {
-      violations.push({ fieldMetadataId: field.id, fieldLabel: field.label });
-      continue;
-    }
-
-    if (requiredCondition.fieldId) {
-      const conditionField = objectMetadataItem.fields.find(
-        (f) => f.id === requiredCondition.fieldId,
-      );
-      if (!conditionField) continue;
-
-      const conditionFieldDefinition = formatFieldMetadataItemAsFieldDefinition({
-        field: conditionField,
-        objectMetadataItem,
-      });
-
-      const conditionValue = record[conditionField.name];
-      let conditionEmpty: boolean;
-      try {
-        conditionEmpty = isFieldValueEmpty({
-          fieldDefinition: conditionFieldDefinition,
-          fieldValue: conditionValue,
-        });
-      } catch {
-        conditionEmpty = true;
-      }
-
-      const isRequired =
-        (requiredCondition.type === 'fieldEmpty' && conditionEmpty) ||
-        (requiredCondition.type === 'fieldNotEmpty' && !conditionEmpty);
-
-      if (isRequired) {
-        violations.push({ fieldMetadataId: field.id, fieldLabel: field.label });
-      }
-    }
+  if (!isDefined(record) || isDefined(record.deletedAt)) {
+    return [];
   }
 
-  return violations;
+  return objectMetadataItem.fields.flatMap((fieldMetadataItem) => {
+    const requiredCondition: RequiredCondition | null | undefined =
+      fieldMetadataItem.requiredCondition;
+
+    if (
+      !isDefined(requiredCondition) ||
+      !isRecordFieldValueEmpty(record, fieldMetadataItem) ||
+      !isRequiredConditionMet({
+        record,
+        requiredCondition,
+        fieldMetadataItems: objectMetadataItem.fields,
+      })
+    ) {
+      return [];
+    }
+
+    return [
+      {
+        fieldMetadataId: fieldMetadataItem.id,
+        fieldLabel: fieldMetadataItem.label,
+      },
+    ];
+  });
 };

@@ -1,57 +1,77 @@
-import { isDefined } from 'twenty-shared/utils';
+import { isNonEmptyString } from '@sniptt/guards';
+import { type ObjectRecord } from 'twenty-shared/types';
+import { In } from 'typeorm';
 
-import type { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { type WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
 
-// Builds a policy display name from carrier and product names.
-// Pattern: "{Carrier} - {Product}", matching ingestion format.
-export async function buildPolicyDisplayName(
-  carrierId: string | null,
-  productId: string | null,
-  workspaceId: string,
-  globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
-): Promise<string | null> {
-  let carrierName = '';
-  let productName = '';
+type NamedRecord = {
+  id: string;
+  name: string | null;
+};
 
-  if (isDefined(carrierId)) {
-    const carrierRepo = await globalWorkspaceOrmManager.getRepository(
-      workspaceId,
+const collectIds = (ids: unknown[]): string[] => [
+  ...new Set(ids.filter(isNonEmptyString)),
+];
+
+const findTrimmedNameById = async (
+  objectNameSingular: 'carrier' | 'product',
+  ids: string[],
+  workspaceOrmManager: WorkspaceOrmManager,
+): Promise<Map<string, string>> => {
+  if (ids.length === 0) {
+    return new Map();
+  }
+
+  // System read: a derived policy name must not depend on what the caller may read
+  const records = await workspaceOrmManager
+    .getRepositoryWithoutPermissionChecks<NamedRecord>(objectNameSingular)
+    .find({ where: { id: In(ids) }, select: ['id', 'name'] });
+
+  return new Map(records.map(({ id, name }) => [id, (name ?? '').trim()]));
+};
+
+// "{Carrier} - {Product}", the format ingestion writes; callers run inside a workspace context
+export const buildPolicyDisplayNames = async (
+  policies: Partial<ObjectRecord>[],
+  workspaceOrmManager: WorkspaceOrmManager,
+): Promise<(string | null)[]> => {
+  const [carrierNameById, productNameById] = await Promise.all([
+    findTrimmedNameById(
       'carrier',
-      { shouldBypassPermissionChecks: true },
-    );
-
-    const carrier = (await carrierRepo.findOne({
-      where: { id: carrierId },
-    })) as Record<string, unknown> | null;
-
-    carrierName = ((carrier?.name as string) ?? '').trim();
-  }
-
-  if (isDefined(productId)) {
-    const productRepo = await globalWorkspaceOrmManager.getRepository(
-      workspaceId,
+      collectIds(policies.map(({ carrierId }) => carrierId)),
+      workspaceOrmManager,
+    ),
+    findTrimmedNameById(
       'product',
-      { shouldBypassPermissionChecks: true },
-    );
+      collectIds(policies.map(({ productId }) => productId)),
+      workspaceOrmManager,
+    ),
+  ]);
 
-    const product = (await productRepo.findOne({
-      where: { id: productId },
-    })) as Record<string, unknown> | null;
+  return policies.map(({ carrierId, productId }) => {
+    const carrierName = isNonEmptyString(carrierId)
+      ? (carrierNameById.get(carrierId) ?? '')
+      : '';
+    const productName = isNonEmptyString(productId)
+      ? (productNameById.get(productId) ?? '')
+      : '';
 
-    productName = ((product?.name as string) ?? '').trim();
-  }
+    if (carrierName === '' && productName === '') {
+      return null;
+    }
 
-  if (carrierName && productName) {
-    return `${carrierName} - ${productName}`;
-  }
+    return `${carrierName || 'Unknown'} - ${productName || 'Unknown'}`;
+  });
+};
 
-  if (carrierName) {
-    return `${carrierName} - Unknown`;
-  }
+export const buildPolicyDisplayName = async (
+  policy: Partial<ObjectRecord>,
+  workspaceOrmManager: WorkspaceOrmManager,
+): Promise<string | null> => {
+  const [displayName] = await buildPolicyDisplayNames(
+    [policy],
+    workspaceOrmManager,
+  );
 
-  if (productName) {
-    return `Unknown - ${productName}`;
-  }
-
-  return null;
-}
+  return displayName;
+};

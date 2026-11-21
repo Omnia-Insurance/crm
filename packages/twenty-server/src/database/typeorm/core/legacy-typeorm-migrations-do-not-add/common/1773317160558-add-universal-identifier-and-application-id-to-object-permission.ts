@@ -6,10 +6,10 @@ export class AddUniversalIdentifierAndApplicationIdToObjectPermission17733171605
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
-      `ALTER TABLE "core"."objectPermission" ADD COLUMN IF NOT EXISTS "universalIdentifier" uuid`,
+      `ALTER TABLE "core"."objectPermission" ADD "universalIdentifier" uuid`,
     );
     await queryRunner.query(
-      `ALTER TABLE "core"."objectPermission" ADD COLUMN IF NOT EXISTS "applicationId" uuid`,
+      `ALTER TABLE "core"."objectPermission" ADD "applicationId" uuid`,
     );
   }
 

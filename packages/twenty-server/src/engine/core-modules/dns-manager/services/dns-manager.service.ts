@@ -8,6 +8,7 @@ import {
   type CustomHostnameListResponse,
 } from 'cloudflare/resources/custom-hostnames/custom-hostnames';
 import { assertIsDefinedOrThrow, isDefined } from 'twenty-shared/utils';
+import { z } from 'zod';
 
 import { type DomainValidRecords } from 'src/engine/core-modules/dns-manager/dtos/domain-valid-records';
 import {
@@ -17,6 +18,17 @@ import {
 import { dnsManagerValidator } from 'src/engine/core-modules/dns-manager/validator/dns-manager.validate';
 import { DomainServerConfigService } from 'src/engine/core-modules/domain/domain-server-config/services/domain-server-config.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
+
+const sslDcvDelegationSchema = z.object({
+  dcv_delegation_records: z
+    .array(
+      z.object({
+        cname: z.string().optional(),
+        cname_target: z.string().optional(),
+      }),
+    )
+    .optional(),
+});
 
 type DnsManagerOptions = {
   isPublicDomain?: boolean;
@@ -35,6 +47,10 @@ export class DnsManagerService {
         apiToken: this.twentyConfigService.get('CLOUDFLARE_API_KEY'),
       });
     }
+  }
+
+  isConfigured(): boolean {
+    return isDefined(this.cloudflareClient);
   }
 
   async registerHostname(customDomain: string, options?: DnsManagerOptions) {
@@ -82,8 +98,8 @@ export class DnsManagerService {
 
     const statuses = this.getHostnameStatuses(customHostname);
 
-    // @ts-expect-error - type definition doesn't reflect the real API
-    const dcvRecords = ssl?.dcv_delegation_records?.[0];
+    const dcvRecords =
+      sslDcvDelegationSchema.safeParse(ssl).data?.dcv_delegation_records?.[0];
 
     return {
       id: id,
@@ -218,7 +234,6 @@ export class DnsManagerService {
       return customHostnames.result[0];
     }
 
-    // should never happen. error 5xx
     const hostnameCount = customHostnames.result.length;
     const domainName = hostname;
 
@@ -226,7 +241,7 @@ export class DnsManagerService {
       'More than one custom hostname found in cloudflare',
       DnsManagerExceptionCode.MULTIPLE_HOSTNAMES_FOUND,
       {
-        userFriendlyMessage: msg`${hostnameCount} hostnames found for domain '${domainName}'. Expect 1`,
+        userFriendlyMessage: msg`${hostnameCount} hostnames found for domain "${domainName}". Expect 1`,
       },
     );
   }
@@ -245,7 +260,6 @@ export class DnsManagerService {
     const { ssl, verification_errors, created_at } = customHostname;
 
     return {
-      // wait 10s before starting the real check
       redirection:
         created_at &&
         new Date().getTime() - new Date(created_at).getTime() < 1000 * 10

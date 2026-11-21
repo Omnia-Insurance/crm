@@ -3,7 +3,7 @@ import { fromEntityToScalarEntity } from 'src/engine/metadata-modules/flat-entit
 import { type FlatRole } from 'src/engine/metadata-modules/flat-role/types/flat-role.type';
 import { type EntityManyToOneIdByUniversalIdentifierMaps } from 'src/engine/workspace-cache/types/entity-many-to-one-id-by-universal-identifier-maps.type';
 import { type EntityWithRegroupedOneToManyRelations } from 'src/engine/workspace-cache/types/entity-with-regrouped-one-to-many-relations.type';
-import { type RegroupedEntity } from 'src/engine/workspace-cache/utils/regroup-entities-by-related-entity-id';
+import { type RegroupedEntity } from 'src/engine/workspace-cache/types/regrouped-entity.type';
 import { resolveManyToOneRelationIdsToUniversalIdentifiers } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/utils/resolve-many-to-one-relation-ids-to-universal-identifiers.util';
 
 type FromRoleEntityToFlatRoleArgs = {
@@ -45,6 +45,9 @@ export const fromRoleEntityToFlatRole = (
     ),
     rowLevelPermissionPredicateGroupIds:
       roleEntity.rowLevelPermissionPredicateGroups.map(({ id }) => id),
+    rowLevelPermissionRuleIds: (roleEntity.rowLevelPermissionRules ?? []).map(
+      ({ id }) => id,
+    ),
     roleTargetUniversalIdentifiers: roleEntity.roleTargets.map(
       ({ universalIdentifier }) => universalIdentifier,
     ),
@@ -63,6 +66,16 @@ export const fromRoleEntityToFlatRole = (
       ),
     rowLevelPermissionPredicateGroupUniversalIdentifiers:
       roleEntity.rowLevelPermissionPredicateGroups.map(
+        ({ universalIdentifier }) => universalIdentifier,
+      ),
+    rowLevelPermissionRuleUniversalIdentifiers: (
+      roleEntity.rowLevelPermissionRules ?? []
+    ).map(({ universalIdentifier }) => universalIdentifier),
+    agentChatChannelRoleIds: roleEntity.agentChatChannelRoles.map(
+      ({ id }) => id,
+    ),
+    agentChatChannelRoleUniversalIdentifiers:
+      roleEntity.agentChatChannelRoles.map(
         ({ universalIdentifier }) => universalIdentifier,
       ),
   };

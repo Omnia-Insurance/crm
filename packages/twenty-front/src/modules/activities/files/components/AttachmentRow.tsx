@@ -10,20 +10,22 @@ import {
 import { getFileCategoryFromExtension } from '@/object-record/record-field/ui/utils/getFileCategoryFromExtension';
 import { SettingsTextInput } from '@/ui/input/components/SettingsTextInput';
 import { styled } from '@linaria/react';
-import { useState, useContext } from 'react';
+import { useState } from 'react';
 import { getSafeUrl, isDefined } from 'twenty-shared/utils';
 
 import { type AttachmentWithFile } from '@/activities/files/utils/filterAttachmentsWithFile';
 import { FileIcon } from '@/file/components/FileIcon';
 import { useHasPermissionFlag } from '@/settings/roles/hooks/useHasPermissionFlag';
-import { CoreObjectNameSingular } from 'twenty-shared/types';
+import { isNavigationModifierPressed } from '@/ui/navigation/utils/isNavigationModifierPressed';
+import { StandardObjectNameSingular } from 'twenty-shared/types';
+import { OverflowingTextWithTooltip } from 'twenty-ui/primitives/typography';
+import { Card } from 'twenty-ui/primitives/surfaces';
 import { IconCalendar } from 'twenty-ui/icon';
-import { OverflowingTextWithTooltip } from 'twenty-ui/surfaces';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
-import { isNavigationModifierPressed } from 'twenty-ui/utilities';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
 import { PermissionFlagType } from '~/generated-metadata/graphql';
 import { formatToHumanReadableDate } from '~/utils/date-utils';
 import { getFileNameAndExtension } from '~/utils/file/getFileNameAndExtension';
+import { openUrlInNewTab } from '~/utils/openUrlInNewTab';
 
 const StyledLeftContent = styled.div`
   align-items: center;
@@ -49,16 +51,9 @@ const StyledCalendarIconContainer = styled.div`
 
 const StyledLink = styled.a`
   align-items: center;
-  appearance: none;
-  background: none;
-  border: none;
   color: ${themeCssVariables.font.color.primary};
   cursor: pointer;
   display: flex;
-  font-family: inherit;
-  font-size: inherit;
-  padding: 0;
-  text-align: left;
   text-decoration: none;
   width: 100%;
 
@@ -72,16 +67,22 @@ const StyledLinkContainer = styled.div`
   width: 100%;
 `;
 
+const StyledTextInputContainer = styled.div`
+  width: 100%;
+`;
+
 type AttachmentRowProps = {
   attachment: AttachmentWithFile;
   onPreview?: (attachment: AttachmentWithFile) => void;
+  divider?: boolean;
 };
 
 export const AttachmentRow = ({
   attachment,
   onPreview,
+  divider = false,
 }: AttachmentRowProps) => {
-  const { theme } = useContext(ThemeContext);
+  const theme = useTheme();
   const [isEditing, setIsEditing] = useState(false);
 
   const hasDownloadPermission = useHasPermissionFlag(
@@ -97,9 +98,10 @@ export const AttachmentRow = ({
   const fileCategory = getFileCategoryFromExtension(attachment.file.extension);
 
   const fileUrl = attachment.file.url;
+  const safeFileUrl = getSafeUrl(fileUrl);
 
   const { destroyOneRecord: destroyOneAttachment } = useDestroyOneRecord({
-    objectNameSingular: CoreObjectNameSingular.Attachment,
+    objectNameSingular: StandardObjectNameSingular.Attachment,
   });
 
   const handleDelete = () => {
@@ -118,7 +120,7 @@ export const AttachmentRow = ({
     const newFileName = `${attachmentFileName}${attachmentFileExtension}`;
 
     updateOneRecord({
-      objectNameSingular: CoreObjectNameSingular.Attachment,
+      objectNameSingular: StandardObjectNameSingular.Attachment,
       idToUpdate: attachment.id,
       updateOneRecordInput: {
         name: newFileName,
@@ -153,15 +155,29 @@ export const AttachmentRow = ({
     downloadFile(fileUrl, `${attachmentFileName}${attachmentFileExtension}`);
   };
 
-  const handleOpenDocument = (e: React.MouseEvent) => {
-    // Cmd/Ctrl+click opens new tab, right click opens context menu
-    if (isNavigationModifierPressed(e) === true) {
+  const handleRowClick = () => {
+    if (isDefined(onPreview)) {
+      onPreview(attachment);
       return;
     }
 
-    // Only prevent default and use preview if onPreview is provided
+    if (!isDefined(safeFileUrl)) {
+      return;
+    }
+
+    openUrlInNewTab(safeFileUrl);
+  };
+
+  const handleFileLinkClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    event.stopPropagation();
+
+    // Cmd/Ctrl+click opens new tab, right click opens context menu
+    if (isNavigationModifierPressed(event) === true) {
+      return;
+    }
+
     if (isDefined(onPreview)) {
-      e.preventDefault();
+      event.preventDefault();
       onPreview(attachment);
     }
   };
@@ -174,34 +190,51 @@ export const AttachmentRow = ({
         } as GenericFieldContextType
       }
     >
-      <ActivityRow disabled>
+      <ActivityRow
+        onClick={handleRowClick}
+        disabled={isEditing}
+        divider={divider}
+        label={`${attachmentFileName}${attachmentFileExtension}`}
+      >
         <StyledLeftContent>
           <FileIcon fileCategory={fileCategory} thumbnailUrl={fileUrl} />
           {isEditing ? (
-            <SettingsTextInput
-              instanceId={`attachment-${attachment.id}-name`}
-              value={attachmentFileName}
-              onChange={handleOnChange}
-              onBlur={handleOnBlur}
-              autoFocus
-              onKeyDown={handleOnKeyDown}
-            />
+            <Card.Control
+              render={
+                <StyledTextInputContainer
+                  onClick={(event) => event.stopPropagation()}
+                />
+              }
+            >
+              <SettingsTextInput
+                instanceId={`attachment-${attachment.id}-name`}
+                value={attachmentFileName}
+                onChange={handleOnChange}
+                onBlur={handleOnBlur}
+                autoFocus
+                onKeyDown={handleOnKeyDown}
+              />
+            </Card.Control>
           ) : (
             <StyledLinkContainer>
-              <StyledLink
-                onClick={handleOpenDocument}
-                href={getSafeUrl(fileUrl)}
-                target="_blank"
-                rel="noopener noreferrer"
+              <Card.Control
+                render={
+                  <StyledLink
+                    onClick={handleFileLinkClick}
+                    href={safeFileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  />
+                }
               >
                 <OverflowingTextWithTooltip
                   text={`${attachmentFileName}${attachmentFileExtension}`}
                 />
-              </StyledLink>
+              </Card.Control>
             </StyledLinkContainer>
           )}
         </StyledLeftContent>
-        <StyledRightContent>
+        <Card.Control render={<StyledRightContent />}>
           <StyledCalendarIconContainer>
             <IconCalendar size={theme.icon.size.md} />
           </StyledCalendarIconContainer>
@@ -213,7 +246,7 @@ export const AttachmentRow = ({
             onRename={handleRename}
             hasDownloadPermission={hasDownloadPermission}
           />
-        </StyledRightContent>
+        </Card.Control>
       </ActivityRow>
     </FieldContext.Provider>
   );

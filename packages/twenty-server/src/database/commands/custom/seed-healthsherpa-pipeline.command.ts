@@ -1,14 +1,22 @@
 import { InjectRepository } from '@nestjs/typeorm';
 
 import { Command, Option } from 'nest-commander';
+import { isDefined } from 'twenty-shared/utils';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
-import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
+import { ProvisionedWorkspaceCommandRunner } from 'src/database/commands/command-runners/provisioned-workspace.command-runner';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
-import { type RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
+import {
+  type RunOnWorkspaceArgs,
+  type WorkspaceCommandOptions,
+} from 'src/database/commands/command-runners/workspace.command-runner';
 import { IngestionFieldMappingEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-field-mapping.entity';
 import { IngestionPipelineEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-pipeline.entity';
+import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
+import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
+
+const PIPELINE_NAME = 'Health Sherpa Policies';
 
 // Health Sherpa policy status → CRM status mapping
 const POLICY_STATUS_MAPPING = {
@@ -19,11 +27,15 @@ const POLICY_STATUS_MAPPING = {
   unknown: 'PENDING',
 };
 
+type SeedHealthSherpaPipelineOptions = WorkspaceCommandOptions & {
+  force?: boolean;
+};
+
 @Command({
   name: 'workspace:seed-healthsherpa-pipeline',
   description: 'Seed Health Sherpa policy ingestion pipeline',
 })
-export class SeedHealthSherpaPipelineCommand extends ActiveOrSuspendedWorkspaceCommandRunner {
+export class SeedHealthSherpaPipelineCommand extends ProvisionedWorkspaceCommandRunner<SeedHealthSherpaPipelineOptions> {
   @Option({
     flags: '-f, --force',
     description: 'Delete and recreate the pipeline if it already exists.',
@@ -35,8 +47,10 @@ export class SeedHealthSherpaPipelineCommand extends ActiveOrSuspendedWorkspaceC
 
   constructor(
     protected readonly workspaceIteratorService: WorkspaceIteratorService,
-    @InjectRepository(IngestionPipelineEntity)
-    private readonly pipelineRepository: Repository<IngestionPipelineEntity>,
+    @InjectWorkspaceScopedRepository(IngestionPipelineEntity)
+    private readonly pipelineRepository: WorkspaceScopedRepository<IngestionPipelineEntity>,
+    // mapping rows are scoped through their pipeline and carry no workspaceId
+    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
     @InjectRepository(IngestionFieldMappingEntity)
     private readonly fieldMappingRepository: Repository<IngestionFieldMappingEntity>,
   ) {
@@ -46,22 +60,18 @@ export class SeedHealthSherpaPipelineCommand extends ActiveOrSuspendedWorkspaceC
   override async runOnWorkspace({
     workspaceId,
     options,
-  }: RunOnWorkspaceArgs): Promise<void> {
-    const force = (options as { force?: boolean }).force ?? false;
+  }: RunOnWorkspaceArgs<SeedHealthSherpaPipelineOptions>): Promise<void> {
+    const force = options.force ?? false;
 
     this.logger.log(
       `Seeding Health Sherpa pipeline for workspace ${workspaceId}`,
     );
 
-    // Check if pipeline already exists
-    const existing = await this.pipelineRepository.findOne({
-      where: {
-        workspaceId,
-        name: 'Health Sherpa Policies',
-      },
+    const existing = await this.pipelineRepository.findOne(workspaceId, {
+      where: { name: PIPELINE_NAME },
     });
 
-    if (existing && !force) {
+    if (isDefined(existing) && !force) {
       this.logger.log(
         `Pipeline already exists for workspace ${workspaceId}, skipping (use --force to recreate)`,
       );
@@ -69,41 +79,47 @@ export class SeedHealthSherpaPipelineCommand extends ActiveOrSuspendedWorkspaceC
       return;
     }
 
-    if (existing && force) {
-      this.logger.log(`Deleting existing pipeline ${existing.id}`);
-      await this.pipelineRepository.delete(existing.id);
-    }
-
-    // Generate webhook secret
-    const webhookSecret =
-      process.env.HEALTHSHERPA_WEBHOOK_SECRET ||
-      `hs-${uuidv4().replace(/-/g, '')}`;
-
-    // Create pipeline
-    const pipeline = await this.pipelineRepository.save({
-      workspaceId,
-      name: 'Health Sherpa Policies',
-      description:
-        'Automatically ingest policy data from Health Sherpa webhooks',
-      mode: 'push',
-      targetObjectNameSingular: 'policy',
-      webhookSecret,
-      dedupFieldNames: ['applicationId'], // Match on applicationId to update existing
-      isEnabled: true,
-    });
-
-    this.logger.log(`Created pipeline ${pipeline.id}`);
-    this.logger.log(`Webhook URL: POST /ingestion/${pipeline.id}`);
-    this.logger.log(`Webhook Secret: ${webhookSecret}`);
-
     if (options.dryRun) {
-      this.logger.log('[DRY RUN] Would create field mappings (see below)');
+      this.logger.log(
+        isDefined(existing)
+          ? `[DRY RUN] Would delete pipeline ${existing.id} and recreate it with these field mappings`
+          : '[DRY RUN] Would create the pipeline with these field mappings',
+      );
       this.logFieldMappings();
 
       return;
     }
 
-    // Create field mappings
+    if (isDefined(existing)) {
+      this.logger.log(`Deleting existing pipeline ${existing.id}`);
+      await this.pipelineRepository.delete(workspaceId, { id: existing.id });
+    }
+
+    const webhookSecretFromEnv = process.env.HEALTHSHERPA_WEBHOOK_SECRET;
+    const webhookSecret =
+      webhookSecretFromEnv || `hs-${uuidv4().replace(/-/g, '')}`;
+
+    const pipeline = await this.pipelineRepository.insertAndReturnOne(
+      workspaceId,
+      {
+        name: PIPELINE_NAME,
+        description:
+          'Automatically ingest policy data from Health Sherpa webhooks',
+        mode: 'push',
+        targetObjectNameSingular: 'policy',
+        webhookSecret,
+        // update existing policies matched on applicationId
+        dedupFieldNames: ['applicationId'],
+        isEnabled: true,
+      },
+    );
+
+    this.logger.log(`Created pipeline ${pipeline.id}`);
+    this.logger.log(`Webhook URL: POST /ingestion/${pipeline.id}`);
+    this.logger.log(
+      `Webhook secret ${webhookSecretFromEnv ? 'taken from HEALTHSHERPA_WEBHOOK_SECRET' : 'generated'}; admins can copy it from the pipeline's settings page`,
+    );
+
     const mappings = this.buildFieldMappings(pipeline.id);
 
     await this.fieldMappingRepository.save(mappings);

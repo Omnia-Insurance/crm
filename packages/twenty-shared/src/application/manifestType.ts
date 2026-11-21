@@ -1,3 +1,4 @@
+import { type WorkflowManifest } from './workflowManifestType';
 import { type AppLocale } from '@/translations';
 
 import { type AgentManifest } from './agentManifestType';
@@ -11,15 +12,22 @@ import {
 } from './frontComponentManifestType';
 import { type IndexManifest } from './indexManifestType';
 import { type LogicFunctionManifest } from './logicFunctionManifestType';
+import { type McpServerManifest } from './mcpServerManifestType';
+import { type MessagingProviderManifest } from './messagingProviderManifestType';
 import { type NavigationMenuItemManifest } from './navigationMenuItemManifestType';
 import { type ObjectManifest } from './objectManifestType';
 import {
   type PageLayoutManifest,
   type PageLayoutTabManifest,
+  type StandalonePageLayoutWidgetManifest,
 } from './pageLayoutManifestType';
 import { type PermissionFlagManifest } from './permissionFlagManifestType';
+import { type RelatedRecordPathManifest } from './relatedRecordPathManifestType';
 import { type RoleManifest } from './roleManifestType';
+import { type SettingsMenuItemManifest } from './settingsMenuItemManifestType';
 import { type SkillManifest } from './skillManifestType';
+import { type TimelineActivityTypeManifest } from './timelineActivityTypeManifestType';
+import { type ValidationRuleManifest } from './validationRuleManifestType';
 import {
   type StandaloneViewFieldManifest,
   type ViewManifest,
@@ -30,6 +38,7 @@ export type TranslationsManifest = Partial<
 >;
 
 export type Manifest = {
+  workflows?: WorkflowManifest[];
   application: ApplicationManifest;
   objects: ObjectManifest[];
   fields: FieldManifest[];
@@ -41,12 +50,19 @@ export type Manifest = {
   skills: SkillManifest[];
   agents: AgentManifest[];
   connectionProviders?: ConnectionProviderManifest[];
+  messagingProviders?: MessagingProviderManifest[];
+  mcpServers?: McpServerManifest[];
   publicAssets: AssetManifest[];
   views: ViewManifest[];
   viewFields: StandaloneViewFieldManifest[];
   navigationMenuItems: NavigationMenuItemManifest[];
   pageLayouts: PageLayoutManifest[];
   pageLayoutTabs: PageLayoutTabManifest[];
+  pageLayoutWidgets: StandalonePageLayoutWidgetManifest[];
   commandMenuItems: CommandMenuItemManifest[];
+  timelineActivityTypes: TimelineActivityTypeManifest[];
+  settingsMenuItems: SettingsMenuItemManifest[];
+  validationRules?: ValidationRuleManifest[];
+  relatedRecordPaths?: RelatedRecordPathManifest[];
   translations?: TranslationsManifest;
 };

@@ -33,6 +33,7 @@ export const formatFieldMetadataItemAsFieldDefinition = ({
       : undefined;
 
   const fieldDefintionMetadata = {
+    description: field.description,
     fieldName: field.name,
     placeHolder: field.label,
     relationType,
@@ -65,6 +66,7 @@ export const formatFieldMetadataItemAsFieldDefinition = ({
       metadata: fieldDefintionMetadata,
       type: field.type,
     }),
+    // OMNIA-CUSTOM: soft required-field rule, read by the required indicators and the creation form
     requiredCondition: field.requiredCondition ?? null,
   };
 };

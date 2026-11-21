@@ -3,23 +3,22 @@ import { OnboardingImportPreviewEmails } from '@/onboarding/components/import-co
 import { OnboardingImportPreviewSyncBadge } from '@/onboarding/components/import-contacts/OnboardingImportPreviewSyncBadge';
 import { OnboardingImportPrivacyNote } from '@/onboarding/components/import-contacts/OnboardingImportPrivacyNote';
 import { styled } from '@linaria/react';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
 
-const PREVIEW_WIDTH = 340;
-const PREVIEW_HEIGHT = 200;
+const PREVIEW_HEIGHT = 198;
 
 const StyledCard = styled.div`
   align-items: center;
   background-color: ${themeCssVariables.background.secondary};
   border: 1px solid ${themeCssVariables.border.color.medium};
-  border-radius: ${themeCssVariables.border.radius.xl};
+  border-radius: 12px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: ${themeCssVariables.spacing[3]};
   overflow: hidden;
-  padding-bottom: ${themeCssVariables.spacing[3]};
-  width: ${PREVIEW_WIDTH}px;
+  padding-bottom: calc(${themeCssVariables.spacing[3]} - 1px);
+  width: 100%;
 `;
 
 const StyledColumns = styled.div`
@@ -31,13 +30,19 @@ const StyledColumns = styled.div`
   width: 100%;
 `;
 
-export const OnboardingImportPreview = () => (
+type OnboardingImportPreviewProps = {
+  privacyNote: string;
+};
+
+export const OnboardingImportPreview = ({
+  privacyNote,
+}: OnboardingImportPreviewProps) => (
   <StyledCard>
     <StyledColumns>
       <OnboardingImportPreviewEmails />
       <OnboardingImportPreviewCompanies />
       <OnboardingImportPreviewSyncBadge />
     </StyledColumns>
-    <OnboardingImportPrivacyNote />
+    <OnboardingImportPrivacyNote text={privacyNote} />
   </StyledCard>
 );

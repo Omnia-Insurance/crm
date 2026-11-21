@@ -5,7 +5,7 @@ export type CreateObjectPermissionInput = {
   canUpdateObjectRecords?: boolean;
   canSoftDeleteObjectRecords?: boolean;
   canDestroyObjectRecords?: boolean;
-  showInSidebar?: boolean;
+  // OMNIA-CUSTOM: per-object sidebar visibility and policy edit window (C3, C4)
+  showInSidebar?: boolean | null;
   editWindowMinutes?: number | null;
-  universalIdentifier?: string;
 };

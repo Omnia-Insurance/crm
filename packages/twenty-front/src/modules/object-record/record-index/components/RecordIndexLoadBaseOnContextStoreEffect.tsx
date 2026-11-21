@@ -13,21 +13,25 @@ export const RecordIndexLoadBaseOnContextStoreEffect = () => {
     contextStoreCurrentViewIdComponentState,
   );
 
-  const [loadedViewId, setLoadedViewId] = useState<string | undefined>(
-    undefined,
-  );
+  const [loadedViewKey, setLoadedViewKey] = useState<string | undefined>();
 
   const view = useAtomFamilySelectorValue(viewFromViewIdFamilySelector, {
     viewId: contextStoreCurrentViewId ?? '',
   });
 
+  const viewGroupsSignature = (view?.viewGroups ?? [])
+    .map((viewGroup) => viewGroup.id)
+    .sort()
+    .join(',');
+
+  const currentViewLoadKey = isDefined(contextStoreCurrentViewId)
+    ? `${contextStoreCurrentViewId}-${viewGroupsSignature}`
+    : undefined;
+
   const { objectMetadataItem } = useContextStoreObjectMetadataItemOrThrow();
 
   useEffect(() => {
-    if (
-      isDefined(contextStoreCurrentViewId) &&
-      loadedViewId === contextStoreCurrentViewId
-    ) {
+    if (isDefined(currentViewLoadKey) && loadedViewKey === currentViewLoadKey) {
       return;
     }
 
@@ -37,12 +41,12 @@ export const RecordIndexLoadBaseOnContextStoreEffect = () => {
 
     if (isDefined(view)) {
       loadRecordIndexStates(view, objectMetadataItem);
-      setLoadedViewId(contextStoreCurrentViewId);
+      setLoadedViewKey(currentViewLoadKey);
     }
   }, [
-    contextStoreCurrentViewId,
+    currentViewLoadKey,
     loadRecordIndexStates,
-    loadedViewId,
+    loadedViewKey,
     objectMetadataItem,
     view,
   ]);

@@ -1,3 +1,6 @@
+import { createOneFieldMetadata } from 'test/integration/metadata/suites/field-metadata/utils/create-one-field-metadata.util';
+import { deleteOneFieldMetadata } from 'test/integration/metadata/suites/field-metadata/utils/delete-one-field-metadata.util';
+import { updateOneFieldMetadata } from 'test/integration/metadata/suites/field-metadata/utils/update-one-field-metadata.util';
 import { createOnePageLayoutTab } from 'test/integration/metadata/suites/page-layout-tab/utils/create-one-page-layout-tab.util';
 import { fetchTestFieldMetadataIds } from 'test/integration/metadata/suites/page-layout-widget/utils/fetch-test-field-metadata-ids.util';
 import { createOnePageLayout } from 'test/integration/metadata/suites/page-layout/utils/create-one-page-layout.util';
@@ -8,13 +11,18 @@ import {
   type EachTestingContext,
   eachTestingContextFilter,
 } from 'twenty-shared/testing';
-import { AggregateOperations } from 'twenty-shared/types';
+import {
+  AggregateOperations,
+  FieldMetadataType,
+  PageLayoutTabLayoutMode,
+  PageLayoutType,
+  type PageLayoutWidgetGridPosition,
+  WidgetType,
+} from 'twenty-shared/types';
 import { v4 } from 'uuid';
 
 import { WidgetConfigurationType } from 'src/engine/metadata-modules/page-layout-widget/enums/widget-configuration-type.type';
-import { WidgetType } from 'src/engine/metadata-modules/page-layout-widget/enums/widget-type.enum';
 import { type AllPageLayoutWidgetConfiguration } from 'src/engine/metadata-modules/page-layout-widget/types/all-page-layout-widget-configuration.type';
-import { PageLayoutType } from 'src/engine/metadata-modules/page-layout/enums/page-layout-type.enum';
 
 const MOCK_IFRAME_CONFIGURATION = {
   configurationType: WidgetConfigurationType.IFRAME,
@@ -38,12 +46,7 @@ type TestContext = {
       title: string;
       type: WidgetType;
       objectMetadataId: string | null;
-      gridPosition: {
-        row: number;
-        column: number;
-        rowSpan: number;
-        columnSpan: number;
-      };
+      position: PageLayoutWidgetGridPosition;
       configuration: AllPageLayoutWidgetConfiguration;
     }>;
   }>;
@@ -78,7 +81,8 @@ describe('Page layout with tabs update should succeed', () => {
                 title: 'Pie Chart Widget',
                 type: WidgetType.GRAPH,
                 objectMetadataId: testFieldMetadataIds.objectMetadataId,
-                gridPosition: {
+                position: {
+                  layoutMode: PageLayoutTabLayoutMode.GRID,
                   row: 0,
                   column: 0,
                   rowSpan: 1,
@@ -113,7 +117,8 @@ describe('Page layout with tabs update should succeed', () => {
                 title: 'Pie Chart Widget',
                 type: WidgetType.GRAPH,
                 objectMetadataId: testFieldMetadataIds.objectMetadataId,
-                gridPosition: {
+                position: {
+                  layoutMode: PageLayoutTabLayoutMode.GRID,
                   row: 0,
                   column: 0,
                   rowSpan: 1,
@@ -140,7 +145,8 @@ describe('Page layout with tabs update should succeed', () => {
                 title: 'Iframe Widget',
                 type: WidgetType.IFRAME,
                 objectMetadataId: null,
-                gridPosition: {
+                position: {
+                  layoutMode: PageLayoutTabLayoutMode.GRID,
                   row: 0,
                   column: 0,
                   rowSpan: 1,
@@ -252,7 +258,8 @@ describe('Page layout with tabs update should succeed', () => {
                 title: 'Iframe Widget',
                 type: WidgetType.IFRAME,
                 objectMetadataId: null,
-                gridPosition: {
+                position: {
+                  layoutMode: PageLayoutTabLayoutMode.GRID,
                   row: 0,
                   column: 0,
                   rowSpan: 1,
@@ -297,7 +304,8 @@ describe('Page layout with tabs update should succeed', () => {
                 title: 'Iframe Widget',
                 type: WidgetType.IFRAME,
                 objectMetadataId: null,
-                gridPosition: {
+                position: {
+                  layoutMode: PageLayoutTabLayoutMode.GRID,
                   row: 0,
                   column: 0,
                   rowSpan: 1,
@@ -322,5 +330,88 @@ describe('Page layout with tabs update should succeed', () => {
       pageLayoutTabId: testTabId2,
       title: 'Iframe Widget',
     });
+  });
+
+  it('should save layout tabs and widgets when a chart uses a deactivated field', async () => {
+    const { data: fieldData } = await createOneFieldMetadata({
+      expectToFail: false,
+      input: {
+        objectMetadataId: testFieldMetadataIds.objectMetadataId,
+        type: FieldMetadataType.NUMBER,
+        label: 'Deactivated Aggregate Field',
+        name: `deactivatedAggregateField${Date.now()}`,
+        isLabelSyncedWithName: false,
+      },
+    });
+
+    const aggregateFieldMetadataId = fieldData.createOneField.id;
+
+    const tabs = [
+      {
+        id: testTabId1,
+        title: 'Tab 1',
+        position: 0,
+        widgets: [
+          {
+            id: v4(),
+            pageLayoutTabId: testTabId1,
+            title: 'Chart on deactivated field',
+            type: WidgetType.GRAPH,
+            objectMetadataId: testFieldMetadataIds.objectMetadataId,
+            position: {
+              layoutMode: PageLayoutTabLayoutMode.GRID as const,
+              row: 0,
+              column: 0,
+              rowSpan: 1,
+              columnSpan: 1,
+            },
+            configuration: {
+              configurationType: WidgetConfigurationType.AGGREGATE_CHART,
+              aggregateFieldMetadataId,
+              aggregateOperation: AggregateOperations.SUM,
+            } satisfies AllPageLayoutWidgetConfiguration,
+          },
+        ],
+      },
+    ];
+
+    const input = {
+      id: testPageLayoutId,
+      name: 'Original Page Layout',
+      type: PageLayoutType.RECORD_PAGE,
+      objectMetadataId: null,
+      tabs,
+    };
+
+    const deactivateAggregateField = () =>
+      updateOneFieldMetadata({
+        expectToFail: false,
+        input: {
+          idToUpdate: aggregateFieldMetadataId,
+          updatePayload: { isActive: false },
+        },
+      });
+
+    try {
+      await updateOnePageLayoutWithTabsAndWidgets({
+        expectToFail: false,
+        input,
+      });
+
+      await deactivateAggregateField();
+
+      const { errors } = await updateOnePageLayoutWithTabsAndWidgets({
+        expectToFail: false,
+        input,
+      });
+
+      expect(errors).toBeUndefined();
+    } finally {
+      await deactivateAggregateField();
+      await deleteOneFieldMetadata({
+        expectToFail: false,
+        input: { idToDelete: aggregateFieldMetadataId },
+      });
+    }
   });
 });

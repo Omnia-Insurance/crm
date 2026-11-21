@@ -1,43 +1,22 @@
 import { styled } from '@linaria/react';
-import { type ComponentProps, useMemo, useState } from 'react';
-import { Tag } from 'twenty-ui/data-display';
+import { useLingui } from '@lingui/react/macro';
+import { useMemo, useState } from 'react';
+import { isDefined } from 'twenty-shared/utils';
+import { LightIconButton } from 'twenty-ui/components/input';
 import {
   IconAlertTriangle,
   IconChevronDown,
   IconChevronUp,
 } from 'twenty-ui/icon';
-import { LightIconButton } from 'twenty-ui/input';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
-import { isDefined } from 'twenty-shared/utils';
+import { Tag, type TagColor } from 'twenty-ui/primitives/data-display';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
-import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
 import {
   getRunSummary,
   type RunStatusKind,
 } from '@/reconciliation/utils/getRunSummary';
-
-/**
- * Run-summary banner for the reconciliation review page (Linear OMN-11).
- *
- * Surfaces the per-run operator signal that previously lived only in worker
- * logs / raw record JSON (audit 2026-06-11, operability lens): status,
- * FAILED errorMessage (the actionable [STEP] config errors), the stats
- * counters, and — once persistence lands — stats.warnings and the per-run
- * configFingerprint.
- *
- * Reads the reconciliation record already fetched into
- * recordStoreFamilyState by RecordShowEffect (depth-1 fields include status,
- * errorMessage, and stats), so no extra query is needed. The store is filled
- * once on mount — a PARSING/MATCHING state shown here reflects load time,
- * and reloading refreshes it.
- *
- * One summary line is always visible; the per-counter chips, warning list,
- * and config fingerprint live in a collapsed-by-default detail section.
- * A FAILED run's errorMessage is always visible (never behind the collapse).
- */
-
-type TagColor = ComponentProps<typeof Tag>['color'];
+import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
 
 const STATUS_TAG_COLOR: Record<RunStatusKind, TagColor> = {
   failed: 'red',
@@ -126,9 +105,13 @@ type ReconciliationRunSummaryBannerProps = {
   reconciliationId: string;
 };
 
+// Operator signal that used to live only in worker logs (OMN-11). It reads the
+// record the review page loaded, so a PARSING/MATCHING status reflects load time.
 export const ReconciliationRunSummaryBanner = ({
   reconciliationId,
 }: ReconciliationRunSummaryBannerProps) => {
+  const { t } = useLingui();
+
   const recordStore = useAtomFamilyStateValue(
     recordStoreFamilyState,
     reconciliationId,
@@ -148,20 +131,22 @@ export const ReconciliationRunSummaryBanner = ({
     [recordStore],
   );
 
-  // Record not yet in the store (RecordShowEffect still fetching) — the
-  // banner appears once the show-page query lands.
   if (!isDefined(summary)) {
     return null;
   }
 
+  const { configFingerprint } = summary;
+
+  const toggleDetailsLabel = isExpanded
+    ? t`Hide run details`
+    : t`Show run details`;
+
   return (
     <StyledBanner>
       <StyledSummaryRow>
-        <Tag
-          color={STATUS_TAG_COLOR[summary.statusKind]}
-          text={summary.statusLabel}
-          preventShrink
-        />
+        <Tag color={STATUS_TAG_COLOR[summary.statusKind]} truncate={false}>
+          {summary.statusLabel}
+        </Tag>
         {isDefined(summary.summaryText) && (
           <StyledSummaryText title={summary.summaryText}>
             {summary.summaryText}
@@ -170,26 +155,29 @@ export const ReconciliationRunSummaryBanner = ({
         {isDefined(summary.warningSummaryText) && (
           <Tag
             color="orange"
-            Icon={IconAlertTriangle}
-            text={summary.warningSummaryText}
-            preventShrink
-          />
+            startIcon={<IconAlertTriangle />}
+            truncate={false}
+          >
+            {summary.warningSummaryText}
+          </Tag>
         )}
         <StyledSpacer />
         {summary.hasDetails && (
           <LightIconButton
-            aria-label={isExpanded ? 'Hide run details' : 'Show run details'}
-            title={isExpanded ? 'Hide run details' : 'Show run details'}
-            Icon={isExpanded ? IconChevronUp : IconChevronDown}
-            size="small"
+            size="sm"
+            aria-label={toggleDetailsLabel}
+            tooltip={toggleDetailsLabel}
             onClick={() => setIsExpanded((previous) => !previous)}
-          />
+          >
+            {isExpanded ? <IconChevronUp /> : <IconChevronDown />}
+          </LightIconButton>
         )}
       </StyledSummaryRow>
+      {/* A failed run's error is never hidden behind the collapse */}
       {summary.statusKind === 'failed' && (
         <StyledErrorMessage>
           {summary.errorMessage ??
-            'Run failed — no error message recorded; check worker logs.'}
+            t`Run failed — no error message recorded; check worker logs.`}
         </StyledErrorMessage>
       )}
       {isExpanded && summary.hasDetails && (
@@ -200,9 +188,10 @@ export const ReconciliationRunSummaryBanner = ({
                 <Tag
                   key={chip.key}
                   color={chip.isWarning ? 'orange' : 'gray'}
-                  text={chip.text}
-                  preventShrink
-                />
+                  truncate={false}
+                >
+                  {chip.text}
+                </Tag>
               ))}
             </StyledChipRow>
           )}
@@ -215,9 +204,9 @@ export const ReconciliationRunSummaryBanner = ({
               ))}
             </StyledWarningList>
           )}
-          {isDefined(summary.configFingerprint) && (
-            <StyledFingerprintChip title="Config fingerprint for this run">
-              {`config ${summary.configFingerprint}`}
+          {isDefined(configFingerprint) && (
+            <StyledFingerprintChip title={t`Config fingerprint for this run`}>
+              {t`config ${configFingerprint}`}
             </StyledFingerprintChip>
           )}
         </StyledDetailSection>

@@ -1,46 +1,79 @@
-import { metadataStoreState } from '@/metadata-store/states/metadataStoreState';
-import { type FlatObjectMetadataItem } from '@/metadata-store/types/FlatObjectMetadataItem';
-import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
+import { TabListRoot } from '@/ui/layout/tab-list/components/TabListRoot';
+import { Tabs } from 'twenty-ui/primitives/navigation';
+import { PageLayoutWidgetDndProvider } from '@/page-layout/components/dnd/PageLayoutWidgetDndProvider';
 import { PageLayoutLeftPanel } from '@/page-layout/components/PageLayoutLeftPanel';
+import { PageLayoutPrerenderedTabIdsResetEffect } from '@/page-layout/components/PageLayoutPrerenderedTabIdsResetEffect';
+import { PageLayoutRecordIdentifierBar } from '@/page-layout/components/PageLayoutRecordIdentifierBar';
+import { PageLayoutScrollResetEffect } from '@/page-layout/components/PageLayoutScrollResetEffect';
 import { PageLayoutTabList } from '@/page-layout/components/PageLayoutTabList';
 import { PageLayoutTabListEffect } from '@/page-layout/components/PageLayoutTabListEffect';
-import { DEFAULT_RECORD_PAGE_LAYOUT_ID } from '@/page-layout/constants/DefaultRecordPageLayoutId';
 import { PAGE_LAYOUT_LEFT_PANEL_CONTAINER_WIDTH } from '@/page-layout/constants/PageLayoutLeftPanelContainerWidth';
-import { WIDGET_TYPE_TO_RELATION_FIELD_NAME } from '@/page-layout/constants/WidgetTypeToRelationFieldName';
 import { useCurrentPageLayoutOrThrow } from '@/page-layout/hooks/useCurrentPageLayoutOrThrow';
 import { useIsPageLayoutInEditMode } from '@/page-layout/hooks/useIsPageLayoutInEditMode';
 import { usePageLayoutAddTabStrategy } from '@/page-layout/hooks/usePageLayoutAddTabStrategy';
-import { useReorderRecordPageLayoutTabs } from '@/page-layout/hooks/useReorderRecordPageLayoutTabs';
+import { usePageLayoutRenderableTabs } from '@/page-layout/hooks/usePageLayoutRenderableTabs';
 import { PageLayoutMainContent } from '@/page-layout/PageLayoutMainContent';
-import { getScrollWrapperInstanceIdFromPageLayoutId } from '@/page-layout/utils/getScrollWrapperInstanceIdFromPageLayoutId';
+import { pageLayoutPrerenderedTabIdsComponentState } from '@/page-layout/states/pageLayoutPrerenderedTabIdsComponentState';
+import { getScrollWrapperInstanceIdFromPageLayoutAndRecord } from '@/page-layout/utils/getScrollWrapperInstanceIdFromPageLayoutAndRecord';
 import { getTabListInstanceIdFromPageLayoutAndRecord } from '@/page-layout/utils/getTabListInstanceIdFromPageLayoutAndRecord';
-import { getTabsByDisplayMode } from '@/page-layout/utils/getTabsByDisplayMode';
-import { getTabsWithVisibleWidgets } from '@/page-layout/utils/getTabsWithVisibleWidgets';
 import { shouldEnableTabEditingFeatures } from '@/page-layout/utils/shouldEnableTabEditingFeatures';
+import { shouldPrerenderPageLayoutTab } from '@/page-layout/utils/shouldPrerenderPageLayoutTab';
 import { sortTabsByPosition } from '@/page-layout/utils/sortTabsByPosition';
 import { useLayoutRenderingContext } from '@/ui/layout/contexts/LayoutRenderingContext';
+import { useWorkspaceSurfaceScopedComponentInstanceId } from '@/ui/layout/hooks/useWorkspaceSurfaceScopedComponentInstanceId';
+import { useWorkspaceSurface } from '@/ui/layout/hooks/useWorkspaceSurface';
 import { activeTabIdComponentState } from '@/ui/layout/tab-list/states/activeTabIdComponentState';
+import { useIsMobile } from 'twenty-ui/utilities';
 import { ScrollWrapper } from '@/ui/utilities/scroll/components/ScrollWrapper';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
-import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
 import { styled } from '@linaria/react';
-import { useMemo } from 'react';
-import { FieldMetadataType } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
-import { useIsMobile } from 'twenty-ui/utilities';
+import { MOBILE_VIEWPORT, themeCssVariables } from 'twenty-ui/theme';
+import { PageLayoutType } from '~/generated-metadata/graphql';
+
+const StyledRoot = styled.div`
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+
+  @media print {
+    display: block;
+    height: auto;
+  }
+`;
 
 const StyledContainer = styled.div<{ hasPinnedTab: boolean }>`
   display: grid;
+  flex: 1;
   grid-template-columns: ${({ hasPinnedTab }) =>
     hasPinnedTab ? `${PAGE_LAYOUT_LEFT_PANEL_CONTAINER_WIDTH}px 1fr` : '1fr'};
   grid-template-rows: minmax(0, 1fr);
-  height: 100%;
+  min-height: 0;
   width: 100%;
 
   @media print {
     display: block;
     height: auto;
     width: 100%;
+
+    .page-layout-scroll-wrapper {
+      container-name: none !important;
+      container-type: normal !important;
+    }
+
+    .page-layout-viewport-filling-widget-slot {
+      --widget-height: auto !important;
+
+      height: auto !important;
+      min-height: 0 !important;
+      overflow: visible !important;
+
+      .widget-card-header {
+        position: static !important;
+      }
+    }
   }
 `;
 
@@ -59,9 +92,36 @@ const StyledTabsAndDashboardContainer = styled.div`
   }
 `;
 
+// display: none, not a hidden <Activity>, which skips the effects Apollo fetches from (see pageLayoutTabPrerenderContract.test).
+const StyledTabContentDisplay = styled.div<{ isActiveTab: boolean }>`
+  display: ${({ isActiveTab }) => (isActiveTab ? 'contents' : 'none')};
+`;
+
+const StyledTabPanel = styled.div`
+  align-items: start;
+  min-height: 100%;
+
+  &:not([hidden]) {
+    display: grid;
+  }
+`;
+
 const StyledScrollWrapperContainer = styled.div`
   flex: 1;
   min-height: 0;
+
+  .page-layout-scroll-wrapper {
+    container-name: tab-viewport;
+    container-type: size;
+  }
+
+  // Reserve the floating mobile navigation bar's footprint.
+  @media (max-width: ${MOBILE_VIEWPORT}px) {
+    .page-layout-scroll-wrapper {
+      box-sizing: border-box;
+      padding-bottom: ${themeCssVariables.spacing[20]};
+    }
+  }
 
   @media print {
     min-height: auto;
@@ -74,175 +134,172 @@ const StyledScrollWrapperContainer = styled.div`
 `;
 
 export const PageLayoutTabsRenderer = () => {
+  const workspaceSurface = useWorkspaceSurface();
   const { currentPageLayout } = useCurrentPageLayoutOrThrow();
 
-  const { isInSidePanel, layoutType, targetRecordIdentifier } =
+  const { layoutType, targetRecordIdentifier, isRecordIdentifierBarHidden } =
     useLayoutRenderingContext();
 
   const isPageLayoutInEditMode = useIsPageLayoutInEditMode();
 
+  const isMobile = useIsMobile();
+
   const activeTabId = useAtomComponentStateValue(activeTabIdComponentState);
 
-  const tabListInstanceId = getTabListInstanceIdFromPageLayoutAndRecord({
-    pageLayoutId: currentPageLayout.id,
-    layoutType,
-    targetRecordIdentifier,
-  });
+  const scrollWrapperInstanceId = useWorkspaceSurfaceScopedComponentInstanceId(
+    getScrollWrapperInstanceIdFromPageLayoutAndRecord({
+      pageLayoutId: currentPageLayout.id,
+      layoutType,
+      targetRecordIdentifier,
+      scrollWrapperArea: 'tab-content',
+    }),
+  );
+
+  const tabListInstanceId = useWorkspaceSurfaceScopedComponentInstanceId(
+    getTabListInstanceIdFromPageLayoutAndRecord({
+      pageLayoutId: currentPageLayout.id,
+      layoutType,
+      targetRecordIdentifier,
+    }),
+  );
 
   const addTabStrategy = usePageLayoutAddTabStrategy({
     pageLayoutId: currentPageLayout.id,
     tabListInstanceId,
   });
 
-  const { reorderRecordPageTabs } = useReorderRecordPageLayoutTabs(
-    currentPageLayout.id,
-  );
-
-  const { objectMetadataItems } = useObjectMetadataItems();
-
-  const inactiveRelationFieldNames = useMemo(() => {
-    if (!isDefined(targetRecordIdentifier)) {
-      return new Set<string>();
-    }
-
-    const objectMetadataItem = objectMetadataItems.find(
-      (item) =>
-        item.nameSingular === targetRecordIdentifier.targetObjectNameSingular,
-    );
-
-    if (!isDefined(objectMetadataItem)) {
-      return new Set<string>();
-    }
-
-    return new Set(
-      objectMetadataItem.fields
-        .filter(
-          (field) =>
-            !field.isActive &&
-            (field.type === FieldMetadataType.RELATION ||
-              field.type === FieldMetadataType.MORPH_RELATION),
-        )
-        .map((field) => field.name),
-    );
-  }, [objectMetadataItems, targetRecordIdentifier]);
-
-  const isMobile = useIsMobile();
-
-  const metadataStore = useAtomFamilyStateValue(
-    metadataStoreState,
-    'objectMetadataItems',
-  );
-
-  const isSystemObject =
-    (metadataStore.current as FlatObjectMetadataItem[]).find(
-      (item) =>
-        item.nameSingular === targetRecordIdentifier?.targetObjectNameSingular,
-    )?.isSystem ?? false;
-
   const canEnableTabEditing =
     isPageLayoutInEditMode &&
     shouldEnableTabEditingFeatures(currentPageLayout.type);
 
-  const tabsWithVisibleWidgets = getTabsWithVisibleWidgets({
-    tabs: currentPageLayout.tabs,
-    isMobile,
-    isInSidePanel,
-    isEditMode: isPageLayoutInEditMode,
-  });
-
-  const SYSTEM_OBJECT_TABS = ['Home', 'Timeline', 'Overview', 'Flow'];
-
-  const isUsingDefaultRecordPageLayout =
-    currentPageLayout.id === DEFAULT_RECORD_PAGE_LAYOUT_ID;
-
-  const tabsForCurrentObject =
-    isSystemObject && isUsingDefaultRecordPageLayout
-      ? tabsWithVisibleWidgets.filter((tab) =>
-          SYSTEM_OBJECT_TABS.includes(tab.title),
-        )
-      : tabsWithVisibleWidgets;
-
-  const { tabsToRenderInTabList, pinnedLeftTab } = getTabsByDisplayMode({
-    tabs: tabsForCurrentObject,
-    pageLayoutType: currentPageLayout.type,
-    isMobile,
-    isInSidePanel,
-  });
+  const { tabsToRenderInTabList, pinnedLeftTab } =
+    usePageLayoutRenderableTabs();
 
   const sortedTabs = sortTabsByPosition(tabsToRenderInTabList);
 
-  const sortedActiveTabs = useMemo(
-    () =>
-      sortedTabs.filter((tab) => {
-        const widgetTypes = tab.widgets.map((widget) => widget.type);
-        return !widgetTypes.some((widgetType) => {
-          const relationFieldName =
-            WIDGET_TYPE_TO_RELATION_FIELD_NAME[widgetType];
-          return (
-            isDefined(relationFieldName) &&
-            inactiveRelationFieldNames.has(relationFieldName)
-          );
-        });
-      }),
-    [sortedTabs, inactiveRelationFieldNames],
-  );
-
-  const activeTabExistsInCurrentPageLayout = currentPageLayout.tabs.some(
+  const activeTabExistsInRenderableTabs = sortedTabs.some(
     (tab) => tab.id === activeTabId,
   );
 
+  const pageLayoutPrerenderedTabIds = useAtomComponentStateValue(
+    pageLayoutPrerenderedTabIdsComponentState,
+  );
+
+  const tabsToMount = sortedTabs.filter(
+    (tab) =>
+      tab.id === activeTabId ||
+      (!isPageLayoutInEditMode &&
+        pageLayoutPrerenderedTabIds.includes(tab.id) &&
+        shouldPrerenderPageLayoutTab({
+          tab,
+          pageLayoutType: currentPageLayout.type,
+        })),
+  );
+
+  const shouldRenderRecordIdentifierBar =
+    currentPageLayout.type === PageLayoutType.RECORD_PAGE &&
+    isDefined(targetRecordIdentifier) &&
+    isRecordIdentifierBarHidden !== true &&
+    workspaceSurface.type !== 'side-panel' &&
+    !isMobile;
+
+  const shouldRenderTabList = sortedTabs.length > 1 || isPageLayoutInEditMode;
+  const behaveAsLinks =
+    workspaceSurface.type === 'main' && !isPageLayoutInEditMode;
+  const hasTabPanels = shouldRenderTabList && !behaveAsLinks;
+
+  const tabList = shouldRenderTabList && (
+    <PageLayoutTabList
+      aria-label={currentPageLayout.name}
+      className="page-layout-tab-list-print-hidden"
+      presentation={
+        shouldRenderRecordIdentifierBar ? 'identifier-bar' : 'standalone'
+      }
+      centerTabs={shouldRenderRecordIdentifierBar && !isDefined(pinnedLeftTab)}
+      tabs={sortedTabs}
+      behaveAsLinks={behaveAsLinks}
+      componentInstanceId={tabListInstanceId}
+      addTabStrategy={addTabStrategy}
+      isReorderEnabled={canEnableTabEditing}
+      pageLayoutType={currentPageLayout.type}
+    />
+  );
+
   return (
-    <StyledContainer hasPinnedTab={isDefined(pinnedLeftTab)}>
-      {isDefined(pinnedLeftTab) && (
-        <PageLayoutLeftPanel pinnedLeftTabId={pinnedLeftTab.id} />
-      )}
+    <PageLayoutWidgetDndProvider>
+      <PageLayoutScrollResetEffect
+        pageLayoutTabId={activeTabId}
+        scrollWrapperInstanceId={scrollWrapperInstanceId}
+        targetRecordId={targetRecordIdentifier?.id}
+      />
+      <PageLayoutPrerenderedTabIdsResetEffect />
+      <TabListRoot
+        componentInstanceId={tabListInstanceId}
+        enabled={hasTabPanels}
+      >
+        <StyledRoot>
+          {shouldRenderRecordIdentifierBar && (
+            <PageLayoutRecordIdentifierBar
+              targetRecordIdentifier={targetRecordIdentifier}
+              pinnedTab={pinnedLeftTab}
+              isPinnedTabEditable={isPageLayoutInEditMode}
+              tabList={tabList}
+            />
+          )}
 
-      <StyledTabsAndDashboardContainer>
-        <PageLayoutTabListEffect
-          tabs={sortedActiveTabs}
-          componentInstanceId={tabListInstanceId}
-          defaultTabToFocusOnMobileAndSidePanelId={
-            currentPageLayout.defaultTabToFocusOnMobileAndSidePanelId ??
-            undefined
-          }
-        />
-        {(sortedActiveTabs.length > 1 || isPageLayoutInEditMode) && (
-          <PageLayoutTabList
-            className="page-layout-tab-list-print-hidden"
-            tabs={sortedActiveTabs}
-            behaveAsLinks={!isInSidePanel && !isPageLayoutInEditMode}
-            isInSidePanel={isInSidePanel}
-            componentInstanceId={tabListInstanceId}
-            addTabStrategy={addTabStrategy}
-            isReorderEnabled={canEnableTabEditing}
-            onReorder={
-              canEnableTabEditing
-                ? (result, provided) =>
-                    reorderRecordPageTabs(
-                      result,
-                      provided,
-                      isDefined(pinnedLeftTab),
-                    )
-                : undefined
-            }
-            pageLayoutType={currentPageLayout.type}
-          />
-        )}
+          <StyledContainer hasPinnedTab={isDefined(pinnedLeftTab)}>
+            {isDefined(pinnedLeftTab) && (
+              <PageLayoutLeftPanel
+                pageLayoutId={currentPageLayout.id}
+                pinnedLeftTabId={pinnedLeftTab.id}
+              />
+            )}
 
-        <StyledScrollWrapperContainer>
-          <ScrollWrapper
-            className="page-layout-scroll-wrapper"
-            componentInstanceId={getScrollWrapperInstanceIdFromPageLayoutId(
-              currentPageLayout.id,
-            )}
-            defaultEnableXScroll={false}
-          >
-            {isDefined(activeTabId) && activeTabExistsInCurrentPageLayout && (
-              <PageLayoutMainContent tabId={activeTabId} />
-            )}
-          </ScrollWrapper>
-        </StyledScrollWrapperContainer>
-      </StyledTabsAndDashboardContainer>
-    </StyledContainer>
+            <StyledTabsAndDashboardContainer>
+              <PageLayoutTabListEffect
+                isInEditMode={isPageLayoutInEditMode}
+                tabs={sortedTabs}
+                componentInstanceId={tabListInstanceId}
+                defaultTabToFocusOnMobileAndSidePanelId={
+                  currentPageLayout.defaultTabToFocusOnMobileAndSidePanelId ??
+                  undefined
+                }
+              />
+              {!shouldRenderRecordIdentifierBar && tabList}
+
+              <StyledScrollWrapperContainer>
+                <ScrollWrapper
+                  className="page-layout-scroll-wrapper"
+                  componentInstanceId={scrollWrapperInstanceId}
+                  defaultEnableXScroll={false}
+                >
+                  {isDefined(activeTabId) &&
+                    activeTabExistsInRenderableTabs &&
+                    tabsToMount.map((tab) =>
+                      hasTabPanels ? (
+                        <Tabs.Panel
+                          key={tab.id}
+                          value={tab.id}
+                          keepMounted
+                          render={<StyledTabPanel />}
+                        >
+                          <PageLayoutMainContent tabId={tab.id} />
+                        </Tabs.Panel>
+                      ) : (
+                        <StyledTabContentDisplay
+                          key={tab.id}
+                          isActiveTab={tab.id === activeTabId}
+                        >
+                          <PageLayoutMainContent tabId={tab.id} />
+                        </StyledTabContentDisplay>
+                      ),
+                    )}
+                </ScrollWrapper>
+              </StyledScrollWrapperContainer>
+            </StyledTabsAndDashboardContainer>
+          </StyledContainer>
+        </StyledRoot>
+      </TabListRoot>
+    </PageLayoutWidgetDndProvider>
   );
 };

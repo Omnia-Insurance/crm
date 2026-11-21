@@ -1,7 +1,10 @@
 import { type PageLayoutWidget } from '@/page-layout/types/PageLayoutWidget';
 import { CalendarWidget } from '@/page-layout/widgets/calendar/components/CalendarWidget';
-import { EmailThreadWidget } from '@/page-layout/widgets/email-thread/components/EmailThreadWidget';
-import { EmailWidget } from '@/page-layout/widgets/emails/components/EmailWidget';
+import { CallRecordingWidget } from '@/page-layout/widgets/call-recording/components/CallRecordingWidget';
+import { ChatWidget } from '@/page-layout/widgets/chat/components/ChatWidget';
+import { ChatThreadsWidget } from '@/page-layout/widgets/chat-threads/components/ChatThreadsWidget';
+import { MessageThreadWidget } from '@/page-layout/widgets/email-thread/components/MessageThreadWidget';
+import { MessagesWidget } from '@/page-layout/widgets/messages/components/MessagesWidget';
 import { FieldRichTextWidgetRenderer } from '@/page-layout/widgets/field-rich-text/components/FieldRichTextWidgetRenderer';
 import { FieldWidget } from '@/page-layout/widgets/field/components/FieldWidget';
 import { FieldsWidget } from '@/page-layout/widgets/fields/components/FieldsWidget';
@@ -9,6 +12,7 @@ import { FileWidget } from '@/page-layout/widgets/files/components/FileWidget';
 import { FrontComponentWidgetRenderer } from '@/page-layout/widgets/front-component/components/FrontComponentWidgetRenderer';
 import { GraphWidgetRenderer } from '@/page-layout/widgets/graph/components/GraphWidgetRenderer';
 import { IframeWidget } from '@/page-layout/widgets/iframe/components/IframeWidget';
+import { MessageCampaignBodyWidget } from '@/page-layout/widgets/message-campaign/components/MessageCampaignBodyWidget';
 import { NoteWidget } from '@/page-layout/widgets/notes/components/NoteWidget';
 import { StandaloneRichTextWidgetRenderer } from '@/page-layout/widgets/standalone-rich-text/components/StandaloneRichTextWidgetRenderer';
 import { TaskWidget } from '@/page-layout/widgets/tasks/components/TaskWidget';
@@ -16,7 +20,6 @@ import { TimelineWidget } from '@/page-layout/widgets/timeline/components/Timeli
 import { WorkflowRunWidget } from '@/page-layout/widgets/workflow/components/WorkflowRunWidget';
 import { WorkflowVersionWidget } from '@/page-layout/widgets/workflow/components/WorkflowVersionWidget';
 import { RecordTableWidgetRenderer } from '@/page-layout/widgets/record-table/components/RecordTableWidgetRenderer';
-import { WorkflowWidget } from '@/page-layout/widgets/workflow/components/WorkflowWidget';
 import { WidgetType } from '~/generated-metadata/graphql';
 
 type WidgetContentRendererProps = {
@@ -48,6 +51,12 @@ export const WidgetContentRenderer = ({
     case WidgetType.NOTES:
       return <NoteWidget widget={widget} />;
 
+    case WidgetType.CHAT_THREADS:
+      return <ChatThreadsWidget />;
+
+    case WidgetType.CHAT:
+      return <ChatWidget />;
+
     case WidgetType.FIELD_RICH_TEXT:
       return <FieldRichTextWidgetRenderer widget={widget} />;
 
@@ -55,13 +64,10 @@ export const WidgetContentRenderer = ({
       return <FileWidget widget={widget} />;
 
     case WidgetType.EMAILS:
-      return <EmailWidget widget={widget} />;
+      return <MessagesWidget widget={widget} />;
 
     case WidgetType.CALENDAR:
       return <CalendarWidget widget={widget} />;
-
-    case WidgetType.WORKFLOW:
-      return <WorkflowWidget />;
 
     case WidgetType.WORKFLOW_VERSION:
       return <WorkflowVersionWidget />;
@@ -79,7 +85,16 @@ export const WidgetContentRenderer = ({
       return <RecordTableWidgetRenderer widget={widget} />;
 
     case WidgetType.EMAIL_THREAD:
-      return <EmailThreadWidget widget={widget} />;
+      return <MessageThreadWidget widget={widget} />;
+
+    case WidgetType.MESSAGE_CAMPAIGN_BODY:
+      return <MessageCampaignBodyWidget />;
+
+    case WidgetType.CALL_RECORDING_SUMMARY:
+      return <CallRecordingWidget kind="summary" />;
+
+    case WidgetType.CALL_RECORDING_TRANSCRIPT:
+      return <CallRecordingWidget kind="transcript" />;
 
     default:
       return null;

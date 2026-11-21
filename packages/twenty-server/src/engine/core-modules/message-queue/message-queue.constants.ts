@@ -3,26 +3,38 @@ export const PROCESS_METADATA = Symbol('message-queue:process_metadata');
 export const QUEUE_DRIVER = Symbol('message-queue:queue_driver');
 
 export enum MessageQueue {
+  recordExportQueue = 'record-export-queue',
+  workspaceDataExportQueue = 'workspace-data-export-queue',
   taskAssignedQueue = 'task-assigned-queue',
   messagingQueue = 'messaging-queue',
   webhookQueue = 'webhook-queue',
   cronQueue = 'cron-queue',
   emailQueue = 'email-queue',
+  campaignQueue = 'campaign-queue',
+  campaignSendQueue = 'campaign-send-queue',
+  campaignEngagementQueue = 'campaign-engagement-queue',
   calendarQueue = 'calendar-queue',
+  connectedAccountSyncWebhookQueue = 'connected-account-sync-webhook-queue',
   contactCreationQueue = 'contact-creation-queue',
   billingQueue = 'billing-queue',
   workspaceQueue = 'workspace-queue',
+  workspaceDestroyQueue = 'workspace-destroy-queue',
   entityEventsToDbQueue = 'entity-events-to-db-queue',
+  eventLogQueue = 'event-log-queue',
   workflowQueue = 'workflow-queue',
   delayedJobsQueue = 'delayed-jobs-queue',
   deleteCascadeQueue = 'delete-cascade-queue',
   logicFunctionQueue = 'logic-function-queue',
+  lambdaManagementQueue = 'lambda-management-queue',
+  applicationLifecycleHookQueue = 'application-lifecycle-hook-queue',
+  applicationUpgradeQueue = 'application-upgrade-queue',
   triggerQueue = 'trigger-queue',
   aiQueue = 'ai-queue',
   aiStreamQueue = 'ai-stream-queue',
-  exportQueue = 'export-queue',
+  accessGroupQueue = 'access-group-queue',
+  // OMNIA-CUSTOM: CSV import, ingestion pipelines and payment reconciliation.
+  // The values are the Redis key prefixes prod already uses; never rename them.
   importQueue = 'import-queue',
   ingestionQueue = 'ingestion-queue',
-  // OMNIA-CUSTOM: Payment Reconciliation v2 pipeline jobs
   reconciliationQueue = 'reconciliation-queue',
 }

@@ -1,13 +1,13 @@
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { type RecordField } from '@/object-record/record-field/types/RecordField';
-import { type ObjectPermission } from '~/generated-metadata/graphql';
 import { createRequiredContext } from '~/utils/createRequiredContext';
+import { type ObjectRecordsPermissions } from 'twenty-shared/types';
 
 type RecordCalendarContextValue = {
   viewBarInstanceId: string;
   objectNameSingular: string;
   objectMetadataItem: EnrichedObjectMetadataItem;
-  objectPermissions: ObjectPermission;
+  objectPermissions: ObjectRecordsPermissions;
   visibleRecordFields: RecordField[];
 };
 

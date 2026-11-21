@@ -5,7 +5,7 @@ import {
 } from '@nestjs/terminus';
 
 import { HEALTH_ERROR_MESSAGES } from 'src/engine/core-modules/admin-panel/constants/health-error-messages.constants';
-import { METRICS_FAILURE_RATE_THRESHOLD } from 'src/engine/core-modules/admin-panel/constants/metrics-failure-rate-threshold.const';
+import { METRICS_FAILURE_RATE_THRESHOLD } from 'src/engine/core-modules/admin-panel/constants/metrics-failure-rate-threshold.constant';
 import { withHealthCheckTimeout } from 'src/engine/core-modules/admin-panel/utils/health-check-timeout.util';
 import {
   CALENDAR_SYNC_METRICS_BY_STATUS,
@@ -34,7 +34,6 @@ export class ConnectedAccountHealth {
       );
 
       const failedJobs = counters.FAILED_UNKNOWN || 0;
-      //    +    (counters.FAILED_INSUFFICIENT_PERMISSIONS || 0)
 
       const failureRate =
         totalJobs > 0
@@ -83,7 +82,6 @@ export class ConnectedAccountHealth {
       );
 
       const failedJobs = counters.FAILED_UNKNOWN || 0;
-      //    +    (counters.FAILED_INSUFFICIENT_PERMISSIONS || 0)
 
       const failureRate =
         totalJobs > 0

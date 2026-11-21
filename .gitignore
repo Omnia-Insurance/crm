@@ -3,7 +3,7 @@
 /.idea
 .claude/*
 !.claude/settings.json
-.cursor/debug-*.log
+!.claude/skills/
 **/**/node_modules/
 .cache
 
@@ -14,6 +14,7 @@
 .nx/cache
 .nx/workspace-data
 .nx/nxw.js
+.nx/migrate-runs
 
 .pnp.*
 .yarn/*
@@ -65,3 +66,16 @@ output/playwright/
 screenshots/
 !**/public/screenshots/
 !**/assets/screenshots/
+
+# local graphify knowledge-graph output (never commit)
+**/graphify-out/
+
+# Local scratch scripts
+/.verify*.mjs
+/.shot*.mjs
+/.diag*.mjs
+/.compare*.mjs
+/.narrow*.mjs
+
+# OMNIA-CUSTOM: local Codex config can hold MCP tokens
+.codex/

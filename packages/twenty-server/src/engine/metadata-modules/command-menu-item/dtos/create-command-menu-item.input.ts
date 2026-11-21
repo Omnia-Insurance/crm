@@ -3,6 +3,7 @@ import { Field, Float, InputType } from '@nestjs/graphql';
 import {
   IsBoolean,
   IsEnum,
+  IsIn,
   IsNotEmpty,
   IsNumber,
   IsObject,
@@ -13,8 +14,12 @@ import {
 import GraphQLJSON from 'graphql-type-json';
 
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
-import { type CommandMenuItemPayload } from 'src/engine/metadata-modules/command-menu-item/dtos/command-menu-item-payload.union';
-import { CommandMenuItemAvailabilityType } from 'src/engine/metadata-modules/command-menu-item/enums/command-menu-item-availability-type.enum';
+import { type PathCommandMenuItemPayload } from 'src/engine/metadata-modules/command-menu-item/dtos/types/path-command-menu-item-payload.type';
+import {
+  COMMAND_MENU_CORE_OBJECT_NAMES,
+  CommandMenuItemAvailabilityType,
+  type CommandMenuCoreObjectName,
+} from 'twenty-shared/types';
 import { EngineComponentKey } from 'src/engine/metadata-modules/command-menu-item/enums/engine-component-key.enum';
 
 @InputType()
@@ -23,6 +28,11 @@ export class CreateCommandMenuItemInput {
   @IsOptional()
   @Field(() => UUIDScalarType, { nullable: true })
   workflowVersionId?: string;
+
+  @IsUUID()
+  @IsOptional()
+  @Field(() => UUIDScalarType, { nullable: true })
+  coreWorkflowVersionId?: string;
 
   @IsUUID()
   @IsOptional()
@@ -74,15 +84,30 @@ export class CreateCommandMenuItemInput {
   @Field({ nullable: true })
   conditionalAvailabilityExpression?: string;
 
+  @IsString()
+  @IsOptional()
+  @Field({ nullable: true })
+  conditionalPinnedExpression?: string;
+
   @IsUUID()
   @IsOptional()
   @Field(() => UUIDScalarType, { nullable: true })
   availabilityObjectMetadataId?: string;
 
+  @IsIn(COMMAND_MENU_CORE_OBJECT_NAMES)
+  @IsOptional()
+  @Field(() => String, { nullable: true })
+  availabilityCoreObjectName?: CommandMenuCoreObjectName | null;
+
   @IsObject()
   @IsOptional()
   @Field(() => GraphQLJSON, { nullable: true })
-  payload?: CommandMenuItemPayload;
+  payload?: PathCommandMenuItemPayload;
+
+  @IsUUID()
+  @IsOptional()
+  @Field(() => UUIDScalarType, { nullable: true })
+  navigationTargetObjectMetadataId?: string;
 
   @IsUUID()
   @IsOptional()

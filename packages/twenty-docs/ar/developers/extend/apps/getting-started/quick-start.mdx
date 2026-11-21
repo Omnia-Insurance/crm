@@ -1,0 +1,117 @@
+---
+title: البدء السريع
+description: أنشئ أول تطبيق Twenty باستخدام واجهة سطر الأوامر المستقلة.
+---
+
+import { PageBanner } from "/snippets/page-banner.mdx"
+import { CardTitle } from "/snippets/card-title.mdx"
+
+## قبل أن تبدأ
+
+استخدم Node.js 24 ‏(24.5+) أو 26 ‏(26.5.1+) وYarn 4 ‏(عبر Corepack: `corepack enable`؛ في Node 26، ثبّته أولاً باستخدام `npm install -g corepack`). ثبّت واجهة سطر الأوامر بشكل عام؛ يحتفظ تطبيقك بتبعيات SDK الخاصة به.
+
+<Note>
+يُدعم رسميًا إنشاء تطبيقات Twenty على أنظمة Unix (macOS وLinux) فقط. على Windows، اعمل ضمن WSL 2.
+</Note>
+
+## إنشاء المشروع
+
+```bash
+npm install -g twenty
+twenty app init my-twenty-app
+cd my-twenty-app
+yarn install
+```
+
+يكتب `app init` القالب فقط. لا يثبّت التبعيات، ولا يهيّئ Git، ولا يبدأ Docker، ولا يصادق، ولا يزامن. خصّص اسم العرض والوصف باستخدام `--display-name` و`--description`؛ استخدم `--path` لوجهة مختلفة.
+
+## الاتصال بـ Twenty
+
+استخدم مساحة عمل موجودة، أو ابدأ [خادماً محلياً](/ar/developers/extend/apps/getting-started/local-server)، ثم سجّل الدخول:
+
+```bash
+twenty auth login --url https://your-workspace.twenty.com --name dev --use
+twenty auth status --remote dev
+```
+
+يحفظ `--name dev` الاتصال باسم `dev`؛ ويجعله `--use` الافتراضي للأوامر أدناه. لاستهدافه صراحةً، أضف `--remote dev`. يمكن لمتغيرات البيئة تجاوز الإعداد الافتراضي، راجع [اختيار مساحة العمل](/ar/developers/extend/apps/operations/cli#connecting-to-a-workspace).
+
+## زامن تغييراتك
+
+للمزامنة الأولى، اسمح صراحةً بالتسجيل والتثبيت:
+
+```bash
+twenty app apply --create
+```
+
+ثم ابدأ مراقب التطوير:
+
+```bash
+twenty app dev
+```
+
+استخدم أوامر مقيّدة للنصوص البرمجية والوكلاء:
+
+```bash
+twenty app plan
+twenty app apply
+```
+
+`plan` يعاين التغييرات. `apply` يرفع ويزامن مرة واحدة. استخدم `--no-prune` للاحتفاظ بالكيانات البعيدة غير الموجودة في المصدر، أو `--yes` للسماح بحذف الكائنات والحقول دون مطالبة. تتطلب الأوامر الثلاثة جميعها خادماً بعيداً تمت مصادقته وملكية التسجيل.
+
+## ما الذي يمكنك بناؤه
+
+تتكون التطبيقات من **كيانات** — يُعرَّف كل منها كملف TypeScript يحتوي على `export default` واحد:
+
+| كيان                   | ماذا يفعل                                                                                     |
+| ---------------------- | --------------------------------------------------------------------------------------------- |
+| **الكائنات والحقول**   | نماذج بيانات مخصّصة (بطاقة بريدية، فاتورة، إلخ) بحقول ذات أنواع محددة                         |
+| **الوظائف المنطقية**   | TypeScript على جانب الخادم يتم تشغيله عبر مسارات HTTP، أو جداول cron، أو أحداث قاعدة البيانات |
+| **المكوّنات الأمامية** | مكوّنات React تُعرَض داخل واجهة مستخدم Twenty (اللوحة الجانبية، الودجات، قائمة الأوامر)       |
+| **المهارات والوكلاء**  | قدرات الذكاء الاصطناعي — تعليمات قابلة لإعادة الاستخدام ومساعدون مستقلون ذاتيًا               |
+| **طرق العرض والتنقّل** | طرق عرض قوائم مُعدّة مسبقًا وعناصر قائمة الشريط الجانبي                                       |
+| **تخطيطات الصفحات**    | صفحات تفاصيل سجلات مخصصة تتضمن علامات تبويب وعناصر واجهة                                      |
+
+مرجع كامل: [المفاهيم](/ar/developers/extend/apps/getting-started/concepts).
+
+## أنشئ باستخدام مهارات وكلاء الذكاء الاصطناعي.
+
+تُعلّم [مهارات الوكلاء](https://skills.sh/) الرسمية من Twenty وكلاء البرمجة سير عمل التطبيق الكامل: إنشاء الهيكل، وتطوير الكيانات، وعمليات المزامنة والنشر، والنشر في السوق. تُثبَّت في Claude Code وCodex وCursor وPi وأي بيئة تشغيل أخرى يدعمها CLI `skills`، وتعمل مع أي مثيل من Twenty، بما في ذلك النطاقات المخصصة المستضافة ذاتيًا وlocalhost.
+
+```bash filename="Terminal"
+# List the available skills
+npx skills add https://github.com/twentyhq/twenty/tree/agent-skills --list
+
+# Install the scaffolding and development skills
+npx skills add https://github.com/twentyhq/twenty/tree/agent-skills --skill create-app
+npx skills add https://github.com/twentyhq/twenty/tree/agent-skills --skill develop-app
+```
+
+تُثبَّت كل مهارة مع وثائقها المرجعية الخاصة. يصبح الفرع `agent-skills` متاحًا بعد أول نشر ناجح من `main`؛ وقبل ذلك، اتبع [إرشادات الإنشاء المحلية](https://github.com/twentyhq/twenty/tree/main/packages/twenty-agent-skills#local-development).
+
+## الخطوات التالية
+
+<CardGroup cols={2} className="documentation-card-group">
+  <Card href="/ar/developers/extend/apps/config/overview" img="/images/documentation/section-overview-icons-v1/apps-config.svg">
+    <CardTitle>تكوين</CardTitle>
+    هوية التطبيق والدور الافتراضي والتثبيت وإلغاء تثبيت الروابط والأصول العامة.
+  </Card>
+  <Card href="/ar/developers/extend/apps/data/overview" img="/images/documentation/section-overview-icons-v1/apps-data.svg">
+    <CardTitle>البيانات</CardTitle>
+    كائنات وحقول وعلاقات ثنائية الاتجاه.
+  </Card>
+  <Card href="/ar/developers/extend/apps/logic/overview" img="/images/documentation/section-overview-icons-v1/apps-logic.svg">
+    <CardTitle>المنطق</CardTitle>
+    دوال المنطق والمهارات والوكلاء والاتصالات وقنوات المراسلة.
+  </Card>
+  <Card href="/ar/developers/extend/apps/layout/overview" img="/images/user-guide/halftone/layout-window-v1.svg">
+    <CardTitle>تخطيط</CardTitle>
+    مشاهدات، تصفح، تخطيطات الصفحات، المكونات الأمامية.
+  </Card>
+  <Card href="/ar/developers/extend/apps/operations/overview" img="/images/documentation/section-overview-icons-v1/apps-operations.svg">
+    <CardTitle>العمليات</CardTitle>
+    CLI ، اختبار ، إزالة ، CI ونشر التطبيق الخاص بك.
+  </Card>
+</CardGroup>
+
+<PageBanner illustration="dev-apps" />

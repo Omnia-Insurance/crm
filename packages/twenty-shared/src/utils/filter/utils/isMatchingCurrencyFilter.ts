@@ -80,16 +80,13 @@ export const isMatchingCurrencyFilter = ({
     | null
     | undefined;
 }) => {
+  // OMNIA-CUSTOM: unloaded currency values reach here from the front matcher;
+  // only an IS NULL check can match them, instead of throwing.
   if (!isDefined(value)) {
-    // Check if the filter is testing for NULL — if so, match
-    if (currencyFilter.amountMicros?.is === 'NULL') {
-      return true;
-    }
-    if (currencyFilter.currencyCode?.is === 'NULL') {
-      return true;
-    }
-
-    return false;
+    return (
+      currencyFilter.amountMicros?.is === 'NULL' ||
+      currencyFilter.currencyCode?.is === 'NULL'
+    );
   }
 
   const shouldMatchCurrencyCodeFilter = isDefined(currencyFilter.currencyCode);

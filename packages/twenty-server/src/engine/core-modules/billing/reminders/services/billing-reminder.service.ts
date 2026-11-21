@@ -4,24 +4,27 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
 import { msg } from '@lingui/core/macro';
-import { render } from '@react-email/render';
 import { addDays, differenceInCalendarDays } from 'date-fns';
 import {
   BillingSubscriptionRenewingEmail,
   BillingTrialConvertingEmail,
   BillingTrialEndingEmail,
+  renderEmail,
 } from 'twenty-emails';
-import { isDefined } from 'twenty-shared/utils';
+import { SettingsPath } from 'twenty-shared/types';
+import { getSettingsPath, isDefined } from 'twenty-shared/utils';
 import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
 import { Between, Repository } from 'typeorm';
 
 import { BillingSubscriptionEntity } from 'src/engine/core-modules/billing/entities/billing-subscription.entity';
 import { SubscriptionInterval } from 'src/engine/core-modules/billing/enums/billing-subscription-interval.enum';
 import { SubscriptionStatus } from 'src/engine/core-modules/billing/enums/billing-subscription-status.enum';
+import { isSendInvoiceSubscription } from 'src/engine/core-modules/billing/utils/is-send-invoice-subscription.util';
 import {
   BILLING_RENEWAL_REMINDER_SENT_KEY,
   BILLING_TRIAL_REMINDER_SENT_KEY,
 } from 'src/engine/core-modules/billing/reminders/constants/billing-reminder-sent-keys.constant';
+import { WorkspaceDomainsService } from 'src/engine/core-modules/domain/workspace-domains/services/workspace-domains.service';
 import { EmailService } from 'src/engine/core-modules/email/email.service';
 import { I18nService } from 'src/engine/core-modules/i18n/i18n.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
@@ -30,7 +33,7 @@ import { UserService } from 'src/engine/core-modules/user/services/user.service'
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { WorkspaceMemberWorkspaceEntity } from 'src/modules/workspace-member/standard-objects/workspace-member.workspace-entity';
 
-// Reminders the cron can send. A given trial gets exactly one of "ending" / "converting".
+// A given trial gets exactly one of "ending" / "converting"
 type BillingReminderEmail =
   | { type: 'trial-ending'; trialEndsAt: Date }
   | { type: 'trial-converting'; trialEndsAt: Date; interval: 'month' | 'year' }
@@ -52,6 +55,7 @@ export class BillingReminderService {
     private readonly userVarsService: UserVarsService,
     private readonly emailService: EmailService,
     private readonly i18nService: I18nService,
+    private readonly workspaceDomainsService: WorkspaceDomainsService,
   ) {}
 
   async processReminders(): Promise<void> {
@@ -88,6 +92,10 @@ export class BillingReminderService {
     );
 
     for (const subscription of trialingSubscriptions) {
+      if (isSendInvoiceSubscription(subscription)) {
+        continue;
+      }
+
       const trialEnd = subscription.trialEnd;
 
       if (!isDefined(trialEnd)) {
@@ -180,11 +188,8 @@ export class BillingReminderService {
       return false;
     }
 
-    // Fallback when the payment-method flag isn't synced yet: a with-credit-card trial
-    // is longer than a no-credit-card one, so the trial duration disambiguates. Fall back
-    // to createdAt when trialStart is missing so this still holds during sync gaps —
-    // otherwise a real card-on-file trial could be misread as no-card and wrongly told
-    // "no card will be charged" right before it is actually charged.
+    // Unsynced payment-method flag: card trials are longer, so trial length tells them apart. createdAt covers a
+    // missing trialStart, else a card trial could be told "no card will be charged" right before it is charged
     const withoutCardTrialDurationDays = this.twentyConfigService.get(
       'BILLING_FREE_TRIAL_WITHOUT_CREDIT_CARD_DURATION_IN_DAYS',
     );
@@ -235,10 +240,18 @@ export class BillingReminderService {
       const workspaceMembers =
         await this.userService.loadWorkspaceMembers(workspace);
 
+      const billingSettingsUrl = this.workspaceDomainsService
+        .buildWorkspaceURL({
+          workspace,
+          pathname: getSettingsPath(SettingsPath.Billing),
+        })
+        .toString();
+
       for (const workspaceMember of workspaceMembers) {
         await this.sendReminderEmail({
           workspaceMember,
           workspaceDisplayName: workspace.displayName,
+          billingSettingsUrl,
           reminder,
         });
       }
@@ -258,10 +271,12 @@ export class BillingReminderService {
   private async sendReminderEmail({
     workspaceMember,
     workspaceDisplayName,
+    billingSettingsUrl,
     reminder,
   }: {
     workspaceMember: WorkspaceMemberWorkspaceEntity;
     workspaceDisplayName: string | undefined;
+    billingSettingsUrl: string;
     reminder: BillingReminderEmail;
   }): Promise<void> {
     if (!isDefined(workspaceMember.userEmail)) {
@@ -276,11 +291,12 @@ export class BillingReminderService {
       reminder,
       userName,
       workspaceDisplayName,
+      billingSettingsUrl,
       locale,
     });
 
-    const html = await render(emailTemplate, { pretty: true });
-    const text = await render(emailTemplate, { plainText: true });
+    const html = await renderEmail(emailTemplate, { pretty: true });
+    const text = await renderEmail(emailTemplate, { plainText: true });
 
     await this.emailService.send({
       to: workspaceMember.userEmail,
@@ -297,11 +313,13 @@ export class BillingReminderService {
     reminder,
     userName,
     workspaceDisplayName,
+    billingSettingsUrl,
     locale,
   }: {
     reminder: BillingReminderEmail;
     userName: string;
     workspaceDisplayName: string | undefined;
+    billingSettingsUrl: string;
     locale: WorkspaceMemberWorkspaceEntity['locale'];
   }) {
     switch (reminder.type) {
@@ -315,6 +333,7 @@ export class BillingReminderService {
             dataRetentionDays: this.twentyConfigService.get(
               'WORKSPACE_INACTIVE_DAYS_BEFORE_SOFT_DELETION',
             ),
+            link: billingSettingsUrl,
             locale,
           }),
         };
@@ -326,6 +345,7 @@ export class BillingReminderService {
             workspaceDisplayName,
             trialEndsAt: reminder.trialEndsAt,
             interval: reminder.interval,
+            link: billingSettingsUrl,
             locale,
           }),
         };
@@ -336,6 +356,7 @@ export class BillingReminderService {
             userName,
             workspaceDisplayName,
             renewsAt: reminder.renewsAt,
+            link: billingSettingsUrl,
             locale,
           }),
         };

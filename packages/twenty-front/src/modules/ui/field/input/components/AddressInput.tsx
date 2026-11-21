@@ -1,58 +1,39 @@
+import { ADDRESS_DETAIL_SUB_FIELDS } from '@/ui/field/input/constants/AddressDetailSubFields';
+import { hasAddressDetailValue } from '@/ui/field/input/utils/hasAddressDetailValue';
+import { StyledFieldInputFullWidthDetail } from '@/ui/field/input/components/StyledFieldInputFullWidthDetail';
 import { styled } from '@linaria/react';
+import { atom, useAtomValue, useStore } from 'jotai';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { PlaceAutocompleteSelect } from '@/geo-map/components/PlaceAutocompleteSelect';
 import { SELECT_AUTOCOMPLETE_LIST_DROPDOWN_ID } from '@/geo-map/constants/SelectAutocompleteListDropDownId';
-import { useRegisterInputEvents } from '@/object-record/record-field/ui/meta-types/input/hooks/useRegisterInputEvents';
+import { useRegisterInputEvents } from '@/ui/input/hooks/useRegisterInputEvents';
 import { type FieldAddressDraftValue } from '@/object-record/record-field/ui/types/FieldInputDraftValue';
-import { type FieldAddressValue } from '@/object-record/record-field/ui/types/FieldMetadata';
 import { TextInput } from '@/ui/input/components/TextInput';
-import { TEXT_INPUT_CLICK_OUTSIDE_ID } from '@/ui/input/components/constants/TextInputClickOutsideId';
+import { AddressAutocompleteRoot } from '@/ui/field/input/components/AddressAutocompleteRoot';
+import { type AddressInputProps } from '@/ui/field/input/types/AddressInputProps';
 import { CountrySelect } from '@/ui/input/components/internal/country/components/CountrySelect';
-import { SELECT_COUNTRY_DROPDOWN_ID } from '@/ui/input/components/internal/country/constants/SelectCountryDropdownId';
-import { Dropdown } from '@/ui/layout/dropdown/components/Dropdown';
-import { activeDropdownFocusIdState } from '@/ui/layout/dropdown/states/activeDropdownFocusIdState';
-import { useListenClickOutside } from '@/ui/utilities/pointer-event/hooks/useListenClickOutside';
-import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
-import { isDefined } from 'twenty-shared/utils';
-import { MOBILE_VIEWPORT } from 'twenty-ui/theme-constants';
-import { v4 } from 'uuid';
-
-import { t } from '@lingui/core/macro';
+import { isDefined, typedObjectEntries } from 'twenty-shared/utils';
+import { FieldInputDetailsToggleRow } from '@/ui/field/input/components/FieldInputDetailsToggleRow';
+import { StyledFieldInputDetails } from '@/ui/field/input/components/StyledFieldInputDetails';
+import { StyledTextInput } from '@/ui/field/input/components/TextInput';
+import { Autocomplete } from 'twenty-ui/primitives/input';
+import { MOBILE_VIEWPORT } from 'twenty-ui/theme';
 import { type AllowedAddressSubField } from 'twenty-shared/types';
 import { useAddressAutocomplete } from '@/ui/field/input/hooks/useAddressAutocomplete';
-import { useCountryUtils } from '@/ui/field/input/hooks/useCountryUtils';
+import { useAddressInputClickOutside } from '@/ui/field/input/hooks/useAddressInputClickOutside';
 import { useFocusManagement } from '@/ui/field/input/hooks/useFocusManagement';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledAddressContainer = styled.div`
-  padding: 4px 8px;
-
+  display: flex;
+  flex-direction: column;
   width: 344px;
-  > div {
-    margin-bottom: 6px;
-  }
 
   @media (max-width: ${MOBILE_VIEWPORT}px) {
-    width: auto;
-    min-width: 100px;
     max-width: 200px;
+    min-width: 100px;
     overflow: hidden;
-    > div {
-      margin-bottom: 8px;
-    }
-  }
-`;
-
-const StyledHalfRowContainer = styled.div`
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-
-  @media (max-width: ${MOBILE_VIEWPORT}px) {
-    display: block;
-    > div {
-      margin-bottom: 7px;
-    }
+    width: auto;
   }
 `;
 
@@ -60,22 +41,6 @@ const StyledInputWithDropdownContainer = styled.div`
   position: relative;
   width: 100%;
 `;
-
-export type AddressInputProps = {
-  instanceId: string;
-  value: FieldAddressValue;
-  onTab: (newAddress: FieldAddressDraftValue) => void;
-  onShiftTab: (newAddress: FieldAddressDraftValue) => void;
-  onEnter: (newAddress: FieldAddressDraftValue) => void;
-  onEscape: (newAddress: FieldAddressDraftValue) => void;
-  onClickOutside: (
-    event: MouseEvent | TouchEvent,
-    newAddress: FieldAddressDraftValue,
-  ) => void;
-  clearable?: boolean;
-  onChange?: (updatedValue: FieldAddressDraftValue) => void;
-  subFields?: AllowedAddressSubField[] | null;
-};
 
 export const AddressInput = ({
   instanceId,
@@ -88,7 +53,17 @@ export const AddressInput = ({
   onChange,
   subFields,
 }: AddressInputProps) => {
-  const [internalValue, setInternalValue] = useState(value);
+  const { t } = useLingui();
+  const store = useStore();
+  const [internalValueAtom] = useState(() =>
+    atom<FieldAddressDraftValue>(value),
+  );
+  const internalValue = useAtomValue(internalValueAtom);
+  const setInternalValue = useCallback(
+    (updatedValue: FieldAddressDraftValue) =>
+      store.set(internalValueAtom, updatedValue),
+    [internalValueAtom, store],
+  );
 
   const addressStreet1InputRef = useRef<HTMLInputElement>(null);
   const addressStreet2InputRef = useRef<HTMLInputElement>(null);
@@ -108,18 +83,13 @@ export const AddressInput = ({
     [],
   );
 
-  const { findCountryCodeByCountryName } = useCountryUtils();
-
   const {
     placeAutocompleteData,
-    tokenForPlaceApi,
     typeOfAddressForAutocomplete,
-    setTokenForPlaceApi,
-    setTypeOfAddressForAutocomplete,
-    getAutocompletePlaceData,
-    autoFillInputsFromPlaceDetails,
+    searchPlaces,
+    selectPlace,
     closeDropdownOfAutocomplete,
-  } = useAddressAutocomplete(onChange);
+  } = useAddressAutocomplete({ onChange });
 
   const isFieldInputInSubFieldsAddress = useCallback(
     (field: AllowedAddressSubField): boolean => {
@@ -131,8 +101,29 @@ export const AddressInput = ({
     [subFields],
   );
 
+  const hasStreet1 = isFieldInputInSubFieldsAddress('addressStreet1');
+  const hasDetails = ADDRESS_DETAIL_SUB_FIELDS.some(
+    isFieldInputInSubFieldsAddress,
+  );
+  const [isExpanded, setIsExpanded] = useState(() =>
+    hasAddressDetailValue({ address: value, subFields }),
+  );
+  const shouldShowDetails = hasDetails && (!hasStreet1 || isExpanded);
+
+  const displayedInputRefs = useMemo(
+    () =>
+      Object.fromEntries(
+        typedObjectEntries(inputRefs).filter(([field]) =>
+          field === 'addressStreet1'
+            ? hasStreet1
+            : shouldShowDetails && isFieldInputInSubFieldsAddress(field),
+        ),
+      ),
+    [inputRefs, hasStreet1, shouldShowDetails, isFieldInputInSubFieldsAddress],
+  );
+
   const { getFocusHandler, handleTab, handleShiftTab } = useFocusManagement(
-    inputRefs,
+    displayedInputRefs,
     internalValue,
     onTab,
     onShiftTab,
@@ -148,65 +139,35 @@ export const AddressInput = ({
       onChange?.(updatedAddress);
 
       if (field === 'addressStreet1' || field === 'addressCity') {
-        const token = tokenForPlaceApi ?? v4();
-        if (token !== tokenForPlaceApi) {
-          setTokenForPlaceApi(token);
-        }
-        const countryCode = findCountryCodeByCountryName(
-          updatedAddress.addressCountry ?? '',
-        );
-        if (field !== typeOfAddressForAutocomplete) {
-          setTypeOfAddressForAutocomplete(field);
-        }
-        const isFieldCity = field === 'addressCity';
-        getAutocompletePlaceData(
-          updatedAddressPart,
-          token,
-          countryCode,
-          isFieldCity,
-        );
+        searchPlaces({
+          subField: field,
+          text: updatedAddressPart,
+          countryName: updatedAddress.addressCountry ?? '',
+        });
       }
     },
-    [
-      internalValue,
-      onChange,
-      tokenForPlaceApi,
-      setTokenForPlaceApi,
-      findCountryCodeByCountryName,
-      typeOfAddressForAutocomplete,
-      setTypeOfAddressForAutocomplete,
-      getAutocompletePlaceData,
-      subFields,
-    ],
+    [internalValue, setInternalValue, onChange, searchPlaces, subFields],
   );
 
   const handlePlaceSelection = useCallback(
-    (placeId: string) => {
-      const placeAutocomplete = placeAutocompleteData?.find(
-        (place) => place.placeId === placeId,
-      );
-      const token = tokenForPlaceApi ?? '';
-      if (!isDefined(placeAutocomplete)) return;
+    async (placeId: string) => {
+      const updatedAddress = await selectPlace({
+        placeId,
+        getInternalValue: () => store.get(internalValueAtom),
+      });
 
-      const text: string | undefined =
-        typeOfAddressForAutocomplete !== 'addressCity'
-          ? placeAutocomplete.text
-          : undefined;
+      if (!isDefined(updatedAddress)) {
+        return;
+      }
 
-      autoFillInputsFromPlaceDetails(placeId, token, text, internalValue);
+      setInternalValue(updatedAddress);
+
+      if (hasAddressDetailValue({ address: updatedAddress, subFields })) {
+        setIsExpanded(true);
+      }
     },
-    [
-      placeAutocompleteData,
-      tokenForPlaceApi,
-      typeOfAddressForAutocomplete,
-      autoFillInputsFromPlaceDetails,
-      internalValue,
-    ],
+    [selectPlace, internalValueAtom, setInternalValue, store, subFields],
   );
-
-  const handleClickOutside = useCallback(() => {
-    closeDropdownOfAutocomplete();
-  }, [closeDropdownOfAutocomplete]);
 
   const handleEnter = useCallback(() => {
     onEnter(internalValue);
@@ -220,7 +181,7 @@ export const AddressInput = ({
 
   const handleOutsideClick = useCallback(
     (event: MouseEvent | TouchEvent) => {
-      onClickOutside?.(event, internalValue);
+      onClickOutside?.({ event, newAddress: internalValue });
       closeDropdownOfAutocomplete();
     },
     [onClickOutside, internalValue, closeDropdownOfAutocomplete],
@@ -236,152 +197,138 @@ export const AddressInput = ({
     onShiftTab: handleShiftTab,
   });
 
-  const activeDropdownFocusId = useAtomStateValue(activeDropdownFocusIdState);
-
-  useListenClickOutside({
-    refs: [wrapperRef],
-    callback: (event) => {
-      if (
-        activeDropdownFocusId === SELECT_COUNTRY_DROPDOWN_ID ||
-        activeDropdownFocusId === SELECT_AUTOCOMPLETE_LIST_DROPDOWN_ID
-      ) {
-        return;
-      }
-
-      event.stopImmediatePropagation();
-      handleOutsideClick(event);
-    },
-    enabled: isDefined(onClickOutside),
-    listenerId: 'address-input',
+  useAddressInputClickOutside({
+    inputRef: wrapperRef,
+    onClickOutside: handleOutsideClick,
   });
 
   useEffect(() => {
     setInternalValue(value);
-  }, [value]);
+  }, [setInternalValue, value]);
 
-  const validAutocompleteData = useMemo(
-    () =>
-      placeAutocompleteData && placeAutocompleteData.length > 0
-        ? placeAutocompleteData
-        : null,
-    [placeAutocompleteData],
+  const renderInputWithAutocomplete = ({
+    fieldType,
+    label,
+    autoFocus = false,
+    isInline = false,
+  }: {
+    fieldType: 'addressStreet1' | 'addressCity';
+    label: string;
+    autoFocus?: boolean;
+    isInline?: boolean;
+  }) => (
+    <StyledInputWithDropdownContainer>
+      <AddressAutocompleteRoot
+        dropdownId={SELECT_AUTOCOMPLETE_LIST_DROPDOWN_ID}
+        isEnabled={typeOfAddressForAutocomplete === fieldType}
+        places={placeAutocompleteData}
+        value={internalValue[fieldType] ?? ''}
+        onValueChange={getChangeHandler(fieldType)}
+        onClose={closeDropdownOfAutocomplete}
+        onPlaceSelect={handlePlaceSelection}
+      >
+        {isInline ? (
+          <Autocomplete.Input
+            ref={inputRefs[fieldType]}
+            aria-label={label}
+            placeholder={label}
+            autoFocus={autoFocus}
+            onFocus={getFocusHandler(fieldType)}
+            render={(inputProps) => (
+              // oxlint-disable-next-line react/jsx-props-no-spreading
+              <StyledTextInput {...inputProps} />
+            )}
+          />
+        ) : (
+          <Autocomplete.Input
+            aria-label={label}
+            render={(inputProps) => (
+              <TextInput
+                inputProps={inputProps}
+                autoFocus={autoFocus}
+                ref={inputRefs[fieldType]}
+                label={label}
+                fullWidth
+                onFocus={getFocusHandler(fieldType)}
+              />
+            )}
+          />
+        )}
+      </AddressAutocompleteRoot>
+    </StyledInputWithDropdownContainer>
   );
-
-  const renderInputWithAutocomplete = (
-    inputElement: React.ReactNode | null,
-    fieldType: 'addressStreet1' | 'addressCity',
-  ) => {
-    const shouldShowDropdown =
-      validAutocompleteData && typeOfAddressForAutocomplete === fieldType;
-
-    if (!shouldShowDropdown) {
-      return inputElement;
-    }
-
-    return (
-      <StyledInputWithDropdownContainer>
-        <Dropdown
-          dropdownId={SELECT_AUTOCOMPLETE_LIST_DROPDOWN_ID}
-          dropdownPlacement="bottom-start"
-          excludedClickOutsideIds={[
-            TEXT_INPUT_CLICK_OUTSIDE_ID,
-            SELECT_AUTOCOMPLETE_LIST_DROPDOWN_ID,
-          ]}
-          disableClickForClickableComponent={true}
-          onClickOutside={handleClickOutside}
-          clickableComponent={inputElement}
-          dropdownComponents={
-            <PlaceAutocompleteSelect
-              list={validAutocompleteData}
-              onChange={handlePlaceSelection}
-              dropdownId={SELECT_AUTOCOMPLETE_LIST_DROPDOWN_ID}
-            />
-          }
-        />
-      </StyledInputWithDropdownContainer>
-    );
-  };
 
   return (
     <StyledAddressContainer ref={wrapperRef}>
-      {isFieldInputInSubFieldsAddress('addressStreet1') &&
-        renderInputWithAutocomplete(
-          <TextInput
-            autoFocus
-            value={internalValue.addressStreet1 ?? ''}
-            ref={inputRefs.addressStreet1}
-            label={t`Address 1`}
-            fullWidth
-            onChange={getChangeHandler('addressStreet1')}
-            onFocus={getFocusHandler('addressStreet1')}
-            textClickOutsideId={
-              validAutocompleteData &&
-              typeOfAddressForAutocomplete === 'addressStreet1'
-                ? TEXT_INPUT_CLICK_OUTSIDE_ID
-                : undefined
+      {hasStreet1 && (
+        <FieldInputDetailsToggleRow
+          isExpanded={isExpanded}
+          toggleLabel={t`Address details`}
+          hasToggle={hasDetails}
+          onToggle={() => {
+            if (isExpanded) {
+              getFocusHandler('addressStreet1')();
             }
-          />,
-          'addressStreet1',
-        )}
-      {isFieldInputInSubFieldsAddress('addressStreet2') && (
-        <TextInput
-          value={internalValue.addressStreet2 ?? ''}
-          ref={inputRefs.addressStreet2}
-          label={t`Address 2`}
-          fullWidth
-          onChange={getChangeHandler('addressStreet2')}
-          onFocus={getFocusHandler('addressStreet2')}
-        />
+            setIsExpanded(!isExpanded);
+          }}
+        >
+          {renderInputWithAutocomplete({
+            fieldType: 'addressStreet1',
+            label: t`Address 1`,
+            autoFocus: true,
+            isInline: true,
+          })}
+        </FieldInputDetailsToggleRow>
       )}
-      <StyledHalfRowContainer>
-        {isFieldInputInSubFieldsAddress('addressCity') &&
-          renderInputWithAutocomplete(
-            <TextInput
-              value={internalValue.addressCity ?? ''}
-              ref={inputRefs.addressCity}
-              label={t`City`}
-              fullWidth
-              onChange={getChangeHandler('addressCity')}
-              onFocus={getFocusHandler('addressCity')}
-              textClickOutsideId={
-                validAutocompleteData &&
-                typeOfAddressForAutocomplete === 'addressCity'
-                  ? TEXT_INPUT_CLICK_OUTSIDE_ID
-                  : undefined
-              }
-            />,
-            'addressCity',
+      {shouldShowDetails && (
+        <StyledFieldInputDetails hasSeparator={hasStreet1}>
+          {isFieldInputInSubFieldsAddress('addressStreet2') && (
+            <StyledFieldInputFullWidthDetail>
+              <TextInput
+                value={internalValue.addressStreet2 ?? ''}
+                ref={inputRefs.addressStreet2}
+                label={t`Address 2`}
+                fullWidth
+                onChange={getChangeHandler('addressStreet2')}
+                onFocus={getFocusHandler('addressStreet2')}
+              />
+            </StyledFieldInputFullWidthDetail>
           )}
-        {isFieldInputInSubFieldsAddress('addressState') && (
-          <TextInput
-            value={internalValue.addressState ?? ''}
-            ref={inputRefs.addressState}
-            label={t`State`}
-            fullWidth
-            onChange={getChangeHandler('addressState')}
-            onFocus={getFocusHandler('addressState')}
-          />
-        )}
-      </StyledHalfRowContainer>
-      <StyledHalfRowContainer>
-        {isFieldInputInSubFieldsAddress('addressPostcode') && (
-          <TextInput
-            value={internalValue.addressPostcode ?? ''}
-            ref={inputRefs.addressPostcode}
-            label={t`Post Code`}
-            fullWidth
-            onChange={getChangeHandler('addressPostcode')}
-            onFocus={getFocusHandler('addressPostcode')}
-          />
-        )}
-        {isFieldInputInSubFieldsAddress('addressCountry') && (
-          <CountrySelect
-            label={t`Country`}
-            onChange={getChangeHandler('addressCountry')}
-            selectedCountryName={internalValue.addressCountry ?? ''}
-          />
-        )}
-      </StyledHalfRowContainer>
+          {isFieldInputInSubFieldsAddress('addressCity') &&
+            renderInputWithAutocomplete({
+              fieldType: 'addressCity',
+              label: t`City`,
+              autoFocus: !hasStreet1,
+            })}
+          {isFieldInputInSubFieldsAddress('addressState') && (
+            <TextInput
+              value={internalValue.addressState ?? ''}
+              ref={inputRefs.addressState}
+              label={t`State`}
+              fullWidth
+              onChange={getChangeHandler('addressState')}
+              onFocus={getFocusHandler('addressState')}
+            />
+          )}
+          {isFieldInputInSubFieldsAddress('addressPostcode') && (
+            <TextInput
+              value={internalValue.addressPostcode ?? ''}
+              ref={inputRefs.addressPostcode}
+              label={t`Post Code`}
+              fullWidth
+              onChange={getChangeHandler('addressPostcode')}
+              onFocus={getFocusHandler('addressPostcode')}
+            />
+          )}
+          {isFieldInputInSubFieldsAddress('addressCountry') && (
+            <CountrySelect
+              label={t`Country`}
+              onChange={getChangeHandler('addressCountry')}
+              selectedCountryName={internalValue.addressCountry ?? ''}
+            />
+          )}
+        </StyledFieldInputDetails>
+      )}
     </StyledAddressContainer>
   );
 };

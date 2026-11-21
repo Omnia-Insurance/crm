@@ -1,33 +1,46 @@
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
 import { IconChevronDown } from 'twenty-ui/icon';
-import { TabButton } from 'twenty-ui/input';
+import { Dropdown, TabButton } from 'twenty-ui/components/navigation';
 
 import { TAB_LIST_HEIGHT } from '@/ui/layout/tab-list/constants/TabListHeight';
+import { TAB_LIST_ROW_HEIGHT_CSS_VARIABLE } from '@/ui/layout/tab-list/constants/TabListRowHeightCssVariable';
+import { useLingui } from '@lingui/react/macro';
+
+const TAB_MORE_BUTTON_TEST_ID = 'tab-tab-more-button';
 
 const StyledTabMoreButtonContainer = styled.div`
   display: flex;
-  height: ${TAB_LIST_HEIGHT};
+  height: var(${TAB_LIST_ROW_HEIGHT_CSS_VARIABLE}, ${TAB_LIST_HEIGHT});
 `;
+
+type TabMoreButtonProps = {
+  hiddenTabsCount: number;
+  active: boolean;
+  disableTestId?: boolean;
+  isDropdownTrigger?: boolean;
+};
 
 export const TabMoreButton = ({
   hiddenTabsCount,
   active,
-  className,
-}: {
-  hiddenTabsCount: number;
-  active: boolean;
-  className?: string;
-}) => {
+  disableTestId,
+  isDropdownTrigger = false,
+}: TabMoreButtonProps) => {
+  const { t } = useLingui();
+  const testId = disableTestId ? undefined : TAB_MORE_BUTTON_TEST_ID;
+
+  const tabButton = (
+    <TabButton
+      data-testid={testId}
+      active={active}
+      children={`+${hiddenTabsCount} ${t`More`}`}
+      endIcon={<IconChevronDown />}
+    />
+  );
+
   return (
     <StyledTabMoreButtonContainer>
-      <TabButton
-        id="tab-more-button"
-        active={active}
-        title={`+${hiddenTabsCount} ${t`More`}`}
-        RightIcon={IconChevronDown}
-        className={className}
-      />
+      {isDropdownTrigger ? <Dropdown.Trigger render={tabButton} /> : tabButton}
     </StyledTabMoreButtonContainer>
   );
 };

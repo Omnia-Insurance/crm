@@ -1,19 +1,27 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
+import { isNonEmptyString } from '@sniptt/guards';
 import { type ServerVariables } from 'twenty-shared/application';
-import { isDefined } from 'twenty-shared/utils';
-import { In, Not, type Repository } from 'typeorm';
+import { FieldMetadataType } from 'twenty-shared/types';
+import { isDefined, isNonEmptyArray } from 'twenty-shared/utils';
+import { In, Not, type EntityManager, type Repository } from 'typeorm';
 
 import { ApplicationRegistrationVariableEntity } from 'src/engine/core-modules/application/application-registration-variable/application-registration-variable.entity';
+import { ApplicationRegistrationLookupService } from 'src/engine/core-modules/application/application-registration/application-registration-lookup/application-registration-lookup.service';
 import { ApplicationRegistrationEntity } from 'src/engine/core-modules/application/application-registration/application-registration.entity';
+import { ApplicationRegistrationConfigurationIssue } from 'src/engine/core-modules/application/application-registration/enums/application-registration-configuration-issue.enum';
+import { getApplicationRegistrationConfigurationIssues } from 'src/engine/core-modules/application/application-registration/utils/get-application-registration-configuration-issues.util';
 import { ApplicationEntity } from 'src/engine/core-modules/application/application.entity';
 import {
   ApplicationRegistrationException,
   ApplicationRegistrationExceptionCode,
 } from 'src/engine/core-modules/application/application-registration/application-registration.exception';
-import { type CreateApplicationRegistrationVariableInput } from 'src/engine/core-modules/application/application-registration-variable/dtos/create-application-registration-variable.input';
 import { type UpdateApplicationRegistrationVariableInput } from 'src/engine/core-modules/application/application-registration-variable/dtos/update-application-registration-variable.input';
+import { type FlatApplication } from 'src/engine/core-modules/application/types/flat-application.type';
+import { canCallerReachApplicationRegistrationOrThrow } from 'src/engine/core-modules/application/utils/can-caller-reach-application-registration-or-throw.util';
+import { isReservedEnvVariableName } from 'src/engine/core-modules/logic-function/logic-function-executor/utils/is-reserved-env-variable-name.util';
+import { type PlaintextString } from 'src/engine/core-modules/secret-encryption/branded-strings/plaintext-string.type';
 import { SecretEncryptionService } from 'src/engine/core-modules/secret-encryption/secret-encryption.service';
 import { ApplicationRegistrationVariableDTO } from 'src/engine/core-modules/application/application-registration-variable/dtos/application-registration-variable.dto';
 
@@ -24,19 +32,26 @@ export class ApplicationRegistrationVariableService {
     private readonly variableRepository: Repository<ApplicationRegistrationVariableEntity>,
     @InjectRepository(ApplicationRegistrationEntity)
     private readonly applicationRegistrationRepository: Repository<ApplicationRegistrationEntity>,
+    // Answers "which workspaces installed this registration" for the whole
+    // instance, so the query filters by registration rather than workspace.
+    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
     @InjectRepository(ApplicationEntity)
     private readonly applicationRepository: Repository<ApplicationEntity>,
     private readonly encryptionService: SecretEncryptionService,
+    private readonly applicationRegistrationLookupService: ApplicationRegistrationLookupService,
   ) {}
 
-  async findVariablesWithObfuscatedValues(
-    applicationRegistrationId: string,
-    workspaceId: string,
-  ): Promise<ApplicationRegistrationVariableDTO[]> {
-    await this.assertRegistrationOwnedByWorkspace(
+  async findVariablesWithObfuscatedValues({
+    applicationRegistrationId,
+    workspaceId,
+  }: {
+    applicationRegistrationId: string;
+    workspaceId: string;
+  }): Promise<ApplicationRegistrationVariableDTO[]> {
+    await this.applicationRegistrationLookupService.findOneByIdOrThrow({
       applicationRegistrationId,
-      workspaceId,
-    );
+      ownerWorkspaceId: workspaceId,
+    });
 
     return this.findVariablesWithObfuscatedValuesGlobal(
       applicationRegistrationId,
@@ -54,40 +69,58 @@ export class ApplicationRegistrationVariableService {
     return variables.map((variable) => this.toObfuscatedDTO(variable));
   }
 
-  async createVariable(
-    input: CreateApplicationRegistrationVariableInput,
-    workspaceId: string,
-  ): Promise<ApplicationRegistrationVariableEntity> {
-    await this.assertRegistrationOwnedByWorkspace(
-      input.applicationRegistrationId,
-      workspaceId,
-    );
+  async getServerEnvVariables({
+    applicationRegistrationId,
+  }: {
+    applicationRegistrationId: string | null;
+  }): Promise<Record<string, string>> {
+    if (!isDefined(applicationRegistrationId)) {
+      return {};
+    }
 
-    const encryptedValue = this.encryptionService.encryptVersioned(input.value);
-
-    const variable = this.variableRepository.create({
-      applicationRegistrationId: input.applicationRegistrationId,
-      key: input.key,
-      encryptedValue,
-      description: input.description ?? '',
-      isSecret: input.isSecret ?? true,
+    const variables = await this.variableRepository.find({
+      where: { applicationRegistrationId },
     });
 
-    return this.variableRepository.save(variable);
+    const envVariables: Record<string, string> = {};
+
+    for (const variable of variables) {
+      if (isReservedEnvVariableName(variable.key)) {
+        continue;
+      }
+
+      const plaintextValue = this.decryptValue(variable);
+
+      if (isNonEmptyString(plaintextValue)) {
+        envVariables[variable.key] = plaintextValue;
+      }
+    }
+
+    return envVariables;
   }
 
-  async updateVariable(
-    input: UpdateApplicationRegistrationVariableInput,
-    workspaceId: string,
-  ): Promise<ApplicationRegistrationVariableEntity> {
+  async updateVariable({
+    input,
+    workspaceId,
+    callingApplication,
+  }: {
+    input: UpdateApplicationRegistrationVariableInput;
+    workspaceId: string;
+    callingApplication: FlatApplication | undefined;
+  }): Promise<ApplicationRegistrationVariableDTO> {
     const variable = await this.findVariableOrThrow(input.id);
 
-    await this.assertRegistrationOwnedByWorkspace(
-      variable.applicationRegistrationId,
-      workspaceId,
-    );
+    await this.applicationRegistrationLookupService.findOneByIdOrThrow({
+      applicationRegistrationId: variable.applicationRegistrationId,
+      ownerWorkspaceId: workspaceId,
+    });
 
-    return this.applyVariableUpdate(input);
+    canCallerReachApplicationRegistrationOrThrow({
+      callingApplication,
+      applicationRegistrationId: variable.applicationRegistrationId,
+    });
+
+    return this.toObfuscatedDTO(await this.applyVariableUpdate(input));
   }
 
   async updateVariableGlobal(
@@ -100,27 +133,27 @@ export class ApplicationRegistrationVariableService {
     return this.toObfuscatedDTO(entity);
   }
 
-  async deleteVariable(id: string, workspaceId: string): Promise<boolean> {
-    const variable = await this.findVariableOrThrow(id);
-
-    await this.assertRegistrationOwnedByWorkspace(
-      variable.applicationRegistrationId,
-      workspaceId,
-    );
-
-    await this.variableRepository.delete(id);
-
-    return true;
-  }
-
-  // Syncs variable schemas from manifest: creates missing, updates metadata, removes stale
   async syncVariableSchemas(
     applicationRegistrationId: string,
     serverVariables: ServerVariables,
+    entityManager?: EntityManager,
   ): Promise<void> {
+    const variableRepository = isDefined(entityManager)
+      ? entityManager.getRepository(ApplicationRegistrationVariableEntity)
+      : this.variableRepository;
+
     const declaredKeys = Object.keys(serverVariables);
 
-    const existingVariables = await this.variableRepository.find({
+    const reservedKeys = declaredKeys.filter(isReservedEnvVariableName);
+
+    if (reservedKeys.length > 0) {
+      throw new ApplicationRegistrationException(
+        `Server variable names are reserved: ${reservedKeys.join(', ')}`,
+        ApplicationRegistrationExceptionCode.INVALID_INPUT,
+      );
+    }
+
+    const existingVariables = await variableRepository.find({
       where: { applicationRegistrationId },
     });
 
@@ -130,103 +163,165 @@ export class ApplicationRegistrationVariableService {
 
     for (const [key, schema] of Object.entries(serverVariables)) {
       const existing = existingByKey.get(key);
+      const isDeprecated = schema.isDeprecated ?? false;
+      const isRequired = isDeprecated ? false : (schema.isRequired ?? false);
 
       if (existing) {
-        await this.variableRepository.update(existing.id, {
+        await variableRepository.update(existing.id, {
           description: schema.description ?? '',
-          isSecret: schema.isSecret ?? true,
-          isRequired: schema.isRequired ?? false,
+          isRequired,
+          isDeprecated,
+          type: schema.type ?? FieldMetadataType.TEXT,
+          options: schema.options ?? null,
         });
       } else {
-        await this.variableRepository.save(
-          this.variableRepository.create({
+        await variableRepository.save(
+          variableRepository.create({
             applicationRegistrationId,
             key,
-            encryptedValue: '',
+            encryptedValue: this.encryptionService.encryptVersioned(
+              '' as PlaintextString,
+            ),
             description: schema.description ?? '',
             isSecret: schema.isSecret ?? true,
-            isRequired: schema.isRequired ?? false,
+            isRequired,
+            isDeprecated,
+            type: schema.type ?? FieldMetadataType.TEXT,
+            options: schema.options ?? null,
           }),
         );
       }
     }
 
     if (declaredKeys.length > 0) {
-      await this.variableRepository.delete({
+      await variableRepository.delete({
         applicationRegistrationId,
         key: Not(In(declaredKeys)),
       });
     } else {
-      await this.variableRepository.delete({ applicationRegistrationId });
+      await variableRepository.delete({ applicationRegistrationId });
     }
   }
 
   async isConfiguredBatch(
     applicationRegistrationIds: string[],
   ): Promise<Map<string, boolean>> {
-    const [variables, registrations, installedApps] = await Promise.all([
-      this.variableRepository.find({
-        where: { applicationRegistrationId: In(applicationRegistrationIds) },
-      }),
-      this.applicationRegistrationRepository.find({
-        where: { id: In(applicationRegistrationIds) },
-        select: { id: true, manifest: true, ownerWorkspaceId: true },
-      }),
-      this.applicationRepository.find({
-        where: { applicationRegistrationId: In(applicationRegistrationIds) },
-        select: { applicationRegistrationId: true, workspaceId: true },
-      }),
-    ]);
+    const configurationIssuesByRegistrationId =
+      await this.findConfigurationIssuesBatch(applicationRegistrationIds);
 
-    const result = new Map<string, boolean>();
-
-    for (const id of applicationRegistrationIds) {
-      const registration = registrations.find(
-        (registration) => registration.id === id,
-      );
-
-      const areVariablesConfigured = variables
-        .filter(
-          (variable) =>
-            variable.applicationRegistrationId === id && variable.isRequired,
-        )
-        .every((variable) => variable.isFilled);
-
-      const isInstalledOnOwnerWorkspace = installedApps.some(
-        (app) =>
-          app.applicationRegistrationId === id &&
-          app.workspaceId === registration?.ownerWorkspaceId,
-      );
-
-      result.set(
-        id,
-        areVariablesConfigured &&
-          this.isServerRouteConfigured(
-            registration,
-            isInstalledOnOwnerWorkspace,
-          ),
-      );
-    }
-
-    return result;
+    return new Map(
+      Array.from(
+        configurationIssuesByRegistrationId,
+        ([applicationRegistrationId, configurationIssues]) => [
+          applicationRegistrationId,
+          configurationIssues.length === 0,
+        ],
+      ),
+    );
   }
 
-  private isServerRouteConfigured(
-    registration: ApplicationRegistrationEntity | undefined,
-    isInstalledOnOwnerWorkspace: boolean,
-  ): boolean {
-    const hasServerRouteFunction =
-      registration?.manifest?.logicFunctions?.some((logicFunction) =>
-        isDefined(logicFunction.serverRouteTriggerSettings),
-      ) ?? false;
-
-    if (!hasServerRouteFunction) {
-      return true;
+  async findConfigurationIssuesBatch(
+    applicationRegistrationIds: string[],
+  ): Promise<Map<string, ApplicationRegistrationConfigurationIssue[]>> {
+    if (!isNonEmptyArray(applicationRegistrationIds)) {
+      return new Map();
     }
 
-    return (
-      isDefined(registration?.ownerWorkspaceId) && isInstalledOnOwnerWorkspace
+    const [
+      requiredVariables,
+      ownerWorkspaceIdByRegistrationIdExposingServerRoute,
+      registrationIdsInstalledOnOwnerWorkspace,
+    ] = await Promise.all([
+      this.variableRepository.find({
+        where: {
+          applicationRegistrationId: In(applicationRegistrationIds),
+          isRequired: true,
+        },
+      }),
+      this.findOwnerWorkspaceIdByRegistrationIdExposingServerRoute(
+        applicationRegistrationIds,
+      ),
+      this.findRegistrationIdsInstalledOnOwnerWorkspace(
+        applicationRegistrationIds,
+      ),
+    ]);
+
+    const registrationIdsWithUnfilledRequiredVariable = new Set(
+      requiredVariables
+        .filter((variable) => !this.isVariableFilled(variable))
+        .map((variable) => variable.applicationRegistrationId),
     );
+
+    return new Map(
+      applicationRegistrationIds.map((applicationRegistrationId) => [
+        applicationRegistrationId,
+        getApplicationRegistrationConfigurationIssues({
+          hasUnfilledRequiredServerVariable:
+            registrationIdsWithUnfilledRequiredVariable.has(
+              applicationRegistrationId,
+            ),
+          exposesServerRoute:
+            ownerWorkspaceIdByRegistrationIdExposingServerRoute.has(
+              applicationRegistrationId,
+            ),
+          hasOwnerWorkspace: isDefined(
+            ownerWorkspaceIdByRegistrationIdExposingServerRoute.get(
+              applicationRegistrationId,
+            ),
+          ),
+          isInstalledOnOwnerWorkspace:
+            registrationIdsInstalledOnOwnerWorkspace.has(
+              applicationRegistrationId,
+            ),
+        }),
+      ]),
+    );
+  }
+
+  private async findOwnerWorkspaceIdByRegistrationIdExposingServerRoute(
+    applicationRegistrationIds: string[],
+  ): Promise<Map<string, string | null>> {
+    const rows: { id: string; ownerWorkspaceId: string | null }[] =
+      await this.applicationRegistrationRepository
+        .createQueryBuilder('registration')
+        .select('registration.id', 'id')
+        .addSelect('registration.ownerWorkspaceId', 'ownerWorkspaceId')
+        .where('registration.id IN (:...applicationRegistrationIds)', {
+          applicationRegistrationIds,
+        })
+        .andWhere(
+          `EXISTS (
+          SELECT 1
+          FROM jsonb_array_elements(
+            COALESCE(registration."manifest" -> 'logicFunctions', '[]'::jsonb)
+          ) AS logic_function
+          WHERE logic_function -> 'serverRouteTriggerSettings' IS NOT NULL
+            AND jsonb_typeof(logic_function -> 'serverRouteTriggerSettings') <> 'null'
+        )`,
+        )
+        .getRawMany();
+
+    return new Map(rows.map((row) => [row.id, row.ownerWorkspaceId]));
+  }
+
+  private async findRegistrationIdsInstalledOnOwnerWorkspace(
+    applicationRegistrationIds: string[],
+  ): Promise<Set<string>> {
+    const rows: { id: string }[] = await this.applicationRepository
+      .createQueryBuilder('application')
+      .select('application."applicationRegistrationId"', 'id')
+      .innerJoin(
+        'application.applicationRegistration',
+        'registration',
+        'registration."workspaceId" = application."workspaceId"',
+      )
+      .where(
+        'application."applicationRegistrationId" IN (:...applicationRegistrationIds)',
+        { applicationRegistrationIds },
+      )
+      .getRawMany();
+
+    return new Set(rows.map((row) => row.id));
   }
 
   private async findVariableOrThrow(
@@ -260,7 +355,9 @@ export class ApplicationRegistrationVariableService {
     }
 
     if (isDefined(update.resetValue) && update.resetValue) {
-      updateData.encryptedValue = '';
+      updateData.encryptedValue = this.encryptionService.encryptVersioned(
+        '' as PlaintextString,
+      );
     }
 
     if (isDefined(update.description)) {
@@ -274,36 +371,34 @@ export class ApplicationRegistrationVariableService {
     return this.variableRepository.findOneOrFail({ where: { id } });
   }
 
+  private decryptValue(
+    variable: ApplicationRegistrationVariableEntity,
+  ): string {
+    return this.encryptionService.decryptVersionedOrThrow(
+      variable.encryptedValue,
+    );
+  }
+
+  private isVariableFilled(
+    variable: ApplicationRegistrationVariableEntity,
+  ): boolean {
+    return this.decryptValue(variable) !== '';
+  }
+
   private toObfuscatedDTO(
     variable: ApplicationRegistrationVariableEntity,
   ): ApplicationRegistrationVariableDTO {
-    const { encryptedValue } = variable;
+    const plaintextValue = this.decryptValue(variable);
+    const isFilled = plaintextValue !== '';
 
     return {
       ...variable,
-      isFilled: variable.isFilled,
-      value:
-        encryptedValue !== ''
-          ? variable.isSecret
-            ? '•••••••••••••'
-            : this.encryptionService.decryptVersionedOrThrow(encryptedValue)
-          : null,
+      isFilled,
+      value: !isFilled
+        ? null
+        : variable.isSecret
+          ? '•••••••••••••'
+          : plaintextValue,
     };
-  }
-
-  private async assertRegistrationOwnedByWorkspace(
-    registrationId: string,
-    workspaceId: string,
-  ): Promise<void> {
-    const registration = await this.applicationRegistrationRepository.findOne({
-      where: { id: registrationId, ownerWorkspaceId: workspaceId },
-    });
-
-    if (!registration) {
-      throw new ApplicationRegistrationException(
-        `Application registration with id ${registrationId} not found`,
-        ApplicationRegistrationExceptionCode.APPLICATION_REGISTRATION_NOT_FOUND,
-      );
-    }
   }
 }

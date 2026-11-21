@@ -20,8 +20,9 @@ import {
   WebhookSubscriptionStatus,
 } from 'twenty-shared/types';
 
+import { WasIntroducedInUpgrade } from 'src/engine/core-modules/upgrade/decorators/was-introduced-in-upgrade.decorator';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
-import { WorkspaceRelatedEntity } from 'src/engine/workspace-manager/types/workspace-related-entity';
+import { WorkspaceRelatedEntity } from 'src/engine/workspace-manager/types/workspace-related-entity.type';
 
 registerEnumType(CalendarChannelVisibility, {
   name: 'CalendarChannelVisibility',
@@ -42,6 +43,11 @@ registerEnumType(CalendarChannelContactAutoCreationPolicy, {
   'isSyncEnabled',
   'syncStage',
 ])
+@Index(
+  'IDX_CALENDAR_CHANNEL_WEBHOOK_SUBSCRIPTION_EXTERNAL_ID',
+  ['webhookSubscriptionExternalId'],
+  { where: '"webhookSubscriptionExternalId" IS NOT NULL' },
+)
 export class CalendarChannelEntity extends WorkspaceRelatedEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -82,6 +88,13 @@ export class CalendarChannelEntity extends WorkspaceRelatedEntity {
       CalendarChannelContactAutoCreationPolicy.AS_PARTICIPANT_AND_ORGANIZER,
   })
   contactAutoCreationPolicy: CalendarChannelContactAutoCreationPolicy;
+
+  @Column({ type: 'boolean', nullable: false, default: false })
+  @WasIntroducedInUpgrade({
+    upgradeCommandName:
+      '2.49.0_AddExcludePrivateEventsToCalendarChannelFastInstanceCommand_1792319637000',
+  })
+  excludePrivateEvents: boolean;
 
   @Column({ type: 'boolean', nullable: false, default: true })
   isSyncEnabled: boolean;

@@ -54,7 +54,7 @@ export const typeORMCoreModuleOptions: TypeOrmModuleOptions = {
         ],
   synchronize: false,
   migrationsRun: false,
-  migrationsTransactionMode: 'each',
+  poolSize: Number(process.env.PG_POOL_MAX_CONNECTIONS ?? 10),
   migrationsTableName: '_typeorm_migrations',
   metadataTableName: '_typeorm_generated_columns_and_materialized_views',
   // The TypeORM migration system is frozen — historical migrations live in

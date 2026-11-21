@@ -7,7 +7,7 @@ import {
   type ValidatableWorkflow,
   type ValidatableWorkflowStep,
   type WorkflowValidationIssue,
-} from '@/workflow/validation/types/workflow-validation.type';
+} from '@/workflow/validation/types/WorkflowValidation';
 import { type WorkflowGraph } from '@/workflow/validation/utils/build-workflow-graph.util';
 import { extractVariablesFromInput } from '@/workflow/validation/utils/extract-variables-from-input.util';
 import { getVariablePathSuggestions } from '@/workflow/validation/utils/get-variable-path-suggestions.util';
@@ -15,6 +15,19 @@ import {
   collectOutputSchemaVariablePaths,
   resolveVariablePathInOutputSchema,
 } from '@/workflow/workflow-schema/utils/resolve-variable-path-in-output-schema';
+
+// a CODE step's source is never resolved, so only its inputs can reference variables
+const getStepVariableInput = (step: ValidatableWorkflowStep): unknown => {
+  if (step.type !== 'CODE' || !isObject(step.settings?.input)) {
+    return step.settings?.input;
+  }
+
+  if (!('logicFunctionInput' in step.settings.input)) {
+    return undefined;
+  }
+
+  return step.settings.input.logicFunctionInput;
+};
 
 export const validateWorkflowVariableReferences = ({
   workflow,
@@ -29,7 +42,7 @@ export const validateWorkflowVariableReferences = ({
   const stepIds = new Set(workflow.steps?.map((step) => step.id) ?? []);
 
   for (const step of workflow.steps ?? []) {
-    const variables = extractVariablesFromInput(step.settings?.input);
+    const variables = extractVariablesFromInput(getStepVariableInput(step));
     const ancestors = graph.ancestorsByStepId.get(step.id) ?? new Set<string>();
 
     for (const variable of variables) {

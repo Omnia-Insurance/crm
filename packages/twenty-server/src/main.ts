@@ -2,40 +2,44 @@ import { NestFactory } from '@nestjs/core';
 import { type NestExpressApplication } from '@nestjs/platform-express';
 
 import fs from 'fs';
+import { type Server } from 'http';
 import { inspect } from 'util';
 
 import bytes from 'bytes';
 import { useContainer } from 'class-validator';
 import session from 'express-session';
 import graphqlUploadExpress from 'graphql-upload/graphqlUploadExpress.mjs';
+import { ApiPath } from 'twenty-shared/types';
 
 import { NodeEnvironment } from 'src/engine/core-modules/twenty-config/interfaces/node-environment.interface';
 
 import { setPgDateTypeParser } from 'src/database/pg/set-pg-date-type-parser';
+import { ApplicationRepeatedEventRecorderService } from 'src/engine/core-modules/event-logs/emit/application-repeated-event-recorder.service';
 import { ExceptionHandlerService } from 'src/engine/core-modules/exception-handler/exception-handler.service';
 import { LoggerService } from 'src/engine/core-modules/logger/logger.service';
 import { getSessionStorageOptions } from 'src/engine/core-modules/session-storage/session-storage.module-factory';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { configTransformers } from 'src/engine/core-modules/twenty-config/utils/config-transformers.util';
+import { UsageRecorderService } from 'src/engine/core-modules/usage/services/usage-recorder.service';
+import { applyCredentialedCors } from 'src/engine/core-modules/user-session/utils/apply-credentialed-cors.util';
 import { shouldCaptureException } from 'src/engine/utils/global-exception-handler.util';
-import { UnhandledExceptionFilter } from 'src/filters/unhandled-exception.filter';
 
 import { AppModule } from './app.module';
 import './instrument';
 
 import { settings } from './engine/constants/settings';
-import { generateFrontConfig } from './utils/generate-front-config';
+import { drainHttpServer } from './utils/drain-http-server.util';
+import { enableValidationMetadataCache } from './utils/enable-validation-metadata-cache.util';
 
-// Trigger
 const bootstrap = async () => {
+  enableValidationMetadataCache();
   setPgDateTypeParser();
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-    // Expose WWW-Authenticate so browser-based MCP clients can read the
-    // resource_metadata pointer on 401. Required by MCP authorization spec.
-    cors: { exposedHeaders: ['WWW-Authenticate'] },
     bufferLogs: process.env.LOGGER_IS_BUFFER_ENABLED === 'true',
     rawBody: true,
+    // Lets app.close() destroy sockets the drain cannot close, such as ones mid TLS handshake.
+    forceCloseConnections: true,
     snapshot: process.env.NODE_ENV === NodeEnvironment.DEVELOPMENT,
     ...(process.env.SSL_KEY_PATH && process.env.SSL_CERT_PATH
       ? {
@@ -68,50 +72,73 @@ const bootstrap = async () => {
 
   app.set('trust proxy', trustProxy);
 
+  applyCredentialedCors(app, twentyConfigService);
+
   app.use(session(getSessionStorageOptions(twentyConfigService)));
 
-  // Apply class-validator container so that we can use injection in validators
   useContainer(app.select(AppModule), { fallbackOnErrors: true });
 
-  // Use our logger
   app.useLogger(logger);
 
-  app.useGlobalFilters(new UnhandledExceptionFilter());
-
-  app.useBodyParser('json', { limit: settings.storage.maxFileSize });
+  app.useBodyParser('json', { limit: settings.maxRequestBodySize });
   app.useBodyParser('urlencoded', {
-    limit: settings.storage.maxFileSize,
+    limit: settings.maxRequestBodySize,
     extended: true,
   });
   app.useBodyParser('text', { type: 'text/plain', limit: '1024kb' });
 
-  // Graphql file upload
   app.use(
-    '/graphql',
+    `/${ApiPath.GraphQL}`,
     graphqlUploadExpress({
-      maxFieldSize: bytes(settings.storage.maxFileSize)!,
+      maxFieldSize: bytes(settings.maxRequestBodySize)!,
+      maxFileSize: bytes(settings.maxRequestBodySize)!,
       maxFiles: 10,
     }),
   );
 
   app.use(
-    '/metadata',
+    `/${ApiPath.Metadata}`,
     graphqlUploadExpress({
-      maxFieldSize: bytes(settings.storage.maxFileSize)!,
+      maxFieldSize: bytes(settings.maxRequestBodySize)!,
+      maxFileSize: bytes(settings.maxRequestBodySize)!,
       maxFiles: 10,
     }),
   );
-
-  // Inject the server url in the frontend page
-  generateFrontConfig();
 
   const keepAliveTimeout = twentyConfigService.get(
     'SERVER_KEEP_ALIVE_TIMEOUT_MS',
   );
-  const httpServer = app.getHttpServer();
+  const httpServer: Server = app.getHttpServer();
 
   httpServer.keepAliveTimeout = keepAliveTimeout;
   httpServer.headersTimeout = keepAliveTimeout + 1000;
+
+  // Nest destroys modules before closing the HTTP server, so drain requests first.
+  let shutdownPromise: Promise<void> | undefined;
+  const usageRecorder = app.get(UsageRecorderService);
+  const applicationRepeatedEventRecorder = app.get(
+    ApplicationRepeatedEventRecorderService,
+  );
+
+  const shutdown = () =>
+    (shutdownPromise ??= drainHttpServer({ server: httpServer })
+      // Recorder hooks can otherwise run after their storage has been destroyed.
+      .then(() =>
+        Promise.allSettled([
+          usageRecorder.flushAndStop(),
+          applicationRepeatedEventRecorder.flushAndStop(),
+        ]),
+      )
+      .then(() => app.close())
+      .then(() => process.exit(0))
+      .catch((error) => {
+        logger.error('Application shutdown failed', 'Bootstrap', error);
+        process.exit(1);
+      }));
+
+  for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+    process.once(signal, () => void shutdown());
+  }
 
   await app.listen(twentyConfigService.get('NODE_PORT'));
 };

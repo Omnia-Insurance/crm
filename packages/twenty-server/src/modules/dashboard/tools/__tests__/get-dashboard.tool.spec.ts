@@ -1,10 +1,17 @@
-import { FieldMetadataType } from 'twenty-shared/types';
+import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import {
+  FieldMetadataType,
+  PageLayoutTabLayoutMode,
+} from 'twenty-shared/types';
 
 import { WidgetConfigurationType } from 'src/engine/metadata-modules/page-layout-widget/enums/widget-configuration-type.type';
 import { createGetDashboardTool } from 'src/modules/dashboard/tools/get-dashboard.tool';
-import { type DashboardToolDependencies } from 'src/modules/dashboard/tools/types/dashboard-tool-dependencies.type';
 
 const WORKSPACE_ID = '20202020-aaaa-4d02-bf25-6aeccf7ea419';
+const AUTH_CONTEXT = {
+  type: 'user',
+  workspace: { id: WORKSPACE_ID },
+} as WorkspaceAuthContext;
 
 const AGG_FIELD_ID = '20202020-bbbb-4d02-bf25-6aeccf7ea419';
 const OWNER_FIELD_ID = '20202020-cccc-4d02-bf25-6aeccf7ea419';
@@ -70,7 +77,13 @@ describe('get_dashboard tool', () => {
               id: 'widget-1',
               title: 'Widget',
               type: 'GRAPH',
-              gridPosition: { row: 0, column: 0, rowSpan: 4, columnSpan: 4 },
+              position: {
+                layoutMode: PageLayoutTabLayoutMode.GRID,
+                row: 0,
+                column: 0,
+                rowSpan: 4,
+                columnSpan: 4,
+              },
               objectMetadataId: 'company',
               configuration: {
                 configurationType: WidgetConfigurationType.BAR_CHART,
@@ -85,7 +98,13 @@ describe('get_dashboard tool', () => {
               id: 'widget-2',
               title: 'Widget 2',
               type: 'GRAPH',
-              gridPosition: { row: 4, column: 0, rowSpan: 4, columnSpan: 4 },
+              position: {
+                layoutMode: PageLayoutTabLayoutMode.GRID,
+                row: 4,
+                column: 0,
+                rowSpan: 4,
+                columnSpan: 4,
+              },
               objectMetadataId: 'company',
               configuration: {
                 configurationType: WidgetConfigurationType.BAR_CHART,
@@ -104,11 +123,11 @@ describe('get_dashboard tool', () => {
       pageLayoutService: {
         findByIdOrThrow: jest.fn().mockResolvedValue(pageLayout),
       },
-      globalWorkspaceOrmManager: {
+      workspaceOrmManager: {
         executeInWorkspaceContext: jest
           .fn()
           .mockImplementation(async (fn) => fn()),
-        getRepository: jest.fn().mockResolvedValue({
+        getRepository: jest.fn().mockReturnValue({
           findOne: jest.fn().mockResolvedValue(dashboard),
         }),
       },
@@ -119,17 +138,10 @@ describe('get_dashboard tool', () => {
       },
     };
 
-    const tool = createGetDashboardTool(
-      deps as unknown as Pick<
-        DashboardToolDependencies,
-        | 'pageLayoutService'
-        | 'globalWorkspaceOrmManager'
-        | 'flatEntityMapsCacheService'
-      >,
-      {
-        workspaceId: WORKSPACE_ID,
-      },
-    );
+    const tool = createGetDashboardTool(deps, {
+      workspaceId: WORKSPACE_ID,
+      authContext: AUTH_CONTEXT,
+    });
 
     const result = await tool.execute({ dashboardId: dashboard.id });
 

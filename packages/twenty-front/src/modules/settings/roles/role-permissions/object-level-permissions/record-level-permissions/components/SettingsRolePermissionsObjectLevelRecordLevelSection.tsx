@@ -1,23 +1,23 @@
 /* @license Enterprise */
 
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
+import { Section } from 'twenty-ui/components/layout';
 import { IconArrowUp, IconLock } from 'twenty-ui/icon';
-import { H2Title, H3Title } from 'twenty-ui/typography';
-import { Section } from 'twenty-ui/layout';
-import { Card } from 'twenty-ui/surfaces';
+import { Card } from 'twenty-ui/primitives/surfaces';
 
 import { billingState } from '@/client-config/states/billingState';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { SettingsOptionCardContentButton } from '@/settings/components/SettingsOptions/SettingsOptionCardContentButton';
 import { SettingsRolePermissionsObjectLevelRecordLevelPermissionFilterBuilder } from '@/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelPermissionFilterBuilder';
+// OMNIA-CUSTOM: All records or Matching records per operation (contract C1)
+import { SettingsRolePermissionsObjectLevelRecordLevelOperationsSelect } from '@/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelOperationsSelect';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { SettingsPath } from 'twenty-shared/types';
-import { Button } from 'twenty-ui/input';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
-import { RowLevelPermissionPredicateScope } from '@/settings/roles/types/OmniaRoleExtensions';
+import { Button } from 'twenty-ui/primitives/input';
+import { themeCssVariables } from 'twenty-ui/theme';
 import { useNavigateSettings } from '~/hooks/useNavigateSettings';
-import { OrganizationAdornment } from '~/pages/settings/enterprise/components/OrganizationAdornment';
+import { OrganizationAdornment } from '@/settings/enterprise/components/OrganizationAdornment';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledContent = styled.div`
   padding-bottom: ${themeCssVariables.spacing[2]};
@@ -28,114 +28,75 @@ const StyledCardContainer = styled.div`
   overflow: hidden;
 `;
 
-const StyledScopeSections = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: ${themeCssVariables.spacing[4]};
-`;
-
-const StyledScopeSection = styled.div`
-  border: 1px solid ${themeCssVariables.border.color.light};
-  border-radius: ${themeCssVariables.border.radius.md};
-  display: flex;
-  flex-direction: column;
-  gap: ${themeCssVariables.spacing[3]};
-  padding: ${themeCssVariables.spacing[4]};
-`;
-
 type SettingsRolePermissionsObjectLevelRecordLevelSectionProps = {
   objectMetadataItem: EnrichedObjectMetadataItem;
   roleId: string;
   hasOrganizationPlan: boolean;
 };
 
-const RECORD_LEVEL_PERMISSION_SCOPE_SECTIONS = [
-  {
-    scope: RowLevelPermissionPredicateScope.ALL,
-    title: t`Read + write`,
-    description: t`Rules applied when this role both views and edits records.`,
-  },
-  {
-    scope: RowLevelPermissionPredicateScope.READ,
-    title: t`Read only`,
-    description: t`Rules applied only when this role views records.`,
-  },
-  {
-    scope: RowLevelPermissionPredicateScope.WRITE,
-    title: t`Write only`,
-    description: t`Rules applied only when this role creates, updates, deletes, or restores records.`,
-  },
-] as const;
-
 export const SettingsRolePermissionsObjectLevelRecordLevelSection = ({
   objectMetadataItem,
   roleId,
   hasOrganizationPlan,
 }: SettingsRolePermissionsObjectLevelRecordLevelSectionProps) => {
+  const { t } = useLingui();
   const navigateSettings = useNavigateSettings();
   const billing = useAtomStateValue(billingState);
   const isBillingEnabled = billing?.isBillingEnabled ?? false;
 
   if (!hasOrganizationPlan) {
     return (
-      <Section>
-        <H2Title
+      <Section.Root>
+        <Section.Header
           title={t`Record-level`}
           description={t`Ability to filter the records a user can interact with`}
-          adornment={<OrganizationAdornment />}
+          actions={<OrganizationAdornment />}
         />
         <StyledCardContainer>
-          <Card rounded>
+          <Card.Root>
             <SettingsOptionCardContentButton
               Icon={IconLock}
               title={t`Upgrade to access`}
-              description={t`This feature is part of the Enterprise Plan`}
+              description={t`This feature is part of the Organization plan`}
               Button={
                 <Button
-                  title={t`Upgrade`}
-                  variant="primary"
-                  accent="blue"
-                  size="small"
-                  Icon={IconArrowUp}
+                  size="sm"
+                  startIcon={<IconArrowUp />}
                   onClick={() =>
                     navigateSettings(
                       isBillingEnabled
-                        ? SettingsPath.Billing
-                        : SettingsPath.AdminPanelEnterprise,
+                        ? SettingsPath.BillingPlans
+                        : SettingsPath.AdminPanelOrganization,
                     )
                   }
-                />
+                  variant="solid"
+                  color="accent"
+                >{t`Upgrade`}</Button>
               }
             />
-          </Card>
+          </Card.Root>
         </StyledCardContainer>
-      </Section>
+      </Section.Root>
     );
   }
 
   return (
-    <Section>
-      <H2Title
+    <Section.Root>
+      <Section.Header
         title={t`Record-level`}
-        description={t`Ability to filter the records a user can view and edit.`}
+        description={t`Ability to filter the records a user can interact with.`}
       />
       <StyledContent>
-        <StyledScopeSections>
-          {RECORD_LEVEL_PERMISSION_SCOPE_SECTIONS.map((scopeSection) => (
-            <StyledScopeSection key={scopeSection.scope}>
-              <H3Title
-                title={scopeSection.title}
-                description={scopeSection.description}
-              />
-              <SettingsRolePermissionsObjectLevelRecordLevelPermissionFilterBuilder
-                roleId={roleId}
-                scope={scopeSection.scope}
-                objectMetadataItem={objectMetadataItem}
-              />
-            </StyledScopeSection>
-          ))}
-        </StyledScopeSections>
+        <SettingsRolePermissionsObjectLevelRecordLevelPermissionFilterBuilder
+          roleId={roleId}
+          objectMetadataItem={objectMetadataItem}
+        />
+        {/* OMNIA-CUSTOM: All records or Matching records per operation, so a role can read all and edit its own (contract C1) */}
+        <SettingsRolePermissionsObjectLevelRecordLevelOperationsSelect
+          roleId={roleId}
+          objectMetadataItem={objectMetadataItem}
+        />
       </StyledContent>
-    </Section>
+    </Section.Root>
   );
 };

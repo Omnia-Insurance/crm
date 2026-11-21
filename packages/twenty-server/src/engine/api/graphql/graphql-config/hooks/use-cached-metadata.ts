@@ -1,147 +1,258 @@
+// OMNIA-CUSTOM: slow cache-miss log
 import { Logger } from '@nestjs/common';
 import { createHash } from 'crypto';
 
+import * as Sentry from '@sentry/node';
 import { type Request } from 'express';
 import { type Plugin } from 'graphql-yoga';
 import { isDefined } from 'twenty-shared/utils';
 
-import { InternalServerError } from 'src/engine/core-modules/graphql/utils/graphql-errors.util';
+// OMNIA-CUSTOM: slow cache-miss log
 import { warnIfSlowDuration } from 'src/engine/core-modules/observability/utils/slow-path-observer.util';
+import { type WorkspaceCacheOrDerivedCacheKeyName } from 'src/engine/workspace-cache/types/workspace-cache-key.type';
+
+export type CachedOperationConfig = {
+  dependencies: WorkspaceCacheOrDerivedCacheKeyName[];
+  scope: 'workspace' | 'userWorkspace';
+};
 
 export type CacheMetadataPluginConfig = {
   // oxlint-disable-next-line typescript/no-explicit-any
   cacheGetter: (key: string) => any;
   // oxlint-disable-next-line typescript/no-explicit-any
   cacheSetter: (key: string, value: any) => void;
-  operationsToCache: string[];
+  operationsToCache: Record<string, CachedOperationConfig>;
+  dependencyHashGetter: (
+    workspaceId: string,
+    cacheKeyNames: WorkspaceCacheOrDerivedCacheKeyName[],
+  ) => Promise<string>;
 };
 
-const USER_SCOPED_METADATA_OPERATIONS = new Set([
-  'FindAllViews',
-  // OMNIA-CUSTOM: match the actual client operation name
-  // (query FindFieldsWidgetViews in
-  // twenty-front/.../findFieldsWidgetViews.ts). Core-view visibility is
-  // user-dependent, so the cache key stays user-scoped via userWorkspaceId.
-  // Must stay in sync with operationsToCache in metadata.module-factory.ts.
-  'FindFieldsWidgetViews',
-]);
+// OMNIA-CUSTOM: Omnia runs without Sentry (HIPAA), so slow misses are logged
+// with ids and flags only, never query text, variables or response data.
 const SLOW_METADATA_CACHE_MISS_MS = 1_000;
 const logger = new Logger('CachedMetadata');
 
-type ObservedMetadataRequest = Request & {
-  metadataCacheMissStartedAt?: number;
-  metadataCacheMissOperationName?: string;
-};
-
-export function useCachedMetadata(config: CacheMetadataPluginConfig): Plugin {
-  const computeCacheKey = ({
+export function useCachedMetadata(
+  config: CacheMetadataPluginConfig,
+): Plugin<object, { req: Request }> {
+  const computeCacheKey = async ({
     operationName,
+    operationConfig,
+    workspaceId,
     request,
   }: {
     operationName: string;
-    request: Pick<Request, 'workspace' | 'locale' | 'body' | 'userWorkspaceId'>;
-  }) => {
-    const workspace = request.workspace;
-
-    if (!isDefined(workspace)) {
-      throw new InternalServerError('Workspace is not defined');
-    }
-
-    const workspaceMetadataVersion = workspace.metadataVersion ?? '0';
-    const locale = request.locale;
+    operationConfig: CachedOperationConfig;
+    workspaceId: string;
+    request: Pick<Request, 'locale' | 'body' | 'userWorkspaceId'>;
+  }): Promise<string> => {
+    const dependencyHash = await config.dependencyHashGetter(
+      workspaceId,
+      operationConfig.dependencies,
+    );
     const queryHash = createHash('sha256')
       .update(request.body.query)
+      .update(JSON.stringify(request.body.variables ?? null))
       .digest('hex');
+    const userScopeSegment =
+      operationConfig.scope === 'userWorkspace'
+        ? `:${request.userWorkspaceId}`
+        : '';
 
-    // Core-view visibility is user-dependent, so these responses must stay user-scoped.
-    if (USER_SCOPED_METADATA_OPERATIONS.has(operationName)) {
-      return `graphql:operations:${operationName}:${workspace.id}:${workspaceMetadataVersion}:${request.userWorkspaceId}:${queryHash}`;
-    }
-
-    return `graphql:operations:${operationName}:${workspace.id}:${workspaceMetadataVersion}:${locale}:${queryHash}`;
+    return `graphql:operations:${operationName}:${workspaceId}:${dependencyHash}${userScopeSegment}:${request.locale}:${queryHash}`;
   };
 
   // oxlint-disable-next-line typescript/no-explicit-any
   const getOperationName = (serverContext: any) =>
     serverContext?.req?.body?.operationName;
 
+  const getOperationCacheConfig = (
+    operationName: unknown,
+  ): CachedOperationConfig | undefined =>
+    typeof operationName === 'string' &&
+    Object.prototype.hasOwnProperty.call(
+      config.operationsToCache,
+      operationName,
+    )
+      ? config.operationsToCache[operationName]
+      : undefined;
+
+  const cacheHitRequests = new WeakSet<Request>();
+  const requestCacheKeys = new WeakMap<Request, string | null>();
+  // OMNIA-CUSTOM: slow cache-miss log
+  const cacheMissStartTimes = new WeakMap<Request, number>();
+
+  const resolveCacheKey = async ({
+    operationName,
+    operationConfig,
+    workspaceId,
+    request,
+  }: {
+    operationName: string;
+    operationConfig: CachedOperationConfig;
+    workspaceId: string;
+    request: Request;
+  }): Promise<string | null> => {
+    let cacheKey: string | null;
+
+    try {
+      cacheKey = await computeCacheKey({
+        operationName,
+        operationConfig,
+        workspaceId,
+        request,
+      });
+    } catch (error) {
+      Sentry.captureException(error);
+      cacheKey = null;
+    }
+
+    requestCacheKeys.set(request, cacheKey);
+
+    return cacheKey;
+  };
+
+  const getCachedResponse = ({
+    cacheKey,
+    operationName,
+    phase,
+  }: {
+    cacheKey: string;
+    operationName: string;
+    phase: 'request' | 'response';
+  }) =>
+    Sentry.startSpan(
+      {
+        name: 'metadata GraphQL cache lookup',
+        op: 'cache.get',
+        onlyIfParent: true,
+        attributes: {
+          'cache.phase': phase,
+          'graphql.operation.name': operationName,
+          'graphql.operation.type': 'query',
+        },
+      },
+      async (span) => {
+        const cachedResponse = await config.cacheGetter(cacheKey);
+
+        span.setAttribute('cache.hit', Boolean(cachedResponse));
+
+        return cachedResponse;
+      },
+    );
+
   return {
     onRequest: async ({ endResponse, serverContext }) => {
       // TODO: we should probably override the graphql-yoga request type to include the workspace and locale
-      const request = (
-        serverContext as unknown as { req: ObservedMetadataRequest }
-      ).req;
+      const request = serverContext.req;
+      const workspaceId = request.workspace?.id;
+
+      if (!workspaceId) {
+        return;
+      }
+
       const operationName = getOperationName(serverContext);
+      const operationConfig = getOperationCacheConfig(operationName);
 
-      if (!request.workspace?.id) {
+      if (!isDefined(operationConfig)) {
         return;
       }
 
-      if (!config.operationsToCache.includes(operationName)) {
+      Sentry.setTags({ operationName, operation: 'query' });
+      Sentry.getCurrentScope().setTransactionName(operationName);
+
+      // OMNIA-CUSTOM: API keys and applications share the undefined userWorkspace
+      // segment and widget fields resolve per application, so they skip the
+      // cache; with no key stored, onResponse cannot write for them either.
+      if (isDefined(request.apiKey) || isDefined(request.application)) {
         return;
       }
 
-      const cacheKey = computeCacheKey({
+      const cacheKey = await resolveCacheKey({
         operationName,
+        operationConfig,
+        workspaceId,
         request,
       });
-      const cachedResponse = await config.cacheGetter(cacheKey);
+
+      if (!isDefined(cacheKey)) {
+        return;
+      }
+
+      const cachedResponse = await getCachedResponse({
+        cacheKey,
+        operationName,
+        phase: 'request',
+      });
 
       if (cachedResponse) {
+        cacheHitRequests.add(request);
+
         const earlyResponse = Response.json(cachedResponse);
 
         return endResponse(earlyResponse);
       }
 
-      request.metadataCacheMissStartedAt = performance.now();
-      request.metadataCacheMissOperationName = operationName;
+      // OMNIA-CUSTOM: slow cache-miss log
+      cacheMissStartTimes.set(request, performance.now());
     },
     onResponse: async ({ response, serverContext }) => {
-      const request = (
-        serverContext as unknown as { req: ObservedMetadataRequest }
-      ).req;
-      const operationName = getOperationName(serverContext);
+      const request = serverContext.req;
 
       if (!request.workspace?.id) {
         return;
       }
 
-      if (!config.operationsToCache.includes(operationName)) {
+      const operationName = getOperationName(serverContext);
+
+      if (!isDefined(getOperationCacheConfig(operationName))) {
         return;
       }
 
-      const cacheKey = computeCacheKey({
+      if (cacheHitRequests.delete(request)) {
+        return;
+      }
+
+      const cacheKey = requestCacheKeys.get(request);
+
+      if (!isDefined(cacheKey)) {
+        return;
+      }
+
+      const cachedResponse = await getCachedResponse({
+        cacheKey,
         operationName,
-        request,
+        phase: 'response',
       });
 
-      const cachedResponse = await config.cacheGetter(cacheKey);
-      const responseBody = await response.clone().json();
+      if (!cachedResponse) {
+        const responseBody = await response.json();
 
-      if (!cachedResponse && !responseBody.errors) {
-        await config.cacheSetter(cacheKey, responseBody);
+        // OMNIA-CUSTOM: slow cache-miss log
+        const cacheMissStartedAt = cacheMissStartTimes.get(request);
+
+        if (isDefined(cacheMissStartedAt)) {
+          warnIfSlowDuration({
+            logger,
+            message: 'Slow metadata cache miss',
+            thresholdMs: SLOW_METADATA_CACHE_MISS_MS,
+            durationMs: performance.now() - cacheMissStartedAt,
+            context: {
+              operation: operationName,
+              workspaceId: request.workspace.id,
+              scope: getOperationCacheConfig(operationName)?.scope,
+              hadErrors: isDefined(responseBody.errors),
+            },
+          });
+        }
+
+        if (responseBody.errors) {
+          return;
+        }
+
+        config.cacheSetter(cacheKey, responseBody);
       }
-
-      if (
-        isDefined(request.metadataCacheMissStartedAt) &&
-        request.metadataCacheMissOperationName === operationName
-      ) {
-        warnIfSlowDuration({
-          logger,
-          message: 'Slow metadata cache miss',
-          thresholdMs: SLOW_METADATA_CACHE_MISS_MS,
-          durationMs: performance.now() - request.metadataCacheMissStartedAt,
-          context: {
-            operation: operationName,
-            workspaceId: request.workspace.id,
-            userScoped: USER_SCOPED_METADATA_OPERATIONS.has(operationName),
-            hadErrors: Boolean(responseBody.errors),
-          },
-        });
-      }
-
-      delete request.metadataCacheMissStartedAt;
-      delete request.metadataCacheMissOperationName;
     },
   };
 }

@@ -1,32 +1,27 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { FileUrlModule } from 'src/engine/core-modules/file/file-url/file-url.module';
 import { GetMessagesService } from 'src/engine/core-modules/messaging/services/get-messages.service';
 import { TimelineMessagingService } from 'src/engine/core-modules/messaging/services/timeline-messaging.service';
 import { TimelineMessagingResolver } from 'src/engine/core-modules/messaging/timeline-messaging.resolver';
 import { RelatedPersonIdsModule } from 'src/engine/core-modules/related-person-ids/related-person-ids.module';
-import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
-import { UserModule } from 'src/engine/core-modules/user/user.module';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
-import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
-import { WorkspaceDataSourceModule } from 'src/engine/workspace-datasource/workspace-datasource.module';
+import { PermissionsModule } from 'src/engine/permissions/permissions.module';
 import { ConnectedAccountModule } from 'src/modules/connected-account/connected-account.module';
-import { FeatureFlagModule } from 'src/engine/core-modules/feature-flag/feature-flag.module';
+import { TargetModule } from 'src/engine/core-modules/target/target.module';
+import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
 
 @Module({
   imports: [
-    WorkspaceDataSourceModule,
-    UserModule,
+    FileUrlModule,
     ConnectedAccountModule,
-    FeatureFlagModule,
     PermissionsModule,
     RelatedPersonIdsModule,
-    TypeOrmModule.forFeature([
-      MessageChannelEntity,
-      ConnectedAccountEntity,
-      UserWorkspaceEntity,
-    ]),
+    TargetModule,
+    WorkspaceCacheModule,
+    TypeOrmModule.forFeature([MessageChannelEntity, ConnectedAccountEntity]),
   ],
   exports: [],
   providers: [

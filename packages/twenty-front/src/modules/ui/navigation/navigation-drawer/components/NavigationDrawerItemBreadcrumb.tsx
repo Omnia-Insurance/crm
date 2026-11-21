@@ -1,17 +1,29 @@
 import { type NavigationDrawerSubItemState } from '@/ui/navigation/navigation-drawer/types/NavigationDrawerSubItemState';
 import { styled } from '@linaria/react';
-import { MOBILE_VIEWPORT, themeCssVariables } from 'twenty-ui/theme-constants';
+import { MOBILE_VIEWPORT, themeCssVariables } from 'twenty-ui/theme';
 
-export type NavigationDrawerItemBreadcrumbProps = {
+type NavigationDrawerItemBreadcrumbProps = {
   state?: NavigationDrawerSubItemState;
+  isCompact?: boolean;
 };
 
-const StyledNavigationDrawerItemBreadcrumbContainer = styled.div`
-  height: 28px;
+const StyledNavigationDrawerItemBreadcrumbContainer = styled.div<{
+  isCompact: boolean;
+}>`
+  height: ${themeCssVariables.spacing[7]};
 
-  margin-left: 7.5px;
-  margin-right: ${themeCssVariables.spacing[2]};
+  margin-inline-end: ${({ isCompact }) =>
+    isCompact ? themeCssVariables.spacing[1] : themeCssVariables.spacing[2]};
+  margin-inline-start: ${({ isCompact }) =>
+    isCompact
+      ? themeCssVariables.spacing['1.5']
+      : `calc(${themeCssVariables.spacing[2]} - ${themeCssVariables.spacing['0.5']} / 4)`};
+  position: relative;
   width: 9px;
+
+  [data-dnd-dragging] & {
+    display: none;
+  }
 
   @media (max-width: ${MOBILE_VIEWPORT}px) {
     height: ${themeCssVariables.spacing[8]};
@@ -25,7 +37,7 @@ const StyledGapVerticalLine = styled.div<{ darker: boolean }>`
       : themeCssVariables.border.color.strong};
 
   height: 2px;
-  position: relative;
+  position: absolute;
 
   top: -2px;
   width: 1px;
@@ -37,14 +49,10 @@ const StyledSecondaryFullVerticalBar = styled.div<{ darker: boolean }>`
       ? themeCssVariables.font.color.tertiary
       : themeCssVariables.border.color.strong};
 
-  height: calc(${themeCssVariables.spacing[7]} + 1px);
-  position: relative;
-  top: -17px;
+  height: 100%;
+  position: absolute;
+  top: 0;
   width: 1px;
-
-  @media (max-width: ${MOBILE_VIEWPORT}px) {
-    height: calc(${themeCssVariables.spacing[8]} + 1px);
-  }
 `;
 
 const StyledRoundedProtrusion = styled.div<{ darker: boolean }>`
@@ -53,22 +61,24 @@ const StyledRoundedProtrusion = styled.div<{ darker: boolean }>`
       darker
         ? themeCssVariables.font.color.tertiary
         : themeCssVariables.border.color.strong};
-  border-bottom-left-radius: 4px;
+  // Logical, not physical, so the elbow mirrors under dir="rtl"
+  border-end-start-radius: 4px;
 
-  border-right: none;
+  border-inline-end: none;
 
   border-top: none;
 
   height: 14px;
 
-  position: relative;
-  top: -2px;
+  position: absolute;
+  top: 0;
   width: 8px;
   z-index: ${({ darker }) => (darker ? '1' : 'auto')};
 `;
 
 export const NavigationDrawerItemBreadcrumb = ({
   state,
+  isCompact = false,
 }: NavigationDrawerItemBreadcrumbProps) => {
   const showVerticalBar =
     state !== 'last-not-selected' && state !== 'last-selected';
@@ -84,7 +94,7 @@ export const NavigationDrawerItemBreadcrumb = ({
     state === 'last-selected';
 
   return (
-    <StyledNavigationDrawerItemBreadcrumbContainer>
+    <StyledNavigationDrawerItemBreadcrumbContainer isCompact={isCompact}>
       <StyledGapVerticalLine darker={gapShouldBeDarker} />
       <StyledRoundedProtrusion darker={protrusionShouldBeDarker} />
       {showVerticalBar && (

@@ -1,4 +1,4 @@
-import { type Repository } from 'typeorm';
+import { DataSource, EntityManager, Not, Repository } from 'typeorm';
 
 import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 type FakeEntity = {
@@ -11,31 +11,39 @@ type FakeEntity = {
 const WORKSPACE_ID = 'workspace-1';
 const OTHER_WORKSPACE_ID = 'workspace-2';
 
-const createMockRepository = (): jest.Mocked<Repository<FakeEntity>> =>
-  ({
-    findOne: jest.fn().mockResolvedValue(null),
-    findOneOrFail: jest.fn(),
-    findOneBy: jest.fn().mockResolvedValue(null),
-    find: jest.fn().mockResolvedValue([]),
-    count: jest.fn().mockResolvedValue(0),
-    findAndCount: jest.fn().mockResolvedValue([[], 0]),
-    exists: jest.fn().mockResolvedValue(false),
-    existsBy: jest.fn().mockResolvedValue(false),
-    maximum: jest.fn().mockResolvedValue(null),
-    update: jest.fn(),
-    increment: jest.fn(),
-    decrement: jest.fn(),
-    delete: jest.fn(),
-    softDelete: jest.fn(),
-    insert: jest.fn(),
-    upsert: jest.fn(),
-    create: jest.fn(),
-    save: jest.fn(),
-    createQueryBuilder: jest.fn(),
-  }) as unknown as jest.Mocked<Repository<FakeEntity>>;
+const buildEntityManager = () =>
+  new EntityManager(new DataSource({ type: 'postgres' }));
+
+const createMockRepository = () => {
+  const repository = new Repository<FakeEntity>(
+    'FakeEntity',
+    buildEntityManager(),
+  );
+
+  jest.spyOn(repository, 'findOne').mockResolvedValue(null);
+  jest.spyOn(repository, 'findOneOrFail').mockImplementation();
+  jest.spyOn(repository, 'findOneBy').mockResolvedValue(null);
+  jest.spyOn(repository, 'find').mockResolvedValue([]);
+  jest.spyOn(repository, 'count').mockResolvedValue(0);
+  jest.spyOn(repository, 'findAndCount').mockResolvedValue([[], 0]);
+  jest.spyOn(repository, 'exists').mockResolvedValue(false);
+  jest.spyOn(repository, 'existsBy').mockResolvedValue(false);
+  jest.spyOn(repository, 'maximum').mockResolvedValue(null);
+  jest.spyOn(repository, 'update').mockImplementation();
+  jest.spyOn(repository, 'increment').mockImplementation();
+  jest.spyOn(repository, 'decrement').mockImplementation();
+  jest.spyOn(repository, 'delete').mockImplementation();
+  jest.spyOn(repository, 'softDelete').mockImplementation();
+  jest.spyOn(repository, 'insert').mockImplementation();
+  jest.spyOn(repository, 'upsert').mockImplementation();
+  jest.spyOn(repository, 'create').mockImplementation();
+  jest.spyOn(repository, 'createQueryBuilder').mockImplementation();
+
+  return jest.mocked(repository);
+};
 
 describe('WorkspaceScopedRepository', () => {
-  let repository: jest.Mocked<Repository<FakeEntity>>;
+  let repository: ReturnType<typeof createMockRepository>;
   let scoped: WorkspaceScopedRepository<FakeEntity>;
 
   beforeEach(() => {
@@ -44,10 +52,8 @@ describe('WorkspaceScopedRepository', () => {
   });
 
   describe('workspaceId guard', () => {
-    // TypeORM drops `undefined` values from WHERE/criteria, so a
-    // missing workspaceId would otherwise produce an unscoped query.
-    // Each public method must trip before reaching the repository.
-    it.each([
+    // TypeORM drops undefined from WHERE, so a missing workspaceId would run unscoped
+    const unscopedCalls: [string, () => unknown][] = [
       ['findOne', () => scoped.findOne(undefined as never, { where: {} })],
       [
         'findOneOrFail',
@@ -70,12 +76,21 @@ describe('WorkspaceScopedRepository', () => {
         'upsertAndReturnOne',
         () => scoped.upsertAndReturnOne(undefined as never, {}, ['id']),
       ],
-      ['save', () => scoped.save(undefined as never, {})],
-      ['saveMany', () => scoped.saveMany(undefined as never, [{}])],
+      [
+        'insertAndReturnOne',
+        () => scoped.insertAndReturnOne(undefined as never, {}),
+      ],
       ['maximum', () => scoped.maximum(undefined as never, 'id')],
-    ])('%s throws when workspaceId is undefined', (_name, call) => {
-      expect(call).toThrow(/workspaceId must be a non-empty string/);
-    });
+    ];
+
+    it.each(unscopedCalls)(
+      '%s throws when workspaceId is undefined',
+      async (_name, call) => {
+        await expect(Promise.resolve().then(() => call())).rejects.toThrow(
+          /workspaceId must be a non-empty string/,
+        );
+      },
+    );
 
     it.each([null, ''])('throws when workspaceId is %p', (badWorkspaceId) => {
       expect(() =>
@@ -424,41 +439,130 @@ describe('WorkspaceScopedRepository', () => {
     });
   });
 
-  describe('save', () => {
-    it('stamps workspaceId on the entity passed to save', async () => {
-      await scoped.save(WORKSPACE_ID, { id: 'a', status: 'queued' });
+  describe('insertAndReturnOne', () => {
+    const mockInsertBuilder = (
+      repo: jest.Mocked<Repository<FakeEntity>>,
+      raw: unknown[],
+    ) => {
+      const builder = {
+        insert: jest.fn().mockReturnThis(),
+        values: jest.fn().mockReturnThis(),
+        returning: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({ raw }),
+      };
 
-      expect(repository.save).toHaveBeenCalledWith(
-        { id: 'a', status: 'queued', workspaceId: WORKSPACE_ID },
-        undefined,
-      );
+      (repo.createQueryBuilder as jest.Mock).mockReturnValue(builder);
+
+      return builder;
+    };
+
+    it('stamps workspaceId and hydrates the row from RETURNING', async () => {
+      const persistedRow = {
+        id: 'a',
+        status: 'queued',
+        workspaceId: WORKSPACE_ID,
+      };
+      const builder = mockInsertBuilder(repository, [persistedRow]);
+
+      (repository.create as jest.Mock).mockReturnValue(persistedRow);
+
+      const result = await scoped.insertAndReturnOne(WORKSPACE_ID, {
+        id: 'a',
+        status: 'queued',
+      });
+
+      expect(builder.values).toHaveBeenCalledWith({
+        id: 'a',
+        status: 'queued',
+        workspaceId: WORKSPACE_ID,
+      });
+      expect(builder.returning).toHaveBeenCalledWith('*');
+      expect(result).toBe(persistedRow);
     });
 
-    it('saveMany stamps workspaceId on each entity', async () => {
-      await scoped.saveMany(WORKSPACE_ID, [
-        { id: 'a', status: 'queued' },
-        { id: 'b', status: 'sent' },
-      ]);
+    it('overrides a caller-supplied workspaceId on the entity', async () => {
+      const builder = mockInsertBuilder(repository, [{ id: 'a' }]);
 
-      expect(repository.save).toHaveBeenCalledWith(
-        [
-          { id: 'a', status: 'queued', workspaceId: WORKSPACE_ID },
-          { id: 'b', status: 'sent', workspaceId: WORKSPACE_ID },
-        ],
-        undefined,
-      );
-    });
-
-    it('overrides caller-supplied workspaceId on the entity', async () => {
-      await scoped.save(WORKSPACE_ID, {
+      await scoped.insertAndReturnOne(WORKSPACE_ID, {
         id: 'a',
         workspaceId: OTHER_WORKSPACE_ID,
       });
 
-      expect(repository.save).toHaveBeenCalledWith(
-        { id: 'a', workspaceId: WORKSPACE_ID },
-        undefined,
+      expect(builder.values).toHaveBeenCalledWith({
+        id: 'a',
+        workspaceId: WORKSPACE_ID,
+      });
+    });
+  });
+
+  describe('upsert conflict target guard', () => {
+    it('refuses an upsert whose conflict target matches another workspace', async () => {
+      (repository.findOne as jest.Mock).mockResolvedValue({
+        id: 'a',
+        workspaceId: OTHER_WORKSPACE_ID,
+      });
+
+      await expect(
+        scoped.upsert(WORKSPACE_ID, { id: 'a', status: 'queued' }, ['id']),
+      ).rejects.toThrow(/matches a row owned by another workspace/);
+      expect(repository.upsert).not.toHaveBeenCalled();
+    });
+
+    it('looks the conflict target up across workspaces, including soft-deleted rows', async () => {
+      await scoped.upsert(WORKSPACE_ID, { id: 'a', status: 'queued' }, ['id']);
+
+      expect(repository.findOne).toHaveBeenCalledWith({
+        where: [{ id: 'a', workspaceId: Not(WORKSPACE_ID) }],
+        withDeleted: true,
+      });
+    });
+
+    it('checks every entity of a batch', async () => {
+      await scoped.upsert(
+        WORKSPACE_ID,
+        [
+          { id: 'a', status: 'queued' },
+          { id: 'b', status: 'sent' },
+        ],
+        { conflictPaths: ['id'] },
       );
+
+      expect(repository.findOne).toHaveBeenCalledWith({
+        where: [
+          { id: 'a', workspaceId: Not(WORKSPACE_ID) },
+          { id: 'b', workspaceId: Not(WORKSPACE_ID) },
+        ],
+        withDeleted: true,
+      });
+    });
+
+    it('skips the lookup when workspaceId is part of the conflict target', async () => {
+      await scoped.upsert(WORKSPACE_ID, { id: 'a', status: 'queued' }, [
+        'workspaceId',
+        'id',
+      ]);
+
+      expect(repository.findOne).not.toHaveBeenCalled();
+      expect(repository.upsert).toHaveBeenCalled();
+    });
+
+    it('skips the lookup when the conflict target is not fully populated', async () => {
+      await scoped.upsert(WORKSPACE_ID, { status: 'queued' }, ['id']);
+
+      expect(repository.findOne).not.toHaveBeenCalled();
+      expect(repository.upsert).toHaveBeenCalled();
+    });
+
+    it('guards upsertAndReturnOne as well', async () => {
+      (repository.findOne as jest.Mock).mockResolvedValue({
+        id: 'a',
+        workspaceId: OTHER_WORKSPACE_ID,
+      });
+
+      await expect(
+        scoped.upsertAndReturnOne(WORKSPACE_ID, { id: 'a' }, ['id']),
+      ).rejects.toThrow(/matches a row owned by another workspace/);
+      expect(repository.upsert).not.toHaveBeenCalled();
     });
   });
 
@@ -510,10 +614,9 @@ describe('WorkspaceScopedRepository', () => {
   describe('withManager', () => {
     it('returns a new wrapper bound to the manager-provided repository', async () => {
       const txRepository = createMockRepository();
-      const manager = {
-        getRepository: jest.fn().mockReturnValue(txRepository),
-      } as unknown as import('typeorm').EntityManager;
-      (repository as unknown as { target: unknown }).target = 'FakeEntity';
+      const manager = buildEntityManager();
+
+      jest.spyOn(manager, 'getRepository').mockReturnValue(txRepository);
 
       const tx = scoped.withManager(manager);
 

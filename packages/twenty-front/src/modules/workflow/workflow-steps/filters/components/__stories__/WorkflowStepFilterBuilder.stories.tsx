@@ -3,12 +3,13 @@ import { WorkflowStepFilterBuilder } from '@/workflow/workflow-steps/filters/com
 import { type Meta, type StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import { ComponentDecorator } from 'twenty-ui/testing';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
 import { WorkflowStepActionDrawerDecorator } from '~/testing/decorators/WorkflowStepActionDrawerDecorator';
 import { WorkflowStepDecorator } from '~/testing/decorators/WorkflowStepDecorator';
 import { WorkspaceDecorator } from '~/testing/decorators/WorkspaceDecorator';
 import { graphqlMocks } from '~/testing/graphqlMocks';
 import { getWorkflowNodeIdMock } from '~/testing/mock-data/workflow';
+import { MemoryRouterDecorator } from '~/testing/decorators/MemoryRouterDecorator';
 
 const meta: Meta<typeof WorkflowStepFilterBuilder> = {
   title: 'Modules/Workflow/Filters/WorkflowStepFilterBuilder',
@@ -26,6 +27,7 @@ const meta: Meta<typeof WorkflowStepFilterBuilder> = {
     onFilterSettingsUpdate: fn(),
   },
   decorators: [
+    MemoryRouterDecorator,
     (Story) => (
       <WorkflowStepBody rowGap={themeCssVariables.spacing[0]}>
         <Story />

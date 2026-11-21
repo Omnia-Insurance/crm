@@ -1,47 +1,11 @@
-import { getObjectPermissionsFromMapByObjectMetadataId } from '@/settings/roles/role-permissions/objects-permissions/utils/getObjectPermissionsFromMapByObjectMetadataId';
-import { type ObjectPermissions } from 'twenty-shared/types';
-import { isDefined } from 'twenty-shared/utils';
+import { type ObjectPermissionsByObjectMetadataId } from '@/object-metadata/types/ObjectPermissionsByObjectMetadataId';
+import { getDefaultObjectPermissions } from '@/object-metadata/utils/getDefaultObjectPermissions';
+import { type ObjectRecordsPermissions } from 'twenty-shared/types';
 
+// An object missing from the role's permissions (e.g. created after they were loaded) gets the defaults
 export const getObjectPermissionsForObject = (
-  objectPermissionsByObjectMetadataId: Record<
-    string,
-    ObjectPermissions & { objectMetadataId: string }
-  >,
+  objectPermissionsByObjectMetadataId: ObjectPermissionsByObjectMetadataId,
   objectMetadataId: string,
-): ObjectPermissions & { objectMetadataId: string } => {
-  const objectPermissions = getObjectPermissionsFromMapByObjectMetadataId({
-    objectPermissionsByObjectMetadataId,
-    objectMetadataId,
-  });
-
-  if (!isDefined(objectPermissions)) {
-    return {
-      canReadObjectRecords: true,
-      canUpdateObjectRecords: true,
-      canSoftDeleteObjectRecords: true,
-      canDestroyObjectRecords: true,
-      showInSidebar: true,
-      editWindowMinutes: null,
-      restrictedFields: {},
-      objectMetadataId,
-      rowLevelPermissionPredicates: [],
-      rowLevelPermissionPredicateGroups: [],
-    };
-  }
-
-  return {
-    canReadObjectRecords: objectPermissions.canReadObjectRecords ?? true,
-    canUpdateObjectRecords: objectPermissions.canUpdateObjectRecords ?? true,
-    canSoftDeleteObjectRecords:
-      objectPermissions.canSoftDeleteObjectRecords ?? true,
-    canDestroyObjectRecords: objectPermissions.canDestroyObjectRecords ?? true,
-    showInSidebar: objectPermissions.showInSidebar ?? true,
-    editWindowMinutes: objectPermissions.editWindowMinutes ?? null,
-    restrictedFields: objectPermissions.restrictedFields ?? {},
-    objectMetadataId,
-    rowLevelPermissionPredicates:
-      objectPermissions.rowLevelPermissionPredicates ?? [],
-    rowLevelPermissionPredicateGroups:
-      objectPermissions.rowLevelPermissionPredicateGroups ?? [],
-  };
-};
+): ObjectRecordsPermissions =>
+  objectPermissionsByObjectMetadataId[objectMetadataId] ??
+  getDefaultObjectPermissions();

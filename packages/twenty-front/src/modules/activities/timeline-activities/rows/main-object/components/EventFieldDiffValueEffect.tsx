@@ -1,6 +1,10 @@
 import { useContext, useEffect } from 'react';
 
 import { TimelineActivityContext } from '@/activities/timeline-activities/contexts/TimelineActivityContext';
+import {
+  normalizeTimelinePhonesDiffValue,
+  type TimelinePhonesDiffValue,
+} from '@/activities/timeline-activities/utils/normalizeTimelinePhonesDiffValue';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { type FieldFilesValue } from '@/object-record/record-field/ui/types/FieldMetadata';
@@ -30,7 +34,9 @@ export const EventFieldDiffValueEffect = ({
   const recordStore = useAtomFamilyStateValue(recordStoreFamilyState, recordId);
 
   useEffect(() => {
-    if (!isDefined(diffRecord)) return;
+    if (!isDefined(diffRecord)) {
+      return;
+    }
 
     let fieldValue = diffRecord;
 
@@ -53,6 +59,12 @@ export const EventFieldDiffValueEffect = ({
         }
         return { ...file, isDeleted: true, url: undefined };
       });
+    }
+
+    if (fieldMetadataItem.type === FieldMetadataType.PHONES) {
+      fieldValue = normalizeTimelinePhonesDiffValue(
+        diffRecord as TimelinePhonesDiffValue,
+      );
     }
 
     const forgedObjectRecord = {

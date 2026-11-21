@@ -1,20 +1,22 @@
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
+import { MEMBER_ROLE_UNIVERSAL_IDENTIFIER } from 'twenty-shared/constants';
 
+import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { SettingsRoleApplicability } from '@/settings/roles/role-settings/components/SettingsRoleApplicability';
 import { SettingsRoleSettingsDeleteRoleConfirmationModal } from '@/settings/roles/role-settings/components/SettingsRoleSettingsDeleteRoleConfirmationModal';
 import { ROLE_SETTINGS_DELETE_ROLE_CONFIRMATION_MODAL_ID } from '@/settings/roles/role-settings/components/constants/RoleSettingsDeleteRoleConfirmationModalId';
 import { settingsDraftRoleFamilyState } from '@/settings/roles/states/settingsDraftRoleFamilyState';
 import { IconPicker } from '@/ui/input/components/IconPicker';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
 import { useSetAtomFamilyState } from '@/ui/utilities/state/jotai/hooks/useSetAtomFamilyState';
 import { SettingsTextInput } from '@/ui/input/components/SettingsTextInput';
 import { TextArea } from '@/ui/input/components/TextArea';
-import { useModal } from '@/ui/layout/modal/hooks/useModal';
-import { H2Title } from 'twenty-ui/typography';
-import { Button } from 'twenty-ui/input';
-import { Section } from 'twenty-ui/layout';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { useDialog } from '@/ui/layout/dialog/hooks/useDialog';
+import { Section } from 'twenty-ui/components/layout';
+import { Button } from 'twenty-ui/primitives/input';
+import { themeCssVariables } from 'twenty-ui/theme';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledInputsContainer = styled.div`
   display: flex;
@@ -39,6 +41,7 @@ export const SettingsRoleSettings = ({
   isEditable,
   isCreateMode,
 }: SettingsRoleSettingsProps) => {
+  const { t } = useLingui();
   const settingsDraftRole = useAtomFamilyStateValue(
     settingsDraftRoleFamilyState,
     roleId,
@@ -48,14 +51,43 @@ export const SettingsRoleSettings = ({
     roleId,
   );
 
-  const { openModal } = useModal();
+  const currentWorkspace = useAtomStateValue(currentWorkspaceState);
+
+  const { openDialog } = useDialog();
+
+  const isMemberRole =
+    settingsDraftRole.universalIdentifier === MEMBER_ROLE_UNIVERSAL_IDENTIFIER;
+  const defaultRole = currentWorkspace?.defaultRole;
+  const isDefaultRole = defaultRole?.id === roleId;
+  const hasTargetsDefaultRoleCannotTake =
+    isEditable &&
+    ((defaultRole?.canBeAssignedToApiKeys === false &&
+      settingsDraftRole.apiKeys.length > 0) ||
+      (defaultRole?.canBeAssignedToAgents === false &&
+        settingsDraftRole.agents.length > 0));
+
+  const getDeleteRoleDescription = () => {
+    if (isMemberRole) {
+      return t`The Member role cannot be deleted`;
+    }
+
+    if (isDefaultRole) {
+      return t`The default role cannot be deleted. Choose another default role first`;
+    }
+
+    if (hasTargetsDefaultRoleCannotTake) {
+      return t`The default role cannot be assigned to this role's API keys or agents. Reassign them to another role first`;
+    }
+
+    return t`Delete this role and assign a new role to its members`;
+  };
 
   const descriptionTextAreaId = `${roleId}-description`;
   const nameTextInputId = `${roleId}-name`;
 
   return (
     <>
-      <Section>
+      <Section.Root>
         <StyledInputsContainer>
           <StyledInputContainer>
             <IconPicker
@@ -98,7 +130,7 @@ export const SettingsRoleSettings = ({
           }}
           disabled={!isEditable}
         />
-      </Section>
+      </Section.Root>
 
       <SettingsRoleApplicability
         values={{
@@ -117,22 +149,26 @@ export const SettingsRoleSettings = ({
 
       {!isCreateMode && (
         <>
-          <Section>
-            <H2Title
+          <Section.Root>
+            <Section.Header
               title={t`Danger zone`}
-              description={t`Delete this role and assign a new role to its members`}
+              description={getDeleteRoleDescription()}
             />
             <Button
-              title={t`Delete role`}
-              size="small"
-              variant="secondary"
-              accent="danger"
+              size="sm"
               onClick={() => {
-                openModal(ROLE_SETTINGS_DELETE_ROLE_CONFIRMATION_MODAL_ID);
+                openDialog(ROLE_SETTINGS_DELETE_ROLE_CONFIRMATION_MODAL_ID);
               }}
-              disabled={!isEditable}
-            />
-          </Section>
+              disabled={
+                !isEditable ||
+                isMemberRole ||
+                isDefaultRole ||
+                hasTargetsDefaultRoleCannotTake
+              }
+              variant="outline"
+              color="danger"
+            >{t`Delete role`}</Button>
+          </Section.Root>
           <SettingsRoleSettingsDeleteRoleConfirmationModal roleId={roleId} />
         </>
       )}

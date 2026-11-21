@@ -1,7 +1,7 @@
 import { styled } from '@linaria/react';
 import { MessageFolderImportPolicy } from 'twenty-shared/types';
 
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 type SettingsAccountsMessageFolderIconProps = {
   className?: string;
@@ -23,7 +23,7 @@ const StyledCardMedia = styled.div`
 const StyledCardMediaContent = styled.div`
   align-items: stretch;
   background-color: ${themeCssVariables.background.secondary};
-  border-radius: 2px;
+  border-radius: ${themeCssVariables.border.radius.xs};
   box-sizing: border-box;
   display: flex;
   flex: 1;

@@ -1,5 +1,5 @@
 import { css } from '@linaria/core';
-import { type ReactNode } from 'react';
+import { type MouseEvent, type ReactNode } from 'react';
 
 import { LocalizedLink } from '@/platform/i18n/LocalizedLink';
 import {
@@ -15,6 +15,7 @@ import {
 } from '@/tokens';
 
 import { ButtonShape } from './ButtonShape';
+import { ExternalLink } from './ExternalLink';
 
 const BUTTON_HEIGHT_PX: Record<ButtonSize, number> = {
   regular: 40,
@@ -74,6 +75,20 @@ const buttonClassName = css`
     --button-hover-fill: ${color('white')};
     --button-label: ${color('white')};
     --button-label-hover: ${color('white')};
+  }
+
+  [data-scheme='dark'] [data-scheme='light'] &[data-variant='filled'] {
+    --button-fill: ${color('black')};
+    --button-hover-fill: ${color('black-hover')};
+    --button-label: ${color('white')};
+    --button-label-hover: ${color('white')};
+  }
+
+  [data-scheme='dark'] [data-scheme='light'] &[data-variant='outlined'] {
+    --button-stroke: ${color('black')};
+    --button-hover-fill: ${color('black')};
+    --button-label: ${color('black')};
+    --button-label-hover: ${color('black')};
   }
 
   /* Outlined hovers are a 5% ink wash. The shape paints OPAQUE and the
@@ -160,7 +175,7 @@ export type ButtonProps = {
   size?: ButtonSize;
   type?: 'button' | 'submit';
   variant?: ButtonVariant;
-  onClick?: () => void;
+  onClick?: (event: MouseEvent<HTMLElement>) => void;
 };
 
 export function Button({
@@ -179,8 +194,14 @@ export function Button({
   const isProtocolLink =
     href !== undefined &&
     (href.startsWith('mailto:') || href.startsWith('tel:'));
+  // An in-page jump stays on the current document: it must keep its href so
+  // the target is focusable and reachable without JS, and must never open a tab.
+  const isHashLink = href !== undefined && href.startsWith('#');
   const isExternal =
-    href !== undefined && !href.startsWith('/') && !isProtocolLink;
+    href !== undefined &&
+    !href.startsWith('/') &&
+    !isProtocolLink &&
+    !isHashLink;
 
   const inner = (
     <>
@@ -217,9 +238,9 @@ export function Button({
     );
   }
 
-  if (isProtocolLink) {
+  if (isProtocolLink || isHashLink) {
     return (
-      <a {...sharedAttributes} href={href}>
+      <a {...sharedAttributes} href={href} onClick={onClick}>
         {inner}
       </a>
     );
@@ -227,21 +248,16 @@ export function Button({
 
   if (isExternal) {
     return (
-      <a
-        {...sharedAttributes}
-        href={href}
-        rel="noopener noreferrer"
-        target="_blank"
-      >
+      <ExternalLink {...sharedAttributes} href={href} onClick={onClick}>
         {inner}
-      </a>
+      </ExternalLink>
     );
   }
 
   // Internal links route through LocalizedLink so an unprefixed href ("/x")
   // carries the active locale (/fr/x), and the source locale stays unprefixed.
   return (
-    <LocalizedLink {...sharedAttributes} href={href}>
+    <LocalizedLink {...sharedAttributes} href={href} onClick={onClick}>
       {inner}
     </LocalizedLink>
   );

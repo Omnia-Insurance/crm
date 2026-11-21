@@ -1,0 +1,236 @@
+import { useSidePanelHistory } from '@/side-panel/hooks/useSidePanelHistory';
+import { SidePanelFormCancellationEffect } from '@/object-record/record-form/components/SidePanelFormCancellationEffect';
+import {
+  RecordCreationFormContextProvider,
+  type RecordCreationFormContextValue,
+} from '@/object-record/record-form/contexts/RecordCreationFormContext';
+import { type RecordCreationRequest } from '@/object-record/record-form/types/RecordCreationRequest';
+import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
+import { useSidePanelMenu } from '@/side-panel/hooks/useSidePanelMenu';
+import { recordCreationFormDraftComponentState } from '@/side-panel/pages/record-creation-form/states/recordCreationFormDraftComponentState';
+import { recordCreationFormRequestComponentState } from '@/side-panel/pages/record-creation-form/states/recordCreationFormRequestComponentState';
+import { isSidePanelOpenedState } from '@/side-panel/states/isSidePanelOpenedState';
+import { sidePanelNavigationStackState } from '@/side-panel/states/sidePanelNavigationStackState';
+import { useCloseAnyOpenDropdown } from '@/ui/layout/dropdown/hooks/useCloseAnyOpenDropdown';
+import { t } from '@lingui/core/macro';
+import { useStore } from 'jotai';
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+import { SidePanelPages } from 'twenty-shared/types';
+import { isDefined } from 'twenty-shared/utils';
+import { IconPlus } from 'twenty-ui/icon';
+import { v4 } from 'uuid';
+
+type PendingRecordCreation = {
+  requestId: string;
+  createRecord: RecordCreationRequest['createRecord'];
+  resolve: (createdRecord: ObjectRecord | null) => void;
+  isSettling: boolean;
+};
+
+type RecordCreationFormProviderProps = {
+  children: ReactNode;
+};
+
+export const RecordCreationFormProvider = ({
+  children,
+}: RecordCreationFormProviderProps) => {
+  const store = useStore();
+  const { removePageFromSidePanelHistory } = useSidePanelHistory();
+  const { navigateSidePanelMenu } = useSidePanelMenu();
+  const { closeAnyOpenDropdown } = useCloseAnyOpenDropdown();
+
+  const [pendingRecordCreations, setPendingRecordCreations] = useState<
+    PendingRecordCreation[]
+  >([]);
+
+  // OMNIA-CUSTOM: ask before the tab unloads while a pending creation form holds unsaved input.
+  useEffect(() => {
+    if (pendingRecordCreations.length === 0) {
+      return;
+    }
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      const hasUnsavedDraft = pendingRecordCreations.some(({ requestId }) =>
+        isDefined(
+          store.get(
+            recordCreationFormDraftComponentState.atomFamily({
+              instanceId: requestId,
+            }),
+          ),
+        ),
+      );
+
+      if (hasUnsavedDraft) {
+        event.preventDefault();
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [pendingRecordCreations, store]);
+
+  const settleRecordCreationDraft = useCallback(
+    async ({
+      requestId,
+      draftRecord,
+      shouldKeepOpen = false,
+    }: {
+      requestId: string;
+      draftRecord: Partial<ObjectRecord> | null;
+      shouldKeepOpen?: boolean;
+    }) => {
+      const pendingRecordCreation = pendingRecordCreations.find(
+        (candidate) => candidate.requestId === requestId,
+      );
+
+      if (
+        !isDefined(pendingRecordCreation) ||
+        pendingRecordCreation.isSettling
+      ) {
+        return {};
+      }
+
+      if (draftRecord === null) {
+        pendingRecordCreation.resolve(null);
+
+        setPendingRecordCreations((previousPendingRecordCreations) =>
+          previousPendingRecordCreations.filter(
+            (candidate) => candidate.requestId !== requestId,
+          ),
+        );
+
+        return {};
+      }
+
+      setPendingRecordCreations((previousPendingRecordCreations) =>
+        previousPendingRecordCreations.map((candidate) =>
+          candidate.requestId === requestId
+            ? { ...candidate, isSettling: true }
+            : candidate,
+        ),
+      );
+
+      try {
+        const createdRecord =
+          await pendingRecordCreation.createRecord(draftRecord);
+
+        if (!shouldKeepOpen) {
+          removePageFromSidePanelHistory(requestId);
+
+          pendingRecordCreation.resolve(createdRecord);
+
+          setPendingRecordCreations((previousPendingRecordCreations) =>
+            previousPendingRecordCreations.filter(
+              (candidate) => candidate.requestId !== requestId,
+            ),
+          );
+        }
+
+        return {};
+      } catch (error) {
+        return { error };
+      } finally {
+        setPendingRecordCreations((previousPendingRecordCreations) =>
+          previousPendingRecordCreations.map((candidate) =>
+            candidate.requestId === requestId
+              ? { ...candidate, isSettling: false }
+              : candidate,
+          ),
+        );
+      }
+    },
+    [pendingRecordCreations, removePageFromSidePanelHistory],
+  );
+
+  const requestRecordCreation = useCallback(
+    ({
+      objectMetadataItem,
+      initialDraftRecord,
+      canCreateAnother = true,
+      createRecord,
+    }: RecordCreationRequest) => {
+      const topSidePanelPage = store.get(isSidePanelOpenedState.atom)
+        ? store.get(sidePanelNavigationStackState.atom).at(-1)
+        : undefined;
+
+      if (
+        topSidePanelPage?.page === SidePanelPages.RecordCreationForm &&
+        store.get(
+          recordCreationFormRequestComponentState.atomFamily({
+            instanceId: topSidePanelPage.pageId,
+          }),
+        )?.objectMetadataId === objectMetadataItem.id
+      ) {
+        return Promise.resolve(null);
+      }
+
+      const requestId = v4();
+
+      closeAnyOpenDropdown();
+
+      store.set(
+        recordCreationFormRequestComponentState.atomFamily({
+          instanceId: requestId,
+        }),
+        {
+          requestId,
+          objectMetadataId: objectMetadataItem.id,
+          initialDraftRecord: initialDraftRecord ?? {},
+          canCreateAnother,
+        },
+      );
+
+      return new Promise<ObjectRecord | null>((resolve) => {
+        setPendingRecordCreations((previousPendingRecordCreations) => [
+          ...previousPendingRecordCreations,
+          {
+            requestId,
+            createRecord,
+            resolve,
+            isSettling: false,
+          },
+        ]);
+
+        navigateSidePanelMenu({
+          page: SidePanelPages.RecordCreationForm,
+          pageTitle: t`Create ${objectMetadataItem.labelSingular}`,
+          pageIcon: IconPlus,
+          pageId: requestId,
+        });
+      });
+    },
+    [closeAnyOpenDropdown, navigateSidePanelMenu, store],
+  );
+
+  const cancelPendingRecordCreation = useCallback(
+    ({ requestId }: { requestId: string }) => {
+      settleRecordCreationDraft({ requestId, draftRecord: null });
+    },
+    [settleRecordCreationDraft],
+  );
+
+  const contextValue = useMemo<RecordCreationFormContextValue>(
+    () => ({ requestRecordCreation, settleRecordCreationDraft }),
+    [requestRecordCreation, settleRecordCreationDraft],
+  );
+
+  return (
+    <RecordCreationFormContextProvider value={contextValue}>
+      {children}
+      {pendingRecordCreations.map(({ requestId }) => (
+        <SidePanelFormCancellationEffect
+          key={requestId}
+          requestId={requestId}
+          onCancel={cancelPendingRecordCreation}
+        />
+      ))}
+    </RecordCreationFormContextProvider>
+  );
+};

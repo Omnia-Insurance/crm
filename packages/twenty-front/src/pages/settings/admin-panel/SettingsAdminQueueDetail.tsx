@@ -1,15 +1,16 @@
 import { SettingsAdminQueueJobsTable } from '@/settings/admin-panel/health-status/components/SettingsAdminQueueJobsTable';
 import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
 import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
-import { plural, t } from '@lingui/core/macro';
+import { plural } from '@lingui/core/macro';
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath } from 'twenty-shared/utils';
-import { H2Title } from 'twenty-ui/typography';
-import { Section } from 'twenty-ui/layout';
+import { Section } from 'twenty-ui/components/layout';
+import { useLingui } from '@lingui/react/macro';
 
 export const SettingsAdminQueueDetail = () => {
+  const { t } = useLingui();
   const { queueName } = useParams<{ queueName: string }>();
   const [retentionConfig, setRetentionConfig] = useState<{
     completedMaxAge: number;
@@ -75,13 +76,13 @@ export const SettingsAdminQueueDetail = () => {
       ]}
     >
       <SettingsPageContainer>
-        <Section>
-          <H2Title title={t`Jobs`} description={queueDescription} />
+        <Section.Root>
+          <Section.Header title={t`Jobs`} description={queueDescription} />
           <SettingsAdminQueueJobsTable
             queueName={queueName}
             onRetentionConfigLoaded={setRetentionConfig}
           />
-        </Section>
+        </Section.Root>
       </SettingsPageContainer>
     </SettingsPageLayout>
   );

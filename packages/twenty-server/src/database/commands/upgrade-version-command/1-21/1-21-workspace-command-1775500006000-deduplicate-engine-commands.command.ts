@@ -1,7 +1,7 @@
 import { Command } from 'nest-commander';
 import { isDefined } from 'twenty-shared/utils';
 
-import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
+import { ProvisionedWorkspaceCommandRunner } from 'src/database/commands/command-runners/provisioned-workspace.command-runner';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { type RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
 import { RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
@@ -24,13 +24,9 @@ const OLD_UNIVERSAL_IDENTIFIERS_TO_DELETE = new Set([
 ]);
 
 const NEW_UNIVERSAL_IDENTIFIERS = new Set<string>([
-  // OMNIA-CUSTOM: we split delete/restore/destroy into single/multiple variants
-  STANDARD_COMMAND_MENU_ITEMS.deleteSingleRecord.universalIdentifier,
-  STANDARD_COMMAND_MENU_ITEMS.deleteMultipleRecords.universalIdentifier,
-  STANDARD_COMMAND_MENU_ITEMS.restoreSingleRecord.universalIdentifier,
-  STANDARD_COMMAND_MENU_ITEMS.restoreMultipleRecords.universalIdentifier,
-  STANDARD_COMMAND_MENU_ITEMS.destroySingleRecord.universalIdentifier,
-  STANDARD_COMMAND_MENU_ITEMS.destroyMultipleRecords.universalIdentifier,
+  STANDARD_COMMAND_MENU_ITEMS.deleteRecords.universalIdentifier,
+  STANDARD_COMMAND_MENU_ITEMS.restoreRecords.universalIdentifier,
+  STANDARD_COMMAND_MENU_ITEMS.destroyRecords.universalIdentifier,
   STANDARD_COMMAND_MENU_ITEMS.exportRecords.universalIdentifier,
 ]);
 
@@ -40,7 +36,7 @@ const NEW_UNIVERSAL_IDENTIFIERS = new Set<string>([
   description:
     'Merge single/multiple record engine command menu items into unified commands (delete, restore, destroy, export)',
 })
-export class DeduplicateEngineCommandsCommand extends ActiveOrSuspendedWorkspaceCommandRunner {
+export class DeduplicateEngineCommandsCommand extends ProvisionedWorkspaceCommandRunner {
   constructor(
     protected readonly workspaceIteratorService: WorkspaceIteratorService,
     private readonly applicationService: ApplicationService,
@@ -122,8 +118,9 @@ export class DeduplicateEngineCommandsCommand extends ActiveOrSuspendedWorkspace
     }
 
     const validateAndBuildResult =
-      await this.workspaceMigrationValidateBuildAndRunService.validateBuildAndRunWorkspaceMigration(
+      await this.workspaceMigrationValidateBuildAndRunService.validateBuildAndRunLegacyWorkspaceMigration(
         {
+          shouldDeferActions: false,
           allFlatEntityOperationByMetadataName: {
             commandMenuItem: {
               flatEntityToCreate: itemsToCreate,

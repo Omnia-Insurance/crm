@@ -1,11 +1,14 @@
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
-import { isDefined } from 'twenty-shared/utils';
+import { getRelationConnectSubFieldKey } from '@/object-record/spreadsheet-import/utils/spreadSheetGetRelationConnectSubFieldKey';
 
+// The import dialog prefixes connect keys the same way, so the server import job reads both alike
 export const getRelationUpdateSubFieldKey = (
   fieldMetadataItem: FieldMetadataItem,
-  targetField: FieldMetadataItem,
+  targetFieldMetadataItem: FieldMetadataItem,
   compositeSubFieldKey?: string,
-) => {
-  const prefix = 'update:';
-  return `${prefix}${isDefined(compositeSubFieldKey) ? `${compositeSubFieldKey}-${targetField.name}` : targetField.name} (${fieldMetadataItem.name})`;
-};
+) =>
+  `update:${getRelationConnectSubFieldKey(
+    fieldMetadataItem,
+    targetFieldMetadataItem,
+    compositeSubFieldKey,
+  )}`;

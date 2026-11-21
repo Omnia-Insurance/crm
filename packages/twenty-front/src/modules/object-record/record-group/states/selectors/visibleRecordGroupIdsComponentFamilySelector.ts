@@ -1,9 +1,7 @@
-import { recordGroupDefinitionFamilyState } from '@/object-record/record-group/states/recordGroupDefinitionFamilyState';
-import { recordGroupIdsComponentState } from '@/object-record/record-group/states/recordGroupIdsComponentState';
+import { recordGroupTabRecordCountByGroupIdComponentState } from '@/object-record/record-group/states/recordGroupTabRecordCountByGroupIdComponentState';
+import { isRecordGroupTabsDisplayedComponentSelector } from '@/object-record/record-group/states/selectors/isRecordGroupTabsDisplayedComponentSelector';
+import { visibleRecordGroupIdsIncludingEmptyComponentSelector } from '@/object-record/record-group/states/selectors/visibleRecordGroupIdsIncludingEmptyComponentSelector';
 import { type RecordGroupDefinition } from '@/object-record/record-group/types/RecordGroupDefinition';
-import { RecordGroupSort } from '@/object-record/record-group/types/RecordGroupSort';
-import { recordGroupSortedInsert } from '@/object-record/record-group/utils/recordGroupSortedInsert';
-import { recordIndexRecordGroupSortComponentState } from '@/object-record/record-index/states/recordIndexRecordGroupSortComponentState';
 import { recordIndexRecordIdsByGroupComponentFamilyState } from '@/object-record/record-index/states/recordIndexRecordIdsByGroupComponentFamilyState';
 import { recordIndexShouldHideEmptyRecordGroupsComponentState } from '@/object-record/record-index/states/recordIndexShouldHideEmptyRecordGroupsComponentState';
 import { createAtomComponentFamilySelector } from '@/ui/utilities/state/jotai/utils/createAtomComponentFamilySelector';
@@ -18,63 +16,41 @@ export const visibleRecordGroupIdsComponentFamilySelector =
     get:
       ({ instanceId, familyKey: _viewType }) =>
       ({ get }) => {
-        const recordGroupSort = get(recordIndexRecordGroupSortComponentState, {
-          instanceId,
-        });
-
-        const recordGroupIds = get(recordGroupIdsComponentState, {
-          instanceId,
-        });
+        const visibleRecordGroupIds = get(
+          visibleRecordGroupIdsIncludingEmptyComponentSelector,
+          { instanceId },
+        );
 
         const shouldHideEmptyRecordGroups = get(
           recordIndexShouldHideEmptyRecordGroupsComponentState,
           { instanceId },
         );
 
-        const result: RecordGroupDefinition[] = [];
-
-        const comparator = (
-          a: RecordGroupDefinition,
-          b: RecordGroupDefinition,
-        ) => {
-          switch (recordGroupSort) {
-            case RecordGroupSort.Alphabetical:
-              return a.title.localeCompare(b.title);
-            case RecordGroupSort.ReverseAlphabetical:
-              return b.title.localeCompare(a.title);
-            case RecordGroupSort.Manual:
-            default:
-              return a.position - b.position;
-          }
-        };
-
-        for (const recordGroupId of recordGroupIds) {
-          const recordGroupDefinition = get(
-            recordGroupDefinitionFamilyState,
-            recordGroupId,
-          );
-
-          if (!isDefined(recordGroupDefinition)) {
-            continue;
-          }
-
-          if (!recordGroupDefinition.isVisible) {
-            continue;
-          }
-
-          if (shouldHideEmptyRecordGroups) {
-            const rowIds = get(
-              recordIndexRecordIdsByGroupComponentFamilyState,
-              { instanceId, familyKey: recordGroupId },
-            );
-            if (rowIds.length === 0) {
-              continue;
-            }
-          }
-
-          recordGroupSortedInsert(result, recordGroupDefinition, comparator);
+        if (!shouldHideEmptyRecordGroups) {
+          return visibleRecordGroupIds;
         }
 
-        return result.map(({ id }) => id);
+        if (get(isRecordGroupTabsDisplayedComponentSelector, { instanceId })) {
+          const recordCountByGroupId = get(
+            recordGroupTabRecordCountByGroupIdComponentState,
+            { instanceId },
+          );
+
+          if (!isDefined(recordCountByGroupId)) {
+            return visibleRecordGroupIds;
+          }
+
+          return visibleRecordGroupIds.filter(
+            (recordGroupId) => (recordCountByGroupId[recordGroupId] ?? 0) > 0,
+          );
+        }
+
+        return visibleRecordGroupIds.filter(
+          (recordGroupId) =>
+            get(recordIndexRecordIdsByGroupComponentFamilyState, {
+              instanceId,
+              familyKey: recordGroupId,
+            }).length > 0,
+        );
       },
   });

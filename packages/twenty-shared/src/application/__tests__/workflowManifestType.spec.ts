@@ -1,0 +1,842 @@
+/** @jest-environment node */
+
+import { isDefined } from '@/utils/validation/isDefined';
+import { WORKFLOW_AI_AGENT_STEP_CONFIG_ISSUE_MESSAGES } from '@/workflow/constants/WorkflowAiAgentStepConfigIssueMessages';
+
+import {
+  workflowManifestSchema,
+  type WorkflowManifest,
+} from '../workflowManifestType';
+
+const iteratorId = '44444444-4444-4444-8444-444444444444';
+const delayId = '55555555-5555-4555-8555-555555555555';
+const finishId = '66666666-6666-4666-8666-666666666666';
+const workflow: WorkflowManifest = {
+  universalIdentifier: '11111111-1111-4111-8111-111111111111',
+  name: 'Iterator validation',
+  version: {
+    trigger: {
+      universalIdentifier: '33333333-3333-4333-8333-333333333333',
+      type: 'MANUAL',
+      nextStepIds: [iteratorId],
+    },
+    steps: [
+      {
+        universalIdentifier: iteratorId,
+        name: 'Loop',
+        type: 'ITERATOR',
+        input: { items: ['one', 'two'], initialLoopStepIds: [delayId] },
+        nextStepIds: [finishId],
+      },
+      {
+        universalIdentifier: delayId,
+        name: 'Delay',
+        type: 'DELAY',
+        input: { delayType: 'DURATION', duration: { seconds: 1 } },
+        nextStepIds: [iteratorId],
+      },
+      {
+        universalIdentifier: finishId,
+        name: 'Finish',
+        type: 'EMPTY',
+        input: {},
+        nextStepIds: [],
+      },
+    ],
+  },
+};
+
+const getStep = (definition: WorkflowManifest, index: number) => {
+  const step = definition.version.steps[index];
+  if (!isDefined(step)) {
+    throw new Error(`Missing fixture step ${index}`);
+  }
+  return step;
+};
+
+describe('workflow manifest iterator cycles', () => {
+  it('rejects a loop body without a return edge', () => {
+    const invalid = structuredClone(workflow);
+    getStep(invalid, 1).nextStepIds = [];
+    const result = workflowManifestSchema.safeParse(invalid);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.message).toContain('must return to iterator');
+    }
+  });
+
+  it('requires nested iterators to return to their enclosing iterator after completion', () => {
+    const nested = structuredClone(workflow);
+    const innerId = '77777777-7777-4777-8777-777777777777';
+    const outer = getStep(nested, 0);
+    if (outer.type !== 'ITERATOR') {
+      throw new Error('Expected iterator');
+    }
+    outer.input.initialLoopStepIds = [innerId];
+    getStep(nested, 1).nextStepIds = [innerId];
+    nested.version.steps.push({
+      universalIdentifier: innerId,
+      name: 'Inner loop',
+      type: 'ITERATOR',
+      input: { items: ['inner'], initialLoopStepIds: [delayId] },
+      nextStepIds: [],
+    });
+    expect(workflowManifestSchema.safeParse(nested).success).toBe(false);
+    getStep(nested, 3).nextStepIds = [iteratorId];
+    expect(workflowManifestSchema.safeParse(nested).success).toBe(true);
+  });
+
+  it('rejects references to a missing step', () => {
+    const invalid = structuredClone(workflow);
+    const iterator = getStep(invalid, 0);
+    if (iterator.type !== 'ITERATOR') {
+      throw new Error('Expected iterator');
+    }
+    iterator.input.items = '{{missing.items}}';
+    expect(workflowManifestSchema.safeParse(invalid).success).toBe(false);
+  });
+
+  it('accepts a loop body returning to its iterator', () => {
+    expect(workflowManifestSchema.safeParse(workflow).success).toBe(true);
+  });
+
+  it('rejects ordinary cycles inside a loop body', () => {
+    const invalid = structuredClone(workflow);
+    getStep(invalid, 1).nextStepIds = [delayId];
+    expect(workflowManifestSchema.safeParse(invalid).success).toBe(false);
+  });
+
+  it('rejects returning to an iterator from its completed branch', () => {
+    const invalid = structuredClone(workflow);
+    getStep(invalid, 2).nextStepIds = [iteratorId];
+    expect(workflowManifestSchema.safeParse(invalid).success).toBe(false);
+  });
+
+  it('rejects an iterator pointing to itself as its loop body', () => {
+    const invalid = structuredClone(workflow);
+    const iterator = getStep(invalid, 0);
+    if (iterator.type !== 'ITERATOR') {
+      throw new Error('Expected iterator');
+    }
+    iterator.input.initialLoopStepIds = [iteratorId, delayId];
+    expect(workflowManifestSchema.safeParse(invalid).success).toBe(false);
+  });
+});
+
+describe('workflow manifest step types', () => {
+  const ASSIGNEE = '{{trigger.properties.after.assigneeId}}';
+
+  it.each([
+    {
+      type: 'SEND_EMAIL',
+      input: {
+        connectedAccountId: ASSIGNEE,
+        recipients: { to: '{{trigger.properties.after.email}}' },
+        subject: 'Hello',
+      },
+    },
+    {
+      type: 'DRAFT_EMAIL',
+      input: {
+        connectedAccountId: ASSIGNEE,
+        recipients: { to: 'jane@example.com' },
+      },
+    },
+    {
+      type: 'CREATE_CALENDAR_EVENT',
+      input: {
+        connectedAccountId: '{{trigger.properties.after.connectedAccountId}}',
+        title: 'Kick-off',
+        startsAt: '2026-11-02T09:00:00.000Z',
+        endsAt: '2026-11-02T09:30:00.000Z',
+        isFullDay: false,
+        sendInvitations: true,
+        addConferencing: false,
+      },
+    },
+    {
+      type: 'AI_AGENT',
+      input: {
+        agentUniversalIdentifier: '66666666-6666-4666-8666-666666666666',
+        prompt: '{{trigger.properties.after.summary}}',
+        responseFormat: { type: 'text' },
+        humanInputInstructions: 'Ask when the company is unclear',
+        workspaceMemberId: ASSIGNEE,
+        conversation: {
+          key: 'mail:{{trigger.properties.after.threadId}}',
+          scope: 'KEY',
+        },
+      },
+    },
+    {
+      type: 'AI_AGENT',
+      input: {
+        instructions: 'Qualify the lead from its last email.',
+        modelId: 'auto-select-workspace-default-model',
+        modelConfiguration: { webSearch: { enabled: true } },
+        scope: {
+          objectPermissions: [
+            {
+              objectUniversalIdentifier: '77777777-7777-4777-8777-777777777777',
+              canReadObjectRecords: true,
+            },
+          ],
+        },
+        prompt: '{{trigger.properties.after.summary}}',
+      },
+    },
+    {
+      type: 'SEND_CHAT_MESSAGE',
+      input: {
+        workspaceMemberId: ASSIGNEE,
+        title: 'Approve the opportunity',
+        text: 'Detected in an email thread',
+        toolCall: {
+          toolName: 'create_one_opportunity',
+          arguments: { name: '{{trigger.properties.after.name}}' },
+        },
+        conversation: {
+          key: 'mail:{{trigger.properties.after.threadId}}',
+          scope: 'KEY',
+        },
+      },
+    },
+    {
+      type: 'CODE',
+      input: {
+        code: 'export const main = async (params: { name: string }) => ({ greeting: `Hi ${params.name}` });',
+        logicFunctionInput: { name: '{{trigger.properties.after.name}}' },
+      },
+    },
+  ])('accepts $type steps', ({ type, input }) => {
+    const definition = structuredClone(workflow);
+    Object.assign(getStep(definition, 2), { type, input });
+
+    expect(workflowManifestSchema.safeParse(definition).success).toBe(true);
+  });
+
+  it('refuses an AI agent step running an agent with its own config', () => {
+    const definition = structuredClone(workflow);
+    Object.assign(getStep(definition, 2), {
+      type: 'AI_AGENT',
+      input: {
+        agentUniversalIdentifier: '66666666-6666-4666-8666-666666666666',
+        instructions: 'Qualify the lead.',
+      },
+    });
+
+    const result = workflowManifestSchema.safeParse(definition);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.message).toContain(
+        WORKFLOW_AI_AGENT_STEP_CONFIG_ISSUE_MESSAGES.AGENT_STEP_HAS_INLINE_CONFIG,
+      );
+    }
+  });
+
+  it.each([
+    { humanInputInstructions: 'Ask when the company is unclear' },
+    { conversation: { scope: 'RUN' } },
+  ])('refuses %o on an AI agent step without an agent', (agentOnlyInput) => {
+    const definition = structuredClone(workflow);
+    Object.assign(getStep(definition, 2), {
+      type: 'AI_AGENT',
+      input: {
+        instructions: 'Qualify the lead.',
+        prompt: 'Go',
+        ...agentOnlyInput,
+      },
+    });
+
+    const result = workflowManifestSchema.safeParse(definition);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.message).toContain(
+        WORKFLOW_AI_AGENT_STEP_CONFIG_ISSUE_MESSAGES.GENERATE_STEP_HAS_CONVERSATION_CONFIG,
+      );
+    }
+  });
+
+  it('accepts a conversation on an AI agent step running an agent', () => {
+    const definition = structuredClone(workflow);
+    Object.assign(getStep(definition, 2), {
+      type: 'AI_AGENT',
+      input: {
+        agentUniversalIdentifier: '66666666-6666-4666-8666-666666666666',
+        prompt: 'Go',
+        conversation: { scope: 'RUN' },
+      },
+    });
+
+    expect(workflowManifestSchema.safeParse(definition).success).toBe(true);
+  });
+
+  it('accepts the blank human input instructions the builder stores on a step without an agent', () => {
+    const definition = structuredClone(workflow);
+    Object.assign(getStep(definition, 2), {
+      type: 'AI_AGENT',
+      input: { prompt: 'Go', humanInputInstructions: ' ' },
+    });
+
+    expect(workflowManifestSchema.safeParse(definition).success).toBe(true);
+  });
+
+  it('refuses an AI agent step scope with row-level predicates', () => {
+    const definition = structuredClone(workflow);
+    Object.assign(getStep(definition, 2), {
+      type: 'AI_AGENT',
+      input: {
+        instructions: 'Qualify the lead.',
+        scope: { rowLevelPermissionPredicates: [] },
+      },
+    });
+
+    expect(workflowManifestSchema.safeParse(definition).success).toBe(false);
+  });
+
+  describe('connected account reference', () => {
+    const CALENDAR_EVENT = {
+      title: 'Kick-off',
+      startsAt: '2026-11-02T09:00:00.000Z',
+      endsAt: '2026-11-02T09:30:00.000Z',
+      isFullDay: false,
+      sendInvitations: true,
+      addConferencing: false,
+    };
+    const withStep = ({
+      type,
+      input,
+    }: {
+      type: string;
+      input: Record<string, unknown>;
+    }) => {
+      const definition = structuredClone(workflow);
+      Object.assign(getStep(definition, 2), { type, input });
+      return workflowManifestSchema.safeParse(definition);
+    };
+
+    it.each([
+      { type: 'SEND_EMAIL', input: { recipients: { to: 'jane@example.com' } } },
+      {
+        type: 'DRAFT_EMAIL',
+        input: { recipients: { to: 'jane@example.com' } },
+      },
+      { type: 'CREATE_CALENDAR_EVENT', input: CALENDAR_EVENT },
+    ])(
+      'accepts a $type step naming its account by handle',
+      ({ type, input }) => {
+        const result = withStep({
+          type,
+          input: { ...input, connectedAccountHandle: ' sales@example.com ' },
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.data?.version.steps[2]?.input).toMatchObject({
+          connectedAccountHandle: 'sales@example.com',
+        });
+      },
+    );
+
+    it.each([
+      {
+        case: 'both',
+        reference: {
+          connectedAccountId: ASSIGNEE,
+          connectedAccountHandle: 'sales@example.com',
+        },
+      },
+      { case: 'neither', reference: {} },
+      { case: 'an empty handle', reference: { connectedAccountHandle: ' ' } },
+    ])('rejects $case of the account id and handle', ({ reference }) => {
+      const result = withStep({
+        type: 'CREATE_CALENDAR_EVENT',
+        input: { ...CALENDAR_EVENT, ...reference },
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error?.issues[0]?.path).toEqual([
+        'version',
+        'steps',
+        2,
+        'input',
+        'connectedAccountHandle',
+      ]);
+    });
+  });
+
+  it('requires the member a chat message is sent to', () => {
+    const definition = structuredClone(workflow);
+    Object.assign(getStep(definition, 2), {
+      type: 'SEND_CHAT_MESSAGE',
+      input: { title: 'Approve', text: 'Please review' },
+    });
+    const result = workflowManifestSchema.safeParse(definition);
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.path).toEqual([
+      'version',
+      'steps',
+      2,
+      'input',
+      'workspaceMemberId',
+    ]);
+  });
+
+  it('requires the source of a code step, which never runs from a logic function', () => {
+    const definition = structuredClone(workflow);
+    Object.assign(getStep(definition, 2), {
+      type: 'CODE',
+      input: {
+        logicFunctionId: '77777777-7777-4777-8777-777777777777',
+        logicFunctionInput: {},
+      },
+    });
+    const result = workflowManifestSchema.safeParse(definition);
+
+    expect(result.success).toBe(false);
+    expect(
+      result.error?.issues.map(({ path }) => path.slice(3).join('.')),
+    ).toEqual(expect.arrayContaining(['input.code', 'input']));
+  });
+
+  it('rejects an empty code step source', () => {
+    const definition = structuredClone(workflow);
+    Object.assign(getStep(definition, 2), {
+      type: 'CODE',
+      input: { code: '', logicFunctionInput: {} },
+    });
+    const result = workflowManifestSchema.safeParse(definition);
+
+    expect(result.success).toBe(false);
+    expect(
+      result.error?.issues.map(({ path }) => path.slice(3).join('.')),
+    ).toContain('input.code');
+  });
+
+  it('rejects a step type applications cannot use', () => {
+    const invalid = structuredClone(workflow);
+    Object.assign(getStep(invalid, 2), { type: 'CHAT_WITH_AN_ORACLE' });
+    const result = workflowManifestSchema.safeParse(invalid);
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toContain('Unsupported step type');
+  });
+
+  it.each(['SELECT', 'MULTI_SELECT'])(
+    'requires the field a %s form field takes its options from',
+    (type) => {
+      const withFormField = (settings: Record<string, unknown>) => {
+        const definition = structuredClone(workflow);
+        Object.assign(getStep(definition, 2), {
+          type: 'FORM',
+          input: [
+            { id: 'stage', name: 'stage', label: 'Stage', type, settings },
+          ],
+        });
+        return definition;
+      };
+
+      expect(
+        workflowManifestSchema.safeParse(
+          withFormField({
+            selectedFieldUniversalIdentifier:
+              '77777777-7777-4777-8777-777777777777',
+          }),
+        ).success,
+      ).toBe(true);
+
+      const result = workflowManifestSchema.safeParse(
+        withFormField({ selectedFieldId: 'a-workspace-specific-id' }),
+      );
+      expect(result.success).toBe(false);
+      expect(result.error?.issues[0]?.path).toEqual([
+        'version',
+        'steps',
+        2,
+        'input',
+        0,
+        'settings',
+        'selectedFieldUniversalIdentifier',
+      ]);
+    },
+  );
+});
+
+describe('workflow manifest manual trigger', () => {
+  const OBJECT_ID = '99999999-9999-4999-8999-999999999999';
+
+  const withTrigger = (trigger: Record<string, unknown>) => ({
+    ...workflow,
+    version: {
+      ...workflow.version,
+      trigger: { ...workflow.version.trigger, ...trigger },
+    },
+  });
+
+  it('accepts where the workflow can be launched from', () => {
+    for (const availability of [
+      { type: 'GLOBAL' },
+      { type: 'SINGLE_RECORD', objectUniversalIdentifier: OBJECT_ID },
+      { type: 'BULK_RECORDS', objectUniversalIdentifier: OBJECT_ID },
+    ]) {
+      expect(
+        workflowManifestSchema.safeParse(
+          withTrigger({ settings: { availability, icon: 'IconBolt' } }),
+        ).success,
+      ).toBe(true);
+    }
+  });
+
+  it('requires the object a record availability runs on', () => {
+    const result = workflowManifestSchema.safeParse(
+      withTrigger({ settings: { availability: { type: 'SINGLE_RECORD' } } }),
+    );
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.path).toEqual([
+      'version',
+      'trigger',
+      'settings',
+      'availability',
+      'objectUniversalIdentifier',
+    ]);
+  });
+
+  it('needs an availability before an icon or pin can show in the command menu', () => {
+    const result = workflowManifestSchema.safeParse(
+      withTrigger({ settings: { isPinned: true } }),
+    );
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.path).toEqual([
+      'version',
+      'trigger',
+      'settings',
+      'availability',
+    ]);
+  });
+
+  it('names the supported trigger types when the type is unknown', () => {
+    const result = workflowManifestSchema.safeParse(
+      withTrigger({ type: 'UNKNOWN' }),
+    );
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe(
+      'Unsupported trigger type. Application workflows support: MANUAL, CRON, DATABASE_EVENT, WEBHOOK',
+    );
+  });
+});
+
+describe('workflow manifest cron trigger', () => {
+  const withCron = (settings: Record<string, unknown>) => ({
+    ...workflow,
+    version: {
+      ...workflow.version,
+      trigger: {
+        universalIdentifier: workflow.version.trigger.universalIdentifier,
+        type: 'CRON',
+        nextStepIds: workflow.version.trigger.nextStepIds,
+        settings,
+      },
+    },
+  });
+
+  it('accepts every schedule type', () => {
+    for (const settings of [
+      { type: 'DAYS', schedule: { day: 1, hour: 9, minute: 0 } },
+      { type: 'HOURS', schedule: { hour: 2, minute: 30 } },
+      { type: 'MINUTES', schedule: { minute: 15 } },
+      { type: 'CUSTOM', pattern: '0 9 * * 1-5' },
+    ]) {
+      expect(workflowManifestSchema.safeParse(withCron(settings)).success).toBe(
+        true,
+      );
+    }
+  });
+
+  it('rejects a schedule outside the clock', () => {
+    const result = workflowManifestSchema.safeParse(
+      withCron({ type: 'DAYS', schedule: { day: 1, hour: 24, minute: 0 } }),
+    );
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.path).toEqual([
+      'version',
+      'trigger',
+      'settings',
+      'schedule',
+      'hour',
+    ]);
+  });
+
+  it('rejects a schedule key the schedule type does not use', () => {
+    const result = workflowManifestSchema.safeParse(
+      withCron({ type: 'MINUTES', schedule: { minute: 15, hour: 2 } }),
+    );
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.path).toEqual([
+      'version',
+      'trigger',
+      'settings',
+      'schedule',
+    ]);
+  });
+});
+
+describe('workflow manifest webhook trigger', () => {
+  const withWebhook = (settings: Record<string, unknown>) => ({
+    ...workflow,
+    version: {
+      ...workflow.version,
+      trigger: {
+        universalIdentifier: workflow.version.trigger.universalIdentifier,
+        type: 'WEBHOOK',
+        nextStepIds: workflow.version.trigger.nextStepIds,
+        settings,
+      },
+    },
+  });
+
+  it('accepts a GET webhook and a POST webhook with its expected body', () => {
+    for (const settings of [
+      { httpMethod: 'GET' },
+      {
+        httpMethod: 'POST',
+        expectedBody: { email: 'jane@example.com', score: 3 },
+      },
+    ]) {
+      expect(
+        workflowManifestSchema.safeParse(withWebhook(settings)).success,
+      ).toBe(true);
+    }
+  });
+
+  it('requires the expected body of a POST webhook', () => {
+    const result = workflowManifestSchema.safeParse(
+      withWebhook({ httpMethod: 'POST' }),
+    );
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.path).toEqual([
+      'version',
+      'trigger',
+      'settings',
+      'expectedBody',
+    ]);
+  });
+
+  it('refuses an authentication setting, which webhook triggers do not enforce', () => {
+    const result = workflowManifestSchema.safeParse(
+      withWebhook({ httpMethod: 'GET', authentication: 'API_KEY' }),
+    );
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('workflow manifest database event trigger', () => {
+  const OBJECT_ID = '99999999-9999-4999-8999-999999999999';
+  const FIELD_ID = '88888888-8888-4888-8888-888888888888';
+
+  const withDatabaseEvent = (settings: Record<string, unknown>) => ({
+    ...workflow,
+    version: {
+      ...workflow.version,
+      trigger: {
+        universalIdentifier: workflow.version.trigger.universalIdentifier,
+        type: 'DATABASE_EVENT',
+        nextStepIds: workflow.version.trigger.nextStepIds,
+        settings,
+      },
+    },
+  });
+
+  it('accepts the watched object, fields and a record filter', () => {
+    const result = workflowManifestSchema.safeParse(
+      withDatabaseEvent({
+        objectUniversalIdentifier: OBJECT_ID,
+        action: 'updated',
+        fieldUniversalIdentifiers: [FIELD_ID],
+        filter: {
+          stepFilterGroups: [{ id: 'group', logicalOperator: 'AND' }],
+          stepFilters: [
+            {
+              id: 'filter',
+              type: 'TEXT',
+              stepOutputKey: '{{trigger.properties.after.status}}',
+              operand: 'IS',
+              value: 'open',
+              stepFilterGroupId: 'group',
+              fieldMetadataUniversalIdentifier: FIELD_ID,
+              isFullRecord: false,
+            },
+          ],
+        },
+      }),
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it('only watches fields on update events', () => {
+    const result = workflowManifestSchema.safeParse(
+      withDatabaseEvent({
+        objectUniversalIdentifier: OBJECT_ID,
+        action: 'created',
+        fieldUniversalIdentifiers: [FIELD_ID],
+      }),
+    );
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe(
+      'Watched fields only apply to updated and upserted events',
+    );
+  });
+
+  it('refuses a record filter that points to an undeclared filter group', () => {
+    const result = workflowManifestSchema.safeParse(
+      withDatabaseEvent({
+        objectUniversalIdentifier: OBJECT_ID,
+        action: 'updated',
+        filter: {
+          stepFilterGroups: [
+            { id: 'group', logicalOperator: 'AND' },
+            {
+              id: 'nested',
+              logicalOperator: 'OR',
+              parentStepFilterGroupId: 'missing-parent',
+            },
+          ],
+          stepFilters: [
+            {
+              id: 'filter',
+              type: 'TEXT',
+              stepOutputKey: '{{trigger.properties.after.status}}',
+              operand: 'IS',
+              value: 'open',
+              stepFilterGroupId: 'missing-group',
+              fieldMetadataUniversalIdentifier: FIELD_ID,
+            },
+          ],
+        },
+      }),
+    );
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.message)).toEqual([
+      'Filter group missing-parent is not declared in stepFilterGroups',
+      'Filter group missing-group is not declared in stepFilterGroups',
+    ]);
+  });
+
+  it('refuses a filter group id declared twice, since only the first one is evaluated', () => {
+    const result = workflowManifestSchema.safeParse(
+      withDatabaseEvent({
+        objectUniversalIdentifier: OBJECT_ID,
+        action: 'updated',
+        filter: {
+          stepFilterGroups: [
+            { id: 'root', logicalOperator: 'OR' },
+            { id: 'root', logicalOperator: 'AND' },
+          ],
+          stepFilters: [],
+        },
+      }),
+    );
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.message)).toEqual([
+      'Filter group root is declared more than once',
+    ]);
+  });
+
+  it('refuses a filter group that is its own parent, since only groups under a root are evaluated', () => {
+    const result = workflowManifestSchema.safeParse(
+      withDatabaseEvent({
+        objectUniversalIdentifier: OBJECT_ID,
+        action: 'updated',
+        filter: {
+          stepFilterGroups: [
+            { id: 'root', logicalOperator: 'AND' },
+            {
+              id: 'looping',
+              logicalOperator: 'AND',
+              parentStepFilterGroupId: 'looping',
+            },
+          ],
+          stepFilters: [
+            {
+              id: 'filter',
+              type: 'TEXT',
+              stepOutputKey: '{{trigger.properties.after.status}}',
+              operand: 'IS',
+              value: 'open',
+              stepFilterGroupId: 'looping',
+              fieldMetadataUniversalIdentifier: FIELD_ID,
+            },
+          ],
+        },
+      }),
+    );
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.message)).toEqual([
+      'Filter group looping is not reachable from a root group',
+    ]);
+  });
+});
+
+describe('workflow manifest state stored by the workflow builder', () => {
+  const { universalIdentifier: _universalIdentifier, ...triggerWithoutId } =
+    workflow.version.trigger;
+
+  const withTrigger = (trigger: Record<string, unknown>) => ({
+    ...workflow,
+    version: { ...workflow.version, trigger },
+  });
+
+  it('accepts a trigger without a universal identifier, with its name, position and output schema', () => {
+    expect(
+      workflowManifestSchema.safeParse(
+        withTrigger({
+          ...triggerWithoutId,
+          name: 'Launch manually',
+          position: { x: 120, y: 26 },
+          outputSchema: {},
+        }),
+      ).success,
+    ).toBe(true);
+  });
+
+  it('accepts a null position for a trigger or step the builder placed nowhere', () => {
+    const [firstStep, ...otherSteps] = workflow.version.steps;
+
+    expect(
+      workflowManifestSchema.safeParse({
+        ...workflow,
+        version: {
+          trigger: { ...workflow.version.trigger, position: null },
+          steps: [{ ...firstStep, position: null }, ...otherSteps],
+        },
+      }).success,
+    ).toBe(true);
+  });
+
+  it.each([
+    { problem: 'an empty name', trigger: { name: '' } },
+    { problem: 'a position without coordinates', trigger: { position: {} } },
+  ])('rejects $problem', ({ trigger }) => {
+    expect(
+      workflowManifestSchema.safeParse(
+        withTrigger({ ...workflow.version.trigger, ...trigger }),
+      ).success,
+    ).toBe(false);
+  });
+});
+
+describe('workflow manifest isSystem', () => {
+  it('accepts a workflow flagged as system', () => {
+    expect(
+      workflowManifestSchema.safeParse({ ...workflow, isSystem: true }).success,
+    ).toBe(true);
+  });
+
+  it('rejects an isSystem that is not a boolean', () => {
+    expect(
+      workflowManifestSchema.safeParse({ ...workflow, isSystem: 'true' })
+        .success,
+    ).toBe(false);
+  });
+});

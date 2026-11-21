@@ -1,7 +1,7 @@
 import { Command } from 'nest-commander';
 import { isDefined } from 'twenty-shared/utils';
 
-import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
+import { ProvisionedWorkspaceCommandRunner } from 'src/database/commands/command-runners/provisioned-workspace.command-runner';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { type RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
 import { RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
@@ -11,14 +11,10 @@ import { STANDARD_COMMAND_MENU_ITEMS } from 'src/engine/workspace-manager/twenty
 import { computeTwentyStandardApplicationAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/twenty-standard-application-all-flat-entity-maps.constant';
 import { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspace-manager/workspace-migration/services/workspace-migration-validate-build-and-run-service';
 
-// OMNIA-CUSTOM: we split delete/restore/destroy into single/multiple variants
 const UNIVERSAL_IDENTIFIERS_TO_FIX = new Set<string>([
-  STANDARD_COMMAND_MENU_ITEMS.deleteSingleRecord.universalIdentifier,
-  STANDARD_COMMAND_MENU_ITEMS.deleteMultipleRecords.universalIdentifier,
-  STANDARD_COMMAND_MENU_ITEMS.restoreSingleRecord.universalIdentifier,
-  STANDARD_COMMAND_MENU_ITEMS.restoreMultipleRecords.universalIdentifier,
-  STANDARD_COMMAND_MENU_ITEMS.destroySingleRecord.universalIdentifier,
-  STANDARD_COMMAND_MENU_ITEMS.destroyMultipleRecords.universalIdentifier,
+  STANDARD_COMMAND_MENU_ITEMS.deleteRecords.universalIdentifier,
+  STANDARD_COMMAND_MENU_ITEMS.restoreRecords.universalIdentifier,
+  STANDARD_COMMAND_MENU_ITEMS.destroyRecords.universalIdentifier,
 ]);
 
 @RegisteredWorkspaceCommand('1.21.0', 1775500007000)
@@ -27,7 +23,7 @@ const UNIVERSAL_IDENTIFIERS_TO_FIX = new Set<string>([
   description:
     'Fix delete/restore/destroy command menu items to work in select-all (exclusion) mode',
 })
-export class FixSelectAllCommandMenuItemsCommand extends ActiveOrSuspendedWorkspaceCommandRunner {
+export class FixSelectAllCommandMenuItemsCommand extends ProvisionedWorkspaceCommandRunner {
   constructor(
     protected readonly workspaceIteratorService: WorkspaceIteratorService,
     private readonly applicationService: ApplicationService,
@@ -113,8 +109,9 @@ export class FixSelectAllCommandMenuItemsCommand extends ActiveOrSuspendedWorksp
     }
 
     const validateAndBuildResult =
-      await this.workspaceMigrationValidateBuildAndRunService.validateBuildAndRunWorkspaceMigration(
+      await this.workspaceMigrationValidateBuildAndRunService.validateBuildAndRunLegacyWorkspaceMigration(
         {
+          shouldDeferActions: false,
           allFlatEntityOperationByMetadataName: {
             commandMenuItem: {
               flatEntityToCreate: [],

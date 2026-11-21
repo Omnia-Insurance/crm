@@ -1,21 +1,31 @@
+import { isLayoutCustomizationModeEnabledState } from '@/layout-customization/states/isLayoutCustomizationModeEnabledState';
+import { NavigationMenuItemIconWithOverlay } from '@/navigation-menu-item/display/components/NavigationMenuItemIconWithOverlay';
+import { ColoredIcon } from '@/ui/icon/components/ColoredIcon';
 import { NavigationMenuItemType } from 'twenty-shared/types';
-import { isDefined } from 'twenty-shared/utils';
+import { isDefined, isSafeInternalPath } from 'twenty-shared/utils';
+import { getIconTileColorShades } from 'twenty-ui/components/data-display';
 import {
-  Avatar,
-  StyledTintedIconTileContainer,
-  getIconTileColorShades,
-} from 'twenty-ui/data-display';
-import { IconLink, IconWorld, useIcons } from 'twenty-ui/icon';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+  IconCompass,
+  IconLink,
+  IconPerspective,
+  IconWorld,
+} from 'twenty-ui/icon';
+import { useIcons } from 'twenty-ui/icon/provider';
+import { Avatar } from 'twenty-ui/primitives/data-display';
+import { themeCssVariables } from 'twenty-ui/theme';
 import { type NavigationMenuItem } from '~/generated-metadata/graphql';
 
 import { getNavigationMenuItemColor } from '@/navigation-menu-item/common/utils/getNavigationMenuItemColor';
 import { recordIdentifierToObjectRecordIdentifier } from '@/navigation-menu-item/common/utils/recordIdentifierToObjectRecordIdentifier';
+import { NavigationMenuItemAgentIcon } from '@/navigation-menu-item/display/automation/components/NavigationMenuItemAgentIcon';
+import { NavigationMenuItemWorkflowIcon } from '@/navigation-menu-item/display/automation/components/NavigationMenuItemWorkflowIcon';
 import { LinkIconWithLinkOverlay } from '@/navigation-menu-item/display/link/components/LinkIconWithLinkOverlay';
 import { getNavigationMenuItemObjectNameSingular } from '@/navigation-menu-item/display/object/utils/getNavigationMenuItemObjectNameSingular';
+import { getNativePageNavigationMenuItemConfig } from '@/navigation-menu-item/display/native-page/utils/getNativePageNavigationMenuItemConfig';
 import { getNavigationMenuItemComputedLink } from '@/navigation-menu-item/display/utils/getNavigationMenuItemComputedLink';
 import { getNavigationMenuItemLabel } from '@/navigation-menu-item/display/utils/getNavigationMenuItemLabel';
 import { ObjectIconWithViewOverlay } from '@/navigation-menu-item/display/view/components/ObjectIconWithViewOverlay';
+import { ObjectMetadataIcon } from '@/object-metadata/components/ObjectMetadataIcon';
 import { useGetStandardObjectIcon } from '@/object-metadata/hooks/useGetStandardObjectIcon';
 import { objectMetadataItemsSelector } from '@/object-metadata/states/objectMetadataItemsSelector';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
@@ -28,6 +38,9 @@ export const NavigationMenuItemIcon = ({
   navigationMenuItem: NavigationMenuItem;
 }) => {
   const { getIcon } = useIcons();
+  const isLayoutCustomizationModeEnabled = useAtomStateValue(
+    isLayoutCustomizationModeEnabledState,
+  );
   const objectMetadataItems = useAtomStateValue(objectMetadataItemsSelector);
   const views = useAtomStateValue(viewsSelector);
 
@@ -74,25 +87,58 @@ export const NavigationMenuItemIcon = ({
   }
 
   if (navigationMenuItem.type === NavigationMenuItemType.PAGE_LAYOUT) {
-    const pageLayoutIcon = isDefined(navigationMenuItem.icon)
+    const PageLayoutIcon = isDefined(navigationMenuItem.icon)
       ? getIcon(navigationMenuItem.icon)
       : undefined;
     const pageLayoutColor = getNavigationMenuItemColor(navigationMenuItem);
     const pageLayoutIconStyle = getIconTileColorShades(pageLayoutColor);
 
+    const pageIcon = isDefined(PageLayoutIcon) ? (
+      <ColoredIcon Icon={PageLayoutIcon} color={pageLayoutColor} />
+    ) : (
+      <Avatar
+        size="md"
+        shape="rounded-square"
+        name={navigationMenuItem.name ?? ''}
+        color={pageLayoutIconStyle.iconColor}
+        backgroundColor={pageLayoutIconStyle.backgroundColor}
+      />
+    );
+
+    return isLayoutCustomizationModeEnabled ? (
+      <NavigationMenuItemIconWithOverlay OverlayIcon={IconPerspective}>
+        {pageIcon}
+      </NavigationMenuItemIconWithOverlay>
+    ) : (
+      pageIcon
+    );
+  }
+
+  if (navigationMenuItem.type === NavigationMenuItemType.WORKFLOW) {
     return (
-      <StyledTintedIconTileContainer
-        $backgroundColor={pageLayoutIconStyle.backgroundColor}
-        $borderColor={pageLayoutIconStyle.borderColor}
-      >
-        <Avatar
-          size="sm"
-          type="icon"
-          Icon={pageLayoutIcon}
-          iconColor={pageLayoutIconStyle.iconColor}
-          placeholder={navigationMenuItem.name ?? ''}
-        />
-      </StyledTintedIconTileContainer>
+      <NavigationMenuItemWorkflowIcon navigationMenuItem={navigationMenuItem} />
+    );
+  }
+
+  if (navigationMenuItem.type === NavigationMenuItemType.AGENT) {
+    return (
+      <NavigationMenuItemAgentIcon navigationMenuItem={navigationMenuItem} />
+    );
+  }
+
+  if (navigationMenuItem.type === NavigationMenuItemType.NATIVE_PAGE) {
+    const nativePageConfig =
+      getNativePageNavigationMenuItemConfig(navigationMenuItem);
+
+    return (
+      <ColoredIcon
+        Icon={
+          isDefined(navigationMenuItem.icon)
+            ? getIcon(navigationMenuItem.icon)
+            : (nativePageConfig?.Icon ?? IconCompass)
+        }
+        color={getNavigationMenuItemColor(navigationMenuItem)}
+      />
     );
   }
 
@@ -102,6 +148,20 @@ export const NavigationMenuItemIcon = ({
       objectMetadataItems,
       views,
     });
+
+    if (isSafeInternalPath(computedLink)) {
+      return (
+        <ColoredIcon
+          Icon={
+            isDefined(navigationMenuItem.icon)
+              ? getIcon(navigationMenuItem.icon)
+              : IconLink
+          }
+          color={getNavigationMenuItemColor(navigationMenuItem)}
+        />
+      );
+    }
+
     return (
       <LinkIconWithLinkOverlay
         link={computedLink}
@@ -112,27 +172,9 @@ export const NavigationMenuItemIcon = ({
     );
   }
 
-  const itemIcon = isRecord
-    ? undefined
-    : objectMetadataItem?.icon
-      ? getIcon(objectMetadataItem.icon)
-      : undefined;
-  const iconToUse = StandardIcon ?? itemIcon;
-
-  const effectiveColor = getNavigationMenuItemColor(
-    navigationMenuItem,
-    objectMetadataItem,
-  );
-  const useStyledIcon = !isRecord;
-  const iconStyle = useStyledIcon
-    ? getIconTileColorShades(effectiveColor)
-    : null;
-
-  const iconColorToUse = iconStyle
-    ? iconStyle.iconColor
-    : StandardIcon
-      ? IconColor
-      : themeCssVariables.font.color.secondary;
+  if (!isRecord) {
+    return <ObjectMetadataIcon objectMetadataItem={objectMetadataItem} />;
+  }
 
   const labelIdentifier = getNavigationMenuItemLabel(
     navigationMenuItem,
@@ -150,28 +192,20 @@ export const NavigationMenuItemIcon = ({
         })
       : null;
 
-  const avatar = (
-    <Avatar
-      size={iconStyle ? 'sm' : 'md'}
-      type={recordIdentifier?.avatarType ?? 'icon'}
-      Icon={iconToUse}
-      iconColor={iconColorToUse}
-      avatarUrl={getAbsoluteImageUrl(recordIdentifier?.avatarUrl ?? '')}
-      placeholder={labelIdentifier}
-      placeholderColorSeed={navigationMenuItem.targetRecordId ?? undefined}
-    />
-  );
-
-  if (!iconStyle) {
-    return avatar;
-  }
-
   return (
-    <StyledTintedIconTileContainer
-      $backgroundColor={iconStyle.backgroundColor}
-      $borderColor={iconStyle.borderColor}
-    >
-      {avatar}
-    </StyledTintedIconTileContainer>
+    <Avatar
+      size="md"
+      shape={recordIdentifier?.avatarShape ?? 'rounded-square'}
+      icon={
+        isDefined(StandardIcon) ? (
+          <StandardIcon
+            color={IconColor ?? themeCssVariables.font.color.secondary}
+          />
+        ) : undefined
+      }
+      src={getAbsoluteImageUrl(recordIdentifier?.avatarUrl ?? '')}
+      name={labelIdentifier}
+      colorSeed={navigationMenuItem.targetRecordId ?? undefined}
+    />
   );
 };

@@ -1,4 +1,6 @@
+import { getRecordFieldColumnKey } from '@/object-record/record-field/utils/getRecordFieldColumnKey';
 import { hasRecordGroupsComponentSelector } from '@/object-record/record-group/states/selectors/hasRecordGroupsComponentSelector';
+import { useRecordTableColumnVirtualizationItemsContextOrThrow } from '@/object-record/record-table/contexts/RecordTableColumnVirtualizationItemsContext';
 import { useRecordTableContextOrThrow } from '@/object-record/record-table/contexts/RecordTableContext';
 import { useRecordTableRowContextOrThrow } from '@/object-record/record-table/contexts/RecordTableRowContext';
 import { useRecordTableRowDraggableContextOrThrow } from '@/object-record/record-table/contexts/RecordTableRowDraggableContext';
@@ -6,12 +8,21 @@ import { RecordTableCell } from '@/object-record/record-table/record-table-cell/
 import { RecordTableCellFirstRowFirstColumn } from '@/object-record/record-table/record-table-cell/components/RecordTableCellFirstRowFirstColumn';
 import { RecordTableCellStyleWrapper } from '@/object-record/record-table/record-table-cell/components/RecordTableCellStyleWrapper';
 import { RecordTableCellWrapper } from '@/object-record/record-table/record-table-cell/components/RecordTableCellWrapper';
+import { RecordTableFieldCell } from '@/object-record/record-table/record-table-row/components/RecordTableFieldCell';
 import { getRecordTableColumnFieldWidthClassName } from '@/object-record/record-table/utils/getRecordTableColumnFieldWidthClassName';
+import { RecordTableColumnSpacer } from '@/object-record/record-table/virtualization/components/RecordTableColumnSpacer';
+import { isRecordTableFirstRowComponentFamilySelector } from '@/object-record/record-table/states/selectors/isRecordTableFirstRowComponentFamilySelector';
+import { useAtomComponentFamilySelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentFamilySelectorValue';
 import { useAtomComponentSelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorValue';
 import { isDefined, isNonEmptyArray } from 'twenty-shared/utils';
 
 export const RecordTableFieldsCells = () => {
-  const { isSelected, rowIndex } = useRecordTableRowContextOrThrow();
+  const { isSelected, recordId } = useRecordTableRowContextOrThrow();
+
+  const isFirstRow = useAtomComponentFamilySelectorValue(
+    isRecordTableFirstRowComponentFamilySelector,
+    recordId,
+  );
 
   const { isDragging } = useRecordTableRowDraggableContextOrThrow();
 
@@ -21,13 +32,12 @@ export const RecordTableFieldsCells = () => {
     hasRecordGroupsComponentSelector,
   );
 
+  const columnVirtualizationItems =
+    useRecordTableColumnVirtualizationItemsContextOrThrow();
+
   if (!isNonEmptyArray(visibleRecordFields)) {
     return null;
   }
-
-  const recordFieldsAfterFirst = visibleRecordFields.slice(1);
-
-  const isFirstRow = rowIndex === 0;
 
   const firstRecordField = visibleRecordFields[0];
 
@@ -58,23 +68,31 @@ export const RecordTableFieldsCells = () => {
           </RecordTableCellStyleWrapper>
         )}
       </RecordTableCellWrapper>
-      {recordFieldsAfterFirst.map((recordField, recordFieldIndex) => (
-        <RecordTableCellWrapper
-          key={`${recordField.fieldMetadataItemId}${recordField.subFieldName ? `.${recordField.subFieldName}` : ''}`}
-          recordField={recordField}
-          recordFieldIndex={recordFieldIndex + 1}
-        >
-          <RecordTableCellStyleWrapper
+      {columnVirtualizationItems.map((columnVirtualizationItem) => {
+        if (columnVirtualizationItem.type === 'spacer') {
+          return (
+            <RecordTableColumnSpacer
+              key={`spacer-${columnVirtualizationItem.firstColumnIndex}`}
+              width={columnVirtualizationItem.width}
+              hasBottomBorder={!isDragging}
+            />
+          );
+        }
+
+        const { columnIndex } = columnVirtualizationItem;
+        const recordField = visibleRecordFields[columnIndex];
+
+        return (
+          <RecordTableFieldCell
+            // OMNIA-CUSTOM: sub-field columns share fieldMetadataItemId with their relation
+            key={getRecordFieldColumnKey(recordField)}
+            recordField={recordField}
+            recordFieldIndex={columnIndex}
             isSelected={isSelected}
             isDragging={isDragging}
-            widthClassName={getRecordTableColumnFieldWidthClassName(
-              recordFieldIndex + 1,
-            )}
-          >
-            <RecordTableCell />
-          </RecordTableCellStyleWrapper>
-        </RecordTableCellWrapper>
-      ))}
+          />
+        );
+      })}
     </>
   );
 };

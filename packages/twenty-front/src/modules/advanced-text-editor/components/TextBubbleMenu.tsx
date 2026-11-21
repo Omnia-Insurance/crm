@@ -1,74 +1,174 @@
+import { isNonEmptyArray } from '@sniptt/guards';
+import { Fragment, type ReactNode } from 'react';
+import { StyledBubbleMenuContainer } from '@/advanced-text-editor/components/StyledBubbleMenuContainer';
 import { BubbleMenuIconButton } from '@/advanced-text-editor/components/BubbleMenuIconButton';
-import { EditLinkPopover } from '@/advanced-text-editor/components/EditLinkPopover';
+import { BubbleMenuSeparator } from '@/advanced-text-editor/components/BubbleMenuSeparator';
+import { EditLinkDropdown } from '@/advanced-text-editor/components/EditLinkDropdown';
+import { RichTextColorDropdown } from '@/advanced-text-editor/components/RichTextColorDropdown';
 import { TurnIntoBlockDropdown } from '@/advanced-text-editor/components/TurnIntoBlockDropdown';
 import { useTextBubbleState } from '@/advanced-text-editor/hooks/useTextBubbleState';
+import { hasEditorExtension } from '@/advanced-text-editor/utils/hasEditorExtension';
 import { isTextSelected } from '@/advanced-text-editor/utils/isTextSelected';
-import { styled } from '@linaria/react';
+import { getEditLinkDropdownId } from '@/advanced-text-editor/utils/getEditLinkDropdownId';
 import { type Editor } from '@tiptap/core';
+import { NodeSelection } from '@tiptap/pm/state';
 import { BubbleMenu } from '@tiptap/react/menus';
 import {
+  IconAlignCenter,
+  IconAlignLeft,
+  IconAlignRight,
   IconBold,
+  IconCode,
   IconItalic,
   IconList,
   IconListNumbers,
   IconStrikethrough,
   IconUnderline,
 } from 'twenty-ui/icon';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
-
-export const StyledBubbleMenuContainer = styled.div`
-  backdrop-filter: blur(20px);
-  background-color: ${themeCssVariables.background.primary};
-  border-radius: ${themeCssVariables.border.radius.md};
-  box-shadow:
-    0px 2px 4px 0px ${themeCssVariables.background.transparent.light},
-    0px 0px 4px 0px ${themeCssVariables.background.transparent.medium};
-  display: inline-flex;
-  gap: 2px;
-  padding: 2px;
-`;
+import { useLingui } from '@lingui/react/macro';
 
 type TextBubbleMenuProps = {
   editor: Editor;
 };
 
 export const TextBubbleMenu = ({ editor }: TextBubbleMenuProps) => {
+  const { t } = useLingui();
   const state = useTextBubbleState(editor);
   const menuActions = [
     {
       Icon: IconBold,
+      label: t`Bold`,
+      extensionName: 'bold',
+      group: 'format',
       onClick: () => editor.chain().focus().toggleBold().run(),
       isActive: state.isBold,
     },
     {
       Icon: IconItalic,
+      label: t`Italic`,
+      extensionName: 'italic',
+      group: 'format',
       onClick: () => editor.chain().focus().toggleItalic().run(),
       isActive: state.isItalic,
     },
     {
       Icon: IconUnderline,
+      label: t`Underline`,
+      extensionName: 'underline',
+      group: 'format',
       onClick: () => editor.chain().focus().toggleUnderline().run(),
       isActive: state.isUnderline,
     },
     {
       Icon: IconStrikethrough,
+      label: t`Strikethrough`,
+      extensionName: 'strike',
+      group: 'format',
       onClick: () => editor.chain().focus().toggleStrike().run(),
       isActive: state.isStrike,
     },
     {
+      Icon: IconCode,
+      label: t`Code`,
+      extensionName: 'code',
+      group: 'format',
+      onClick: () => editor.chain().focus().toggleCode().run(),
+      isActive: state.isCode,
+    },
+    {
+      Icon: IconAlignLeft,
+      label: t`Align left`,
+      extensionName: 'textAlign',
+      group: 'align',
+      onClick: () => editor.chain().focus().setTextAlign('left').run(),
+      isActive: state.textAlignment === 'left',
+    },
+    {
+      Icon: IconAlignCenter,
+      label: t`Align center`,
+      extensionName: 'textAlign',
+      group: 'align',
+      onClick: () => editor.chain().focus().setTextAlign('center').run(),
+      isActive: state.textAlignment === 'center',
+    },
+    {
+      Icon: IconAlignRight,
+      label: t`Align right`,
+      extensionName: 'textAlign',
+      group: 'align',
+      onClick: () => editor.chain().focus().setTextAlign('right').run(),
+      isActive: state.textAlignment === 'right',
+    },
+    {
       Icon: IconList,
+      label: t`Bullet list`,
+      extensionName: 'bulletList',
+      group: 'list',
       onClick: () => editor.chain().focus().wrapInList('bulletList').run(),
       isActive: state.isBulletList,
     },
     {
       Icon: IconListNumbers,
+      label: t`Numbered list`,
+      extensionName: 'orderedList',
+      group: 'list',
       onClick: () => editor.chain().focus().wrapInList('orderedList').run(),
       isActive: state.isOrderedList,
     },
-  ];
+  ].filter(({ extensionName }) => hasEditorExtension(editor, extensionName));
+
+  const renderActions = (group: string) =>
+    menuActions
+      .filter((action) => action.group === group)
+      .map(({ label, Icon, onClick, isActive }) => (
+        <BubbleMenuIconButton
+          key={Icon.name || Icon.displayName || 'unknown'}
+          label={label}
+          Icon={Icon}
+          onClick={onClick}
+          isActive={isActive}
+        />
+      ));
+
+  const menuGroups: ReactNode[][] = [
+    hasEditorExtension(editor, 'heading')
+      ? [<TurnIntoBlockDropdown key="turn-into" editor={editor} />]
+      : [],
+    renderActions('format'),
+    hasEditorExtension(editor, 'richTextColor')
+      ? [
+          <RichTextColorDropdown
+            key="color"
+            editor={editor}
+            textColor={state.textColor}
+            backgroundColor={state.backgroundColor}
+          />,
+        ]
+      : [],
+    renderActions('align'),
+    renderActions('list'),
+    hasEditorExtension(editor, 'link')
+      ? [
+          <EditLinkDropdown
+            key="link"
+            dropdownId={getEditLinkDropdownId({
+              editorInstanceId: editor.instanceId,
+              bubbleMenuType: 'text',
+            })}
+            defaultValue={state.linkHref}
+            editor={editor}
+          />,
+        ]
+      : [],
+  ].filter(isNonEmptyArray);
 
   const handleShouldShow = () => {
     if (editor.isActive('image')) {
+      return false;
+    }
+
+    const { selection } = editor.state;
+    if (selection instanceof NodeSelection && selection.node.isAtom) {
       return false;
     }
 
@@ -83,18 +183,12 @@ export const TextBubbleMenu = ({ editor }: TextBubbleMenuProps) => {
       updateDelay={0}
     >
       <StyledBubbleMenuContainer>
-        <TurnIntoBlockDropdown editor={editor} />
-        {menuActions.map(({ Icon, onClick, isActive }) => {
-          return (
-            <BubbleMenuIconButton
-              key={Icon.name || Icon.displayName || 'unknown'}
-              Icon={Icon}
-              onClick={onClick}
-              isActive={isActive}
-            />
-          );
-        })}
-        <EditLinkPopover defaultValue={state.linkHref} editor={editor} />
+        {menuGroups.map((menuGroup, index) => (
+          <Fragment key={index}>
+            {index > 0 && <BubbleMenuSeparator />}
+            {menuGroup}
+          </Fragment>
+        ))}
       </StyledBubbleMenuContainer>
     </BubbleMenu>
   );

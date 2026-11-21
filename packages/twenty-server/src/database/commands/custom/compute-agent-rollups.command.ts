@@ -1,18 +1,12 @@
-// OMNIA-CUSTOM: Agent performance rollups.
-//
-// Computes per-agent metrics (total policies, 6-month placement rate, billable
-// hours, off-phone idle hours) and writes them onto agentProfile fields so they
-// can be displayed/ranked natively in a leaderboard dashboard. Idempotent
-// (ensures the fields exist, then recomputes and overwrites).
-//
-// Run with: npx nx run twenty-server:command workspace:compute-agent-rollups
-//   --dry-run   list the workspaces that would be computed without writing
+// OMNIA-CUSTOM: writes per-agent leaderboard metrics (policies, 6-month
+// placement rate, billable and off-phone hours) onto agentProfile fields.
+// Idempotent; --dry-run writes nothing. The hourly cron runs the same service.
 
 import { Command } from 'nest-commander';
 
-import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
-import { type RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
+import { ProvisionedWorkspaceCommandRunner } from 'src/database/commands/command-runners/provisioned-workspace.command-runner';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
+import { type RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
 import { AgentRollupService } from 'src/modules/agent-rollup/services/agent-rollup.service';
 
 @Command({
@@ -20,7 +14,7 @@ import { AgentRollupService } from 'src/modules/agent-rollup/services/agent-roll
   description:
     'Compute per-agent performance rollups (policies, placement rate, billable/off-phone hours) onto agentProfile fields. Idempotent.',
 })
-export class ComputeAgentRollupsCommand extends ActiveOrSuspendedWorkspaceCommandRunner {
+export class ComputeAgentRollupsCommand extends ProvisionedWorkspaceCommandRunner {
   constructor(
     protected readonly workspaceIteratorService: WorkspaceIteratorService,
     private readonly agentRollupService: AgentRollupService,

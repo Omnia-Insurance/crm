@@ -1,4 +1,4 @@
-import { type FieldMetadataTypesToTestForFilterInputValidation } from 'test/integration/graphql/suites/inputs-validation/types/field-metadata-type-to-test';
+import { type FieldMetadataTypesToTestForFilterInputValidation } from 'test/integration/graphql/suites/inputs-validation/types/field-metadata-type-to-test.type';
 import {
   joinColumnNameForManyToOneMorphRelationField1,
   TEST_TARGET_OBJECT_RECORD_ID,
@@ -420,11 +420,11 @@ export const successfulFilterInputByFieldMetadataType: {
   [FieldMetadataType.PHONES]: [
     {
       gqlFilterInput: {
-        phonesField: { primaryPhoneNumber: { eq: '1234567890' } },
+        phonesField: { primaryPhoneNumber: { eq: '123456789' } },
       },
-      restFilterInput: 'phonesField.primaryPhoneNumber[eq]:"1234567890"',
+      restFilterInput: 'phonesField.primaryPhoneNumber[eq]:"123456789"',
       validateFilter: (record: Record<string, any>) => {
-        return record.phonesField.primaryPhoneNumber === '1234567890';
+        return record.phonesField.primaryPhoneNumber === '123456789';
       },
     },
     {
@@ -849,6 +849,20 @@ export const successfulFilterInputByFieldMetadataType: {
         return isDefined(record.multiSelectField);
       },
     },
+    {
+      gqlFilterInput: { multiSelectField: { isEmptyArray: true } },
+      restFilterInput: '',
+      validateFilter: (record: Record<string, any>) => {
+        return record.multiSelectField.length === 0;
+      },
+    },
+    {
+      gqlFilterInput: { multiSelectField: { isEmptyArray: false } },
+      restFilterInput: '',
+      validateFilter: (record: Record<string, any>) => {
+        return record.multiSelectField.length > 0;
+      },
+    },
   ],
   [FieldMetadataType.ADDRESS]: [
     {
@@ -937,6 +951,15 @@ export const successfulFilterInputByFieldMetadataType: {
         return JSON.stringify(record.rawJsonField).includes('test');
       },
     },
+    {
+      gqlFilterInput: { rawJsonField: { ilike: '%TEST%' } },
+      restFilterInput: 'rawJsonField[ilike]:"%TEST%"',
+      validateFilter: (record: Record<string, any>) => {
+        return JSON.stringify(record.rawJsonField)
+          .toLowerCase()
+          .includes('test');
+      },
+    },
   ],
   [FieldMetadataType.ARRAY]: [
     {
@@ -956,6 +979,20 @@ export const successfulFilterInputByFieldMetadataType: {
         );
       },
     },
+    {
+      gqlFilterInput: { arrayField: { isEmptyArray: true } },
+      restFilterInput: '',
+      validateFilter: (record: Record<string, any>) => {
+        return record.arrayField.length === 0;
+      },
+    },
+    {
+      gqlFilterInput: { arrayField: { isEmptyArray: false } },
+      restFilterInput: '',
+      validateFilter: (record: Record<string, any>) => {
+        return record.arrayField.length > 0;
+      },
+    },
   ],
   [FieldMetadataType.FILES]: [
     {
@@ -970,6 +1007,18 @@ export const successfulFilterInputByFieldMetadataType: {
       restFilterInput: 'filesField[is]:NOT_NULL',
       validateFilter: (record: Record<string, any>) => {
         return Array.isArray(record.filesField) && record.filesField.length > 0;
+      },
+    },
+    {
+      gqlFilterInput: { filesField: { ilike: '%document.PDF%' } },
+      restFilterInput: 'filesField[ilike]:"%document.PDF%"',
+      validateFilter: (record: Record<string, any>) => {
+        return (
+          Array.isArray(record.filesField) &&
+          record.filesField.some(
+            (file: Record<string, any>) => file.label === 'Document.pdf',
+          )
+        );
       },
     },
   ],

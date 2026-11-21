@@ -1,4 +1,5 @@
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
+import { getDefaultAdvancedFilterOperand } from '@/object-record/advanced-filter/utils/getDefaultAdvancedFilterOperand';
 import { useGetInitialFilterValue } from '@/object-record/object-filter-dropdown/hooks/useGetInitialFilterValue';
 import { fieldMetadataItemIdUsedInDropdownComponentState } from '@/object-record/object-filter-dropdown/states/fieldMetadataItemIdUsedInDropdownComponentState';
 import { objectFilterDropdownCurrentRecordFilterComponentState } from '@/object-record/object-filter-dropdown/states/objectFilterDropdownCurrentRecordFilterComponentState';
@@ -9,21 +10,19 @@ import { subFieldNameUsedInDropdownComponentState } from '@/object-record/object
 import { useUpsertRecordFilter } from '@/object-record/record-filter/hooks/useUpsertRecordFilter';
 import { currentRecordFiltersComponentState } from '@/object-record/record-filter/states/currentRecordFiltersComponentState';
 import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
-import { getRecordFilterOperands } from '@/object-record/record-filter/utils/getRecordFilterOperands';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
+import { type RecordFilterOperand } from 'twenty-shared/types';
 import { getFilterTypeFromFieldType, isDefined } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
 
 type ApplyAdvancedFilterSourceFieldParams = {
   sourceFieldMetadataItem: FieldMetadataItem;
   recordFilterId: string;
+  // OMNIA-CUSTOM: the one-to-many has any / has no items pick their operand
+  operand?: RecordFilterOperand;
 };
 
-// Creates a leaf advanced filter from a source field selection. Composite
-// and many-to-one relation sources are handled by their own specialized
-// hooks (useApplyAdvancedFilterCompositeSubField,
-// useApplyAdvancedFilterRelationTargetField) — callers branch to those
-// before reaching this hook.
 export const useApplyAdvancedFilterSourceField = () => {
   const setSelectedOperandInDropdown = useSetAtomComponentState(
     selectedOperandInDropdownComponentState,
@@ -60,19 +59,25 @@ export const useApplyAdvancedFilterSourceField = () => {
   const applyAdvancedFilterSourceField = ({
     sourceFieldMetadataItem,
     recordFilterId,
+    operand,
   }: ApplyAdvancedFilterSourceFieldParams) => {
     setFieldMetadataItemIdUsedInDropdown(sourceFieldMetadataItem.id);
 
     const filterType = getFilterTypeFromFieldType(sourceFieldMetadataItem.type);
 
-    const defaultOperand = getRecordFilterOperands({
-      filterType,
-      subFieldName: null,
-      relationType: sourceFieldMetadataItem.relation?.type,
-    })[0];
+    // OMNIA-CUSTOM: explicit operand first; one-to-many defaults to emptiness
+    const defaultOperand =
+      operand ??
+      getDefaultAdvancedFilterOperand({
+        filterType,
+        subFieldName: null,
+        relationType: sourceFieldMetadataItem.relation?.type,
+      });
 
     if (!isDefined(defaultOperand)) {
-      throw new Error(`No valid operand found for filter type: ${filterType}`);
+      throw new Error(
+        doNotTranslate(`No valid operand found for filter type: ${filterType}`),
+      );
     }
 
     setSelectedOperandInDropdown(defaultOperand);

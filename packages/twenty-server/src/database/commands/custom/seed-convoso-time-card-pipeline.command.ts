@@ -1,21 +1,32 @@
-import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
 
 import { Command, Option } from 'nest-commander';
-import { DataSource, Repository } from 'typeorm';
+import { isDefined } from 'twenty-shared/utils';
+import { type DataSource, Repository } from 'typeorm';
 
-import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
+import { ProvisionedWorkspaceCommandRunner } from 'src/database/commands/command-runners/provisioned-workspace.command-runner';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
-import { type RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
+import {
+  type RunOnWorkspaceArgs,
+  type WorkspaceCommandOptions,
+} from 'src/database/commands/command-runners/workspace.command-runner';
 import { IngestionFieldMappingEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-field-mapping.entity';
 import { IngestionPipelineEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-pipeline.entity';
+import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
+import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
+import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 
 const PIPELINE_NAME = 'Convoso Agent Productivity Sync';
+
+type SeedConvosoTimeCardPipelineOptions = WorkspaceCommandOptions & {
+  force?: boolean;
+};
 
 @Command({
   name: 'workspace:seed-convoso-time-card-pipeline',
   description: 'Seed Convoso agent productivity → Time Card ingestion pipeline',
 })
-export class SeedConvosoTimeCardPipelineCommand extends ActiveOrSuspendedWorkspaceCommandRunner {
+export class SeedConvosoTimeCardPipelineCommand extends ProvisionedWorkspaceCommandRunner<SeedConvosoTimeCardPipelineOptions> {
   @Option({
     flags: '-f, --force',
     description: 'Delete and recreate the pipeline if it already exists.',
@@ -27,12 +38,12 @@ export class SeedConvosoTimeCardPipelineCommand extends ActiveOrSuspendedWorkspa
 
   constructor(
     protected readonly workspaceIteratorService: WorkspaceIteratorService,
-    @InjectRepository(IngestionPipelineEntity)
-    private readonly pipelineRepository: Repository<IngestionPipelineEntity>,
+    @InjectWorkspaceScopedRepository(IngestionPipelineEntity)
+    private readonly pipelineRepository: WorkspaceScopedRepository<IngestionPipelineEntity>,
+    // mapping rows are scoped through their pipeline and carry no workspaceId
+    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
     @InjectRepository(IngestionFieldMappingEntity)
     private readonly fieldMappingRepository: Repository<IngestionFieldMappingEntity>,
-    @InjectDataSource()
-    private readonly dataSource: DataSource,
   ) {
     super(workspaceIteratorService);
   }
@@ -40,16 +51,25 @@ export class SeedConvosoTimeCardPipelineCommand extends ActiveOrSuspendedWorkspa
   override async runOnWorkspace({
     workspaceId,
     options,
-  }: RunOnWorkspaceArgs): Promise<void> {
-    const force = (options as { force?: boolean }).force ?? false;
+    dataSource,
+  }: RunOnWorkspaceArgs<SeedConvosoTimeCardPipelineOptions>): Promise<void> {
+    const force = options.force ?? false;
 
     this.logger.log(`Seeding ${PIPELINE_NAME} for workspace ${workspaceId}`);
 
-    const existing = await this.pipelineRepository.findOne({
-      where: { workspaceId, name: PIPELINE_NAME },
+    if (!isDefined(dataSource)) {
+      this.logger.warn(
+        `No data source for workspace ${workspaceId}, skipping ${PIPELINE_NAME}`,
+      );
+
+      return;
+    }
+
+    const existing = await this.pipelineRepository.findOne(workspaceId, {
+      where: { name: PIPELINE_NAME },
     });
 
-    if (existing && !force) {
+    if (isDefined(existing) && !force) {
       this.logger.log(
         `Pipeline already exists for workspace ${workspaceId}, skipping (use --force to recreate)`,
       );
@@ -57,71 +77,68 @@ export class SeedConvosoTimeCardPipelineCommand extends ActiveOrSuspendedWorkspa
       return;
     }
 
-    if (existing && force) {
-      this.logger.log(`Deleting existing pipeline ${existing.id}`);
-      await this.pipelineRepository.delete(existing.id);
-    }
-
-    const pipeline = await this.pipelineRepository.save({
-      workspaceId,
-      name: PIPELINE_NAME,
-      description:
-        'Daily roll-up of Convoso agent productivity events into one Time Card per (agent, day).',
-      mode: 'pull',
-      targetObjectNameSingular: 'timeCard',
-      sourceUrl: 'https://api.convoso.com/v1/agent-productivity/search',
-      sourceHttpMethod: 'GET',
-      sourceAuthConfig: {
-        type: 'query_param',
-        paramName: 'auth_token',
-        envVar: 'CONVOSO_API_TOKEN',
-      },
-      sourceRequestConfig: {
-        dateRangeParams: {
-          startParam: 'date_start',
-          endParam: 'date_end',
-          // 26h lookback, snapped to the start of its LA-time calendar day.
-          // Time cards aggregate per (agent, day) and upsert by that day, so the
-          // window MUST cover whole days — a rolling intra-day window would
-          // re-aggregate a shrinking tail of each day as it ages out and
-          // overwrite the complete record with a partial one (collapsing older
-          // days toward zero). Snapping keeps every in-window day fully covered.
-          lookbackMinutes: 26 * 60,
-          timezone: 'America/Los_Angeles',
-          snapStartToDay: true,
-        },
-      },
-      paginationConfig: {
-        type: 'offset',
-        paramName: 'offset',
-        pageSize: 1000,
-      },
-      responseRecordsPath: 'data.entries',
-      // Composite dedup: one Time Card per (agent, day). The relation
-      // resolver fills the agent FK from convosoUserId before dedup runs.
-      // The column name varies by workspace based on what the relation
-      // field was named at object-creation time.
-      dedupFieldNames: [await this.resolveAgentColumn(workspaceId), 'date'],
-      // Hourly. Dedup is on (agent, date) so each run refreshes the same
-      // ~50 rows with the running daily totals — no row growth, current-
-      // day cards lag at most an hour. Timezone-agnostic by design.
-      schedule: '0 * * * *',
-      isEnabled: true,
-    });
-
-    this.logger.log(`Created pipeline ${pipeline.id}`);
+    const agentColumn = await this.resolveAgentColumn(dataSource, workspaceId);
 
     if (options.dryRun) {
-      this.logger.log('[DRY RUN] Would create field mappings (see below)');
+      this.logger.log(
+        isDefined(existing)
+          ? `[DRY RUN] Would delete pipeline ${existing.id} and recreate it with these field mappings`
+          : '[DRY RUN] Would create the pipeline with these field mappings',
+      );
       this.logFieldMappings();
 
       return;
     }
 
-    const mappings = this.buildFieldMappings(
-      pipeline.id,
-      await this.resolveAgentColumn(workspaceId),
+    if (isDefined(existing)) {
+      this.logger.log(`Deleting existing pipeline ${existing.id}`);
+      await this.pipelineRepository.delete(workspaceId, { id: existing.id });
+    }
+
+    const pipeline = await this.pipelineRepository.insertAndReturnOne(
+      workspaceId,
+      {
+        name: PIPELINE_NAME,
+        description:
+          'Daily roll-up of Convoso agent productivity events into one Time Card per (agent, day).',
+        mode: 'pull',
+        targetObjectNameSingular: 'timeCard',
+        sourceUrl: 'https://api.convoso.com/v1/agent-productivity/search',
+        sourceHttpMethod: 'GET',
+        sourceAuthConfig: {
+          type: 'query_param',
+          paramName: 'auth_token',
+          envVar: 'CONVOSO_API_TOKEN',
+        },
+        sourceRequestConfig: {
+          dateRangeParams: {
+            startParam: 'date_start',
+            endParam: 'date_end',
+            // Time cards upsert per (agent, day), so the window must cover
+            // whole days: a rolling intra-day window would overwrite each
+            // aging day with a partial aggregate.
+            lookbackMinutes: 26 * 60,
+            timezone: 'America/Los_Angeles',
+            snapStartToDay: true,
+          },
+        },
+        paginationConfig: {
+          type: 'offset',
+          paramName: 'offset',
+          pageSize: 1000,
+        },
+        responseRecordsPath: 'data.entries',
+        // the relation resolver fills the agent FK from convosoUserId before dedup runs
+        dedupFieldNames: [agentColumn, 'date'],
+        // hourly refresh of the same (agent, date) rows; no row growth
+        schedule: '0 * * * *',
+        isEnabled: true,
+      },
     );
+
+    this.logger.log(`Created pipeline ${pipeline.id}`);
+
+    const mappings = this.buildFieldMappings(pipeline.id, agentColumn);
 
     await this.fieldMappingRepository.save(mappings);
 
@@ -129,23 +146,16 @@ export class SeedConvosoTimeCardPipelineCommand extends ActiveOrSuspendedWorkspa
     this.logger.log(`Pipeline setup complete for workspace ${workspaceId}`);
   }
 
-  // The agent FK column on `_timeCard` is `agentId` or `agentsId` depending
-  // on what the relation field was named when the workspace's Time Card
-  // object was created via the UI (Twenty derives `{fieldName}Id`). Probe
-  // the workspace schema to figure out which one this workspace uses.
-  private async resolveAgentColumn(workspaceId: string): Promise<string> {
-    const rows = await this.dataSource.query(
-      `SELECT schema FROM core."dataSource" WHERE "workspaceId" = $1 LIMIT 1`,
-      [workspaceId],
-    );
-    const schemaName = rows?.[0]?.schema as string | undefined;
-
-    if (!schemaName) {
-      throw new Error(`No dataSource schema for workspace ${workspaceId}`);
-    }
+  // Twenty derives the FK column from the relation field name, which differed
+  // across workspaces (`agentId` or `agentsId`).
+  private async resolveAgentColumn(
+    dataSource: DataSource,
+    workspaceId: string,
+  ): Promise<string> {
+    const schemaName = getWorkspaceSchemaName(workspaceId);
 
     for (const candidate of ['agentId', 'agentsId']) {
-      const exists = await this.dataSource.query(
+      const rows: { exists: boolean }[] = await dataSource.query(
         `SELECT EXISTS (
           SELECT FROM information_schema.columns
           WHERE table_schema = $1 AND table_name = '_timeCard' AND column_name = $2
@@ -153,7 +163,7 @@ export class SeedConvosoTimeCardPipelineCommand extends ActiveOrSuspendedWorkspa
         [schemaName, candidate],
       );
 
-      if (exists?.[0]?.exists) {
+      if (rows[0]?.exists === true) {
         return candidate;
       }
     }

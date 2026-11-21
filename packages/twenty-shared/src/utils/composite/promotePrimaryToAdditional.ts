@@ -1,24 +1,12 @@
+import { type EmailsMetadata } from '@/types/composite-types/emails.composite-type';
 import {
   type AdditionalPhoneMetadata,
   type PhonesMetadata,
-} from '../../types/composite-types/phones.composite-type';
-import { type EmailsMetadata } from '../../types/composite-types/emails.composite-type';
+} from '@/types/composite-types/phones.composite-type';
 
-/**
- * Replace a Phones composite's primary number with `newPrimaryNumber`, pushing
- * the previous primary into `additionalPhones` so it isn't lost.
- *
- * Invariants:
- * - If the existing primary is empty/null → just set the new primary, no push.
- * - If the existing primary equals the new primary → no-op (return as-is).
- * - Otherwise push the previous primary into `additionalPhones`, deduped by `number`.
- * - The new primary is never simultaneously present in `additionalPhones`
- *   (any existing entry whose `number` matches the new primary is removed).
- *
- * Why: when reconciling a Book-of-Business against the CRM, the carrier-supplied
- * primary often differs from what we have. Overwriting silently loses contact
- * info. This keeps both numbers reachable.
- */
+// A carrier's book of business often disagrees with our primary phone; the old
+// primary moves to additionalPhones instead of being overwritten. The new
+// primary never also appears in additionalPhones.
 export const promotePrimaryPhoneToAdditional = (
   existing: PhonesMetadata | null | undefined,
   newPrimaryNumber: string,
@@ -31,7 +19,6 @@ export const promotePrimaryPhoneToAdditional = (
   const existingAdditional: AdditionalPhoneMetadata[] =
     existing?.additionalPhones ?? [];
 
-  // No-op: nothing to change.
   if (existingPrimary === newPrimaryNumber) {
     return {
       primaryPhoneNumber: existingPrimary,
@@ -43,12 +30,6 @@ export const promotePrimaryPhoneToAdditional = (
     };
   }
 
-  // Build the next additional list:
-  //   1. Start from existing additionals.
-  //   2. If the OLD primary was non-empty AND not already in the list,
-  //      append it as a new additional entry.
-  //   3. Drop any entry whose number matches the NEW primary (avoids dupes
-  //      when the new primary was previously demoted to additional).
   const next: AdditionalPhoneMetadata[] = [...existingAdditional];
 
   if (
@@ -76,10 +57,7 @@ export const promotePrimaryPhoneToAdditional = (
   };
 };
 
-/**
- * Email-flavored version of `promotePrimaryPhoneToAdditional`. Same invariants;
- * `additionalEmails` is `string[]` so dedupe is a direct equality check.
- */
+// Same rules as promotePrimaryPhoneToAdditional, for Emails composites.
 export const promotePrimaryEmailToAdditional = (
   existing: EmailsMetadata | null | undefined,
   newPrimaryEmail: string,

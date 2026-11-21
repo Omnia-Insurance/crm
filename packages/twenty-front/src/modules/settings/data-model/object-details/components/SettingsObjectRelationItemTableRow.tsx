@@ -1,31 +1,28 @@
+import { isDDLLockedState } from '@/client-config/states/isDDLLockedState';
 import { useDeleteOneFieldMetadataItem } from '@/object-metadata/hooks/useDeleteOneFieldMetadataItem';
 import { useFieldMetadataItem } from '@/object-metadata/hooks/useFieldMetadataItem';
 import { useGetIsMetadataItemCustom } from '@/object-metadata/hooks/useGetIsMetadataItemCustom';
 import { useGetRelationMetadata } from '@/object-metadata/hooks/useGetRelationMetadata';
-import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
-import { isDDLLockedState } from '@/client-config/states/isDDLLockedState';
+import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { isObjectMetadataReadOnly } from '@/object-record/read-only/utils/isObjectMetadataReadOnly';
 import { SettingsItemTypeTag } from '@/settings/components/SettingsItemTypeTag';
 import { SettingsNameCellSecondaryLabel } from '@/settings/components/SettingsNameCellSecondaryLabel';
+import { SettingsTextLink } from '@/settings/components/SettingsTextLink';
 import { RELATION_TYPES } from '@/settings/data-model/constants/RelationTypes';
 import { SettingsObjectFieldInactiveActionDropdown } from '@/settings/data-model/object-details/components/SettingsObjectFieldDisabledActionDropdown';
 import { TableCell } from '@/ui/layout/table/components/TableCell';
 import { TableRow } from '@/ui/layout/table/components/TableRow';
-import { styled } from '@linaria/react';
+import { UndecoratedLink } from '@/ui/navigation/link/components/UndecoratedLink/UndecoratedLink';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
-import { useContext, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { type MouseEvent, useMemo } from 'react';
 import { FieldMetadataType, SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath, isDefined } from 'twenty-shared/utils';
-import {
-  IconChevronRight,
-  IconRelationManyToMany,
-  useIcons,
-} from 'twenty-ui/icon';
-import { UndecoratedLink } from 'twenty-ui/navigation';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { IconChevronRight, IconRelationManyToMany } from 'twenty-ui/icon';
+import { useIcons } from 'twenty-ui/icon/provider';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
 import { useNavigateSettings } from '~/hooks/useNavigateSettings';
 
 type SettingsObjectRelationItemTableRowProps = {
@@ -63,32 +60,11 @@ const StyledRelationType = styled.div`
   gap: ${themeCssVariables.spacing[1]};
 `;
 
-const StyledLinkContainer = styled.div`
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-
-  > a {
-    color: ${themeCssVariables.font.color.primary};
-    overflow: hidden;
-    text-decoration: underline;
-    text-decoration-color: ${themeCssVariables.border.color.strong};
-    text-overflow: ellipsis;
-    text-underline-offset: 2px;
-    white-space: nowrap;
-
-    &:hover {
-      color: ${themeCssVariables.color.blue};
-      text-decoration-color: ${themeCssVariables.color.blue};
-    }
-  }
-`;
-
 export const SettingsObjectRelationItemTableRow = ({
   fieldMetadataItem,
   objectMetadataItem,
 }: SettingsObjectRelationItemTableRowProps) => {
-  const { theme } = useContext(ThemeContext);
+  const theme = useTheme();
   const { t } = useLingui();
   const navigate = useNavigateSettings();
   const { getIcon } = useIcons();
@@ -143,7 +119,7 @@ export const SettingsObjectRelationItemTableRow = ({
 
   const relationTypeLabel = (() => {
     if (isDefined(displayRelationType) === true) {
-      return RELATION_TYPES[displayRelationType].label;
+      return t(RELATION_TYPES[displayRelationType].label);
     }
     return '';
   })();
@@ -191,17 +167,17 @@ export const SettingsObjectRelationItemTableRow = ({
         )}
         <StyledNameContainer>
           {isRelatedObjectLinkable ? (
-            <StyledLinkContainer>
-              <Link
-                to={getSettingsPath(SettingsPath.ObjectDetail, {
-                  objectNamePlural: relationObjectMetadataItem.namePlural,
-                })}
-                onClick={(event) => event.stopPropagation()}
-                title={targetObjectLabel}
-              >
-                {targetObjectLabel}
-              </Link>
-            </StyledLinkContainer>
+            <SettingsTextLink
+              to={getSettingsPath(SettingsPath.ObjectDetail, {
+                objectNamePlural: relationObjectMetadataItem.namePlural,
+              })}
+              onClick={(event: MouseEvent<HTMLAnchorElement>) =>
+                event.stopPropagation()
+              }
+              title={targetObjectLabel}
+            >
+              {targetObjectLabel}
+            </SettingsTextLink>
           ) : (
             <StyledNameLabel title={targetObjectLabel}>
               {targetObjectLabel}

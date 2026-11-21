@@ -1,9 +1,9 @@
 import { styled } from '@linaria/react';
 import React from 'react';
 
-import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
+import { useIsMobile } from 'twenty-ui/utilities';
 
-import { MOBILE_VIEWPORT } from 'twenty-ui/theme-constants';
+import { MOBILE_VIEWPORT } from 'twenty-ui/theme';
 import { Step, type StepProps } from './Step';
 
 const StyledContainer = styled.div`
@@ -27,11 +27,10 @@ export const StepBar = ({ activeStep, children }: StepBarProps) => {
   return (
     <StyledContainer>
       {React.Children.map(children, (child, index) => {
-        if (!React.isValidElement(child)) {
+        if (!React.isValidElement<StepProps>(child)) {
           return null;
         }
 
-        // If the child is not a Step, return it as-is
         // oxlint-disable-next-line typescript/ban-ts-comment
         // @ts-expect-error
         if (child.type?.displayName !== Step.displayName) {
@@ -46,7 +45,7 @@ export const StepBar = ({ activeStep, children }: StepBarProps) => {
           return null;
         }
 
-        return React.cloneElement<StepProps>(child as any, {
+        return React.cloneElement<StepProps>(child, {
           index,
           isLast: index === React.Children.count(children) - 1,
           activeStep,

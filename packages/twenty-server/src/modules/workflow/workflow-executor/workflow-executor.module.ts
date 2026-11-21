@@ -1,12 +1,15 @@
+import { WorkflowCoreModule } from 'src/engine/core-modules/workflow/workflow-core.module';
 import { Module } from '@nestjs/common';
 
 import { BillingModule } from 'src/engine/core-modules/billing/billing.module';
-import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
 import { FeatureFlagModule } from 'src/engine/core-modules/feature-flag/feature-flag.module';
 import { MetricsModule } from 'src/engine/core-modules/metrics/metrics.module';
-import { WorkflowCommonModule } from 'src/modules/workflow/common/workflow-common.module';
+import { UsageLimitModule } from 'src/engine/core-modules/usage-limit/usage-limit.module';
+import { ApplicationWorkflowStepPermissionService } from 'src/modules/workflow/workflow-executor/services/application-workflow-step-permission.service';
+import { PermissionsModule } from 'src/engine/permissions/permissions.module';
 import { WorkflowActionFactory } from 'src/modules/workflow/workflow-executor/factories/workflow-action.factory';
 import { AiAgentActionModule } from 'src/modules/workflow/workflow-executor/workflow-actions/ai-agent/ai-agent-action.module';
+import { ClassifyActionModule } from 'src/modules/workflow/workflow-executor/workflow-actions/classify/classify-action.module';
 import { CodeActionModule } from 'src/modules/workflow/workflow-executor/workflow-actions/code/code-action.module';
 import { CreateCalendarEventActionModule } from 'src/modules/workflow/workflow-executor/workflow-actions/create-calendar-event/create-calendar-event-action.module';
 import { DelayActionModule } from 'src/modules/workflow/workflow-executor/workflow-actions/delay/delay-action.module';
@@ -17,34 +20,48 @@ import { HttpRequestActionModule } from 'src/modules/workflow/workflow-executor/
 import { IfElseActionModule } from 'src/modules/workflow/workflow-executor/workflow-actions/if-else/if-else-action.module';
 import { IteratorActionModule } from 'src/modules/workflow/workflow-executor/workflow-actions/iterator/iterator-action.module';
 import { LogicFunctionActionModule } from 'src/modules/workflow/workflow-executor/workflow-actions/logic-function/logic-function-action.module';
+import { McpToolActionModule } from 'src/modules/workflow/workflow-executor/workflow-actions/mcp-tool/mcp-tool-action.module';
 import { MailSenderActionModule } from 'src/modules/workflow/workflow-executor/workflow-actions/mail-sender/mail-sender-action.module';
+import { SendChatMessageActionModule } from 'src/modules/workflow/workflow-executor/workflow-actions/send-chat-message/send-chat-message-action.module';
+import { WaitForEventActionModule } from 'src/modules/workflow/workflow-executor/workflow-actions/wait-for-event/wait-for-event-action.module';
 import { RecordCRUDActionModule } from 'src/modules/workflow/workflow-executor/workflow-actions/record-crud/record-crud-action.module';
 import { WorkflowExecutorWorkspaceService } from 'src/modules/workflow/workflow-executor/workspace-services/workflow-executor.workspace-service';
 import { WorkflowRunModule } from 'src/modules/workflow/workflow-runner/workflow-run/workflow-run.module';
+import { WorkflowStepWaitModule } from 'src/modules/workflow/workflow-wait/workflow-step-wait.module';
 
 @Module({
   imports: [
-    WorkflowCommonModule,
+    WorkflowCoreModule,
     WorkflowRunModule,
     CodeActionModule,
     LogicFunctionActionModule,
+    McpToolActionModule,
     DelayActionModule,
+    WaitForEventActionModule,
     RecordCRUDActionModule,
     FormActionModule,
     BillingModule,
-    WorkspaceCacheModule,
     FilterActionModule,
     IfElseActionModule,
     IteratorActionModule,
     AiAgentActionModule,
+    ClassifyActionModule,
     EmptyActionModule,
     FeatureFlagModule,
     HttpRequestActionModule,
     MailSenderActionModule,
+    SendChatMessageActionModule,
     CreateCalendarEventActionModule,
     MetricsModule,
+    UsageLimitModule,
+    WorkflowStepWaitModule,
+    PermissionsModule,
   ],
-  providers: [WorkflowExecutorWorkspaceService, WorkflowActionFactory],
-  exports: [WorkflowExecutorWorkspaceService],
+  providers: [
+    WorkflowExecutorWorkspaceService,
+    WorkflowActionFactory,
+    ApplicationWorkflowStepPermissionService,
+  ],
+  exports: [WorkflowExecutorWorkspaceService, WorkflowActionFactory],
 })
 export class WorkflowExecutorModule {}

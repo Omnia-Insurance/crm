@@ -58,9 +58,7 @@ describe('invertColumnMapping', () => {
       },
     });
 
-    expect(lookup.get('expirationDate')?.mappedHeader).toBe(
-      'Policy Term Date',
-    );
+    expect(lookup.get('expirationDate')?.mappedHeader).toBe('Policy Term Date');
   });
 
   it('layers computed output keys onto mapped entries', () => {
@@ -166,6 +164,8 @@ describe('resolveBobValue', () => {
   it('returns null when nothing resolves', () => {
     const lookup = invertColumnMapping(null);
 
-    expect(resolveBobValue({}, lookup, 'policyNumber', ['policy_number'])).toBeNull();
+    expect(
+      resolveBobValue({}, lookup, 'policyNumber', ['policy_number']),
+    ).toBeNull();
   });
 });

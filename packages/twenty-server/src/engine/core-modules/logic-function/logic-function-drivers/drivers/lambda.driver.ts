@@ -6,7 +6,20 @@ import {
 } from '@aws-sdk/client-lambda';
 import { Logger } from '@nestjs/common';
 
+import { LambdaAwsClientService } from 'src/engine/core-modules/logic-function/logic-function-drivers/drivers/lambda/services/lambda-aws-client.service';
+import { LambdaExecutorManagerService } from 'src/engine/core-modules/logic-function/logic-function-drivers/drivers/lambda/services/lambda-executor-manager.service';
+import { LambdaLayerManagerService } from 'src/engine/core-modules/logic-function/logic-function-drivers/drivers/lambda/services/lambda-layer-manager.service';
+import { LambdaToolFunctionsService } from 'src/engine/core-modules/logic-function/logic-function-drivers/drivers/lambda/services/lambda-tool-functions.service';
 import {
+  type LambdaDriverExecutorPayload,
+  type LambdaDriverOptions,
+  LambdaExecutionPhase,
+} from 'src/engine/core-modules/logic-function/logic-function-drivers/drivers/lambda/types/lambda-driver.type';
+import { HTTP_EGRESS_UNAVAILABLE_ERROR_CODE } from 'src/engine/core-modules/logic-function/logic-function-drivers/drivers/lambda/utils/build-http-egress-unavailable-response.util';
+import { buildLogicFunctionTimeoutResult } from 'src/engine/core-modules/logic-function/logic-function-drivers/drivers/lambda/utils/build-logic-function-timeout-result.util';
+import { parseLambdaLogResult } from 'src/engine/core-modules/logic-function/logic-function-drivers/drivers/lambda/utils/parse-lambda-log-result.util';
+import {
+  type LogicFunctionDeleteApplicationResourcesParams,
   type LogicFunctionDriver,
   type LogicFunctionExecuteParams,
   type LogicFunctionExecuteResult,
@@ -14,19 +27,17 @@ import {
   type LogicFunctionTranspileParams,
   type LogicFunctionTranspileResult,
 } from 'src/engine/core-modules/logic-function/logic-function-drivers/interfaces/logic-function-driver.interface';
-
-import { type LogicFunctionResourceService } from 'src/engine/core-modules/logic-function/logic-function-resource/logic-function-resource.service';
 import {
-  type LambdaDriverExecutorPayload,
-  type LambdaDriverOptions,
-  LambdaExecutionPhase,
-} from 'src/engine/core-modules/logic-function/logic-function-drivers/drivers/lambda/types/lambda-driver.type';
-import { LambdaAwsClientService } from 'src/engine/core-modules/logic-function/logic-function-drivers/drivers/lambda/services/lambda-aws-client.service';
-import { LambdaExecutorManagerService } from 'src/engine/core-modules/logic-function/logic-function-drivers/drivers/lambda/services/lambda-executor-manager.service';
-import { LambdaLayerManagerService } from 'src/engine/core-modules/logic-function/logic-function-drivers/drivers/lambda/services/lambda-layer-manager.service';
-import { LambdaToolFunctionsService } from 'src/engine/core-modules/logic-function/logic-function-drivers/drivers/lambda/services/lambda-tool-functions.service';
-import { buildLogicFunctionTimeoutResult } from 'src/engine/core-modules/logic-function/logic-function-drivers/drivers/lambda/utils/build-logic-function-timeout-result.util';
-import { parseLambdaLogResult } from 'src/engine/core-modules/logic-function/logic-function-drivers/drivers/lambda/utils/parse-lambda-log-result.util';
+  type BrowserTranspileParams,
+  type BrowserTranspileResult,
+  type BrowserDependenciesBuildParams,
+  type TranspileParams,
+  type TranspileResult,
+} from 'src/engine/core-modules/logic-function/logic-function-drivers/types/transpile.type';
+import { getWorkflowCodeStepLogicFunctionId } from 'src/engine/core-modules/logic-function/logic-function-executor/utils/get-workflow-code-step-logic-function-id.util';
+import { type LogicFunctionResourceService } from 'src/engine/core-modules/logic-function/logic-function-resource/logic-function-resource.service';
+import { type HttpEgressRequest } from 'src/engine/core-modules/tool/tools/http-tool/types/http-egress-request.type';
+import { type HttpEgressResponse } from 'src/engine/core-modules/tool/tools/http-tool/types/http-egress-response.type';
 import { HANDLER_NAME_REGEX } from 'src/engine/metadata-modules/logic-function/constants/handler.contant';
 import { LogicFunctionExecutionStatus } from 'src/engine/metadata-modules/logic-function/dtos/logic-function-execution-result.dto';
 import { LogicFunctionExecutionMode } from 'src/engine/metadata-modules/logic-function/logic-function.entity';
@@ -60,13 +71,18 @@ export class LambdaDriver implements LogicFunctionDriver {
     this.toolFunctions = new LambdaToolFunctionsService(
       options,
       this.awsClient,
+      options.cacheLockService,
+      new LambdaAwsClientService(options, 1),
     );
     this.layerManager = new LambdaLayerManagerService(
       options,
       this.awsClient,
       this.toolFunctions,
-      options.logicFunctionResourceService,
+      options.applicationDependencyFilesService,
       options.sdkClientArchiveService,
+      options.cacheLockService,
+      options.workspaceCacheService,
+      options.coreEntityCacheService,
     );
     this.executorManager = new LambdaExecutorManagerService(
       options,
@@ -78,18 +94,19 @@ export class LambdaDriver implements LogicFunctionDriver {
     );
   }
 
-  async transpile({
-    sourceCode,
-    sourceFileName,
-    builtFileName,
-  }: LogicFunctionTranspileParams): Promise<LogicFunctionTranspileResult> {
-    const { builtCode } = await this.toolFunctions.transpile({
-      sourceCode,
-      sourceFileName,
-      builtFileName,
-    });
+  async transpile(
+    params: LogicFunctionTranspileParams,
+  ): Promise<LogicFunctionTranspileResult>;
+  async transpile(
+    params: BrowserTranspileParams,
+  ): Promise<BrowserTranspileResult>;
+  async transpile(params: TranspileParams): Promise<TranspileResult>;
+  async transpile(params: TranspileParams): Promise<TranspileResult> {
+    return this.toolFunctions.transpile(params);
+  }
 
-    return { builtCode };
+  async buildDependencies(params: BrowserDependenciesBuildParams) {
+    return this.toolFunctions.buildDependencies(params);
   }
 
   async delete(flatLogicFunction: FlatLogicFunction): Promise<void> {
@@ -99,10 +116,14 @@ export class LambdaDriver implements LogicFunctionDriver {
   async deleteApplicationResources({
     workspaceId,
     applicationUniversalIdentifier,
-  }: {
-    workspaceId: string;
-    applicationUniversalIdentifier: string;
-  }): Promise<void> {
+  }: LogicFunctionDeleteApplicationResourcesParams): Promise<void> {
+    await this.executorManager.delete({
+      id: getWorkflowCodeStepLogicFunctionId({
+        workspaceId,
+        applicationUniversalIdentifier,
+      }),
+    });
+
     await this.layerManager.deleteSdkLayer({
       workspaceId,
       applicationUniversalIdentifier,
@@ -124,8 +145,8 @@ export class LambdaDriver implements LogicFunctionDriver {
   async execute({
     flatLogicFunction,
     flatApplication,
-    applicationUniversalIdentifier,
     payload,
+    context,
     env,
     timeoutMs = 900_000,
     forceExecutionMode,
@@ -152,7 +173,6 @@ export class LambdaDriver implements LogicFunctionDriver {
       await this.executorManager.buildExecutor({
         flatLogicFunction,
         flatApplication,
-        applicationUniversalIdentifier,
       });
       buildExecutorMs = Date.now() - buildStart;
 
@@ -168,6 +188,7 @@ export class LambdaDriver implements LogicFunctionDriver {
 
       const executorPayload: LambdaDriverExecutorPayload = {
         params: payload,
+        context,
         env: env ?? {},
         handlerName: flatLogicFunction.handlerName,
       };
@@ -178,7 +199,7 @@ export class LambdaDriver implements LogicFunctionDriver {
         executorPayload.code =
           await this.logicFunctionResourceService.getBuiltCode({
             workspaceId: flatLogicFunction.workspaceId,
-            applicationUniversalIdentifier,
+            applicationUniversalIdentifier: flatApplication.universalIdentifier,
             builtHandlerPath: flatLogicFunction.builtHandlerPath,
           });
         getBuiltCodeMs = Date.now() - fetchStart;
@@ -197,10 +218,16 @@ export class LambdaDriver implements LogicFunctionDriver {
       const lambdaClient = await this.awsClient.getLambdaClient();
 
       const invokeStart = Date.now();
-      const result = await lambdaClient.send(command, {
-        abortSignal: AbortSignal.timeout(timeoutMs),
-      });
-      const invokeSendMs = Date.now() - invokeStart;
+      const result = await lambdaClient
+        .send(command, { abortSignal: AbortSignal.timeout(timeoutMs) })
+        .catch(async (error) => {
+          await this.executorManager.clearLambdaExecutorCache(
+            flatLogicFunction,
+          );
+
+          throw error;
+        });
+      const invokeDurationMs = Date.now() - invokeStart;
 
       const parsedResult = result.Payload
         ? JSON.parse(result.Payload.transformToString())
@@ -209,7 +236,7 @@ export class LambdaDriver implements LogicFunctionDriver {
       const {
         logs,
         initDurationMs,
-        billedDurationMs,
+        billedDurationMs: awsBilledDurationMs,
         reportDurationMs,
         coldStart,
       } = parseLambdaLogResult(result.LogResult);
@@ -217,13 +244,14 @@ export class LambdaDriver implements LogicFunctionDriver {
       const duration = Date.now() - invokeFlowStart;
 
       this.logger.log(
-        `[lambda-timing] fnId=${flatLogicFunction.id} executionMode=${executionMode} totalMs=${Date.now() - buildStart} buildExecutorMs=${buildExecutorMs} getBuiltCodeMs=${getBuiltCodeMs} payloadBytes=${Buffer.byteLength(payloadString, 'utf8')} invokeSendMs=${invokeSendMs} reportDurationMs=${reportDurationMs ?? 'n/a'} billedMs=${billedDurationMs ?? 'n/a'} initDurationMs=${initDurationMs ?? 'n/a'} coldStart=${coldStart}`,
+        `[lambda-timing] fnId=${flatLogicFunction.id} executionMode=${executionMode} totalMs=${Date.now() - buildStart} buildExecutorMs=${buildExecutorMs} getBuiltCodeMs=${getBuiltCodeMs} payloadBytes=${Buffer.byteLength(payloadString, 'utf8')} invokeDurationMs=${invokeDurationMs} reportDurationMs=${reportDurationMs ?? 'n/a'} awsBilledDurationMs=${awsBilledDurationMs ?? 'n/a'} initDurationMs=${initDurationMs ?? 'n/a'} coldStart=${coldStart}`,
       );
 
       if (result.FunctionError) {
         return {
           data: null,
           duration,
+          billedDurationMs: invokeDurationMs,
           status: LogicFunctionExecutionStatus.ERROR,
           error: parsedResult,
           logs,
@@ -234,6 +262,7 @@ export class LambdaDriver implements LogicFunctionDriver {
         data: parsedResult,
         logs,
         duration,
+        billedDurationMs: invokeDurationMs,
         status: LogicFunctionExecutionStatus.SUCCESS,
       };
     } catch (error) {
@@ -285,5 +314,21 @@ export class LambdaDriver implements LogicFunctionDriver {
         LogicFunctionExceptionCode.LOGIC_FUNCTION_PLATFORM_EXECUTION_ERROR,
       );
     }
+  }
+
+  async executeHttpRequest(
+    request: HttpEgressRequest,
+  ): Promise<HttpEgressResponse> {
+    const response = await this.toolFunctions.executeHttpRequest(request);
+
+    if (
+      response.outcomeDetails.errorCode === HTTP_EGRESS_UNAVAILABLE_ERROR_CODE
+    ) {
+      this.logger.error(
+        `HTTP egress Lambda unavailable for workspace ${request.context.workspaceId}: ${response.outcomeDetails.reason}`,
+      );
+    }
+
+    return response;
   }
 }

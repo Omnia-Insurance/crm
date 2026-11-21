@@ -1,105 +1,124 @@
+import { ToolCategory } from 'twenty-shared/ai';
+
+import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import { executeToolFromToolSet } from 'src/engine/core-modules/tool-provider/utils/execute-tool-from-tool-set.util';
+import { createMockCodeStep } from 'src/modules/workflow/workflow-executor/utils/create-mock-workflow-steps.util';
 import { createUpdateWorkflowVersionStepTool } from 'src/modules/workflow/workflow-tools/tools/update-workflow-version-step.tool';
 
-const mockStep = {
-  id: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
-  name: 'Send email',
-  type: 'SEND_EMAIL',
-  valid: true,
-  settings: { input: {} },
-};
+const CORE_WORKFLOW_VERSION_ID = 'b3b8a4f0-0000-4000-8000-000000000000';
+const AUTH_CONTEXT = {
+  type: 'user',
+  workspace: { id: 'workspace-id' },
+} as WorkspaceAuthContext;
 
-const buildTool = ({
-  validationResult = { valid: true, errors: [], warnings: [] },
-}: {
-  validationResult?: object;
-} = {}) => {
-  const workflowVersionStepService = {
-    updateWorkflowVersionStep: jest.fn().mockResolvedValue(mockStep),
-  };
-  const workflowValidationService = {
-    validateWorkflowVersion: jest.fn().mockResolvedValue(validationResult),
+const mockStep = createMockCodeStep('f47ac10b-58cc-4372-a567-0e02b2c3d479');
+
+const buildTool = () => {
+  const coreWorkflowVersionMutationService = {
+    updateStep: jest.fn().mockResolvedValue(mockStep),
   };
 
   const tool = createUpdateWorkflowVersionStepTool(
+    { coreWorkflowVersionMutationService } as never,
     {
-      workflowVersionStepService,
-      workflowValidationService,
-    } as never,
-    { workspaceId: 'workspace-id' },
+      workspaceId: 'workspace-id',
+      authContext: AUTH_CONTEXT,
+    },
   );
 
-  return { tool, workflowVersionStepService, workflowValidationService };
+  return { tool, coreWorkflowVersionMutationService };
 };
 
 const baseInput = {
-  workflowVersionId: 'b3b8a4f0-0000-4000-8000-000000000000',
+  coreWorkflowVersionId: CORE_WORKFLOW_VERSION_ID,
   step: mockStep,
-} as unknown as Parameters<
-  ReturnType<typeof createUpdateWorkflowVersionStepTool>['execute']
->[0];
+};
 
 describe('createUpdateWorkflowVersionStepTool', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it('should validate by default and return a compact summary', async () => {
-    const { tool, workflowValidationService } = buildTool({
-      validationResult: {
-        valid: false,
-        errors: [
-          {
-            severity: 'error',
-            code: 'DANGLING_REFERENCE',
-            message: 'Unknown variable',
-            availablePaths: ['{{trigger.x}}'],
-          },
-        ],
-        warnings: [{ severity: 'warning', code: 'NO_STEPS', message: 'w' }],
-      },
+  it('updates the step on the core version and returns the result', async () => {
+    const { tool, coreWorkflowVersionMutationService } = buildTool();
+
+    const result = await tool.execute(baseInput);
+
+    expect(coreWorkflowVersionMutationService.updateStep).toHaveBeenCalledWith({
+      workspaceId: 'workspace-id',
+      coreWorkflowVersionId: CORE_WORKFLOW_VERSION_ID,
+      step: mockStep,
     });
-
-    const result = (await tool.execute(baseInput)) as Record<string, unknown>;
-
-    expect(
-      workflowValidationService.validateWorkflowVersion,
-    ).toHaveBeenCalled();
-
-    const validation = result.validation as Record<string, unknown>;
-
-    expect(validation.valid).toBe(false);
-    expect(validation.errorCount).toBe(1);
-    expect(validation.warningCount).toBe(1);
-    expect(validation).not.toHaveProperty('warnings');
-    expect((validation.errors as object[])[0]).not.toHaveProperty(
-      'availablePaths',
-    );
+    expect(result).toEqual(mockStep);
   });
 
-  it('should skip validation entirely when validate is false', async () => {
-    const { tool, workflowValidationService } = buildTool();
+  it('returns a failure when the update throws', async () => {
+    const { tool, coreWorkflowVersionMutationService } = buildTool();
 
-    const result = (await tool.execute({
-      ...baseInput,
-      validate: false,
-    })) as Record<string, unknown>;
-
-    expect(
-      workflowValidationService.validateWorkflowVersion,
-    ).not.toHaveBeenCalled();
-    expect(result).not.toHaveProperty('validation');
-  });
-
-  it('should still return the step result when validation throws', async () => {
-    const { tool, workflowValidationService } = buildTool();
-
-    workflowValidationService.validateWorkflowVersion.mockRejectedValue(
+    coreWorkflowVersionMutationService.updateStep.mockRejectedValue(
       new Error('boom'),
     );
 
     const result = (await tool.execute(baseInput)) as Record<string, unknown>;
 
-    expect(result.validationError).toBe('boom');
-    expect(result).not.toHaveProperty('validation');
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('boom');
+  });
+
+  describe('called by the AI through its tool set', () => {
+    const upsertRecordStepWithFieldsToUpdate = ({
+      fieldsToUpdate,
+    }: {
+      fieldsToUpdate: string[];
+    }) => ({
+      id: 'a1b2c3d4-0000-4000-8000-000000000001',
+      name: 'Create or update company',
+      type: 'UPSERT_RECORD',
+      valid: true,
+      settings: {
+        input: {
+          objectName: 'company',
+          objectRecord: { name: 'Acme', domainName: 'acme.com' },
+          fieldsToUpdate,
+        },
+        outputSchema: {},
+        errorHandlingOptions: {
+          retryOnFailure: { value: 0 },
+          continueOnFailure: { value: false },
+        },
+      },
+    });
+
+    const callThroughToolSet = ({ step }: { step: object }) => {
+      const { tool, coreWorkflowVersionMutationService } = buildTool();
+
+      return {
+        coreWorkflowVersionMutationService,
+        output: executeToolFromToolSet(
+          Object.fromEntries([[tool.name, tool]]),
+          tool.name,
+          { coreWorkflowVersionId: CORE_WORKFLOW_VERSION_ID, step },
+          ToolCategory.WORKFLOW,
+        ),
+      };
+    };
+
+    it('refuses fieldsToUpdate on an upsert record step, which writes its whole objectRecord', async () => {
+      const { coreWorkflowVersionMutationService, output } = callThroughToolSet(
+        {
+          step: upsertRecordStepWithFieldsToUpdate({
+            fieldsToUpdate: ['name'],
+          }),
+        },
+      );
+
+      expect(await output).toMatchObject({
+        success: false,
+        error: expect.stringContaining('Unrecognized key: "fieldsToUpdate"'),
+      });
+      expect(
+        coreWorkflowVersionMutationService.updateStep,
+      ).not.toHaveBeenCalled();
+    });
   });
 });

@@ -1,22 +1,82 @@
 import type { ApplicationRegistrationData } from '~/pages/settings/applications/tabs/types/ApplicationRegistrationData';
-import { useQuery } from '@apollo/client/react';
-import { FindApplicationRegistrationVariablesDocument } from '~/generated-metadata/graphql';
-import { FindAdminApplicationRegistrationVariablesDocument } from '~/generated-admin/graphql';
-import { Section } from 'twenty-ui/layout';
-import { Status } from 'twenty-ui/data-display';
-import { H2Title } from 'twenty-ui/typography';
+import { useMutation, useQuery } from '@apollo/client/react';
+import {
+  FindApplicationRegistrationVariablesDocument,
+  UpdateApplicationRegistrationVariableDocument,
+} from '~/generated-metadata/graphql';
+import {
+  FindAdminApplicationRegistrationVariablesDocument,
+  FindOneAdminApplicationRegistrationDocument,
+  UpdateAdminApplicationRegistrationVariableDocument,
+} from '~/generated-admin/graphql';
+import { styled } from '@linaria/react';
+import { Section } from 'twenty-ui/components/layout';
+import { themeCssVariables } from 'twenty-ui/theme';
 import { useLingui } from '@lingui/react/macro';
-import { getSettingsPath } from 'twenty-shared/utils';
-import { SettingsPath } from 'twenty-shared/types';
-import { ConfigVariableTable } from '@/settings/config-variables/components/ConfigVariableTable';
+import { useState } from 'react';
+import { type ApplicationVariableOption } from 'twenty-shared/application';
+import { useDebouncedCallback } from 'use-debounce';
+import { SettingsApplicationVariableInput } from '@/settings/applications/components/SettingsApplicationVariableInput';
+import { SettingsApplicationVariableLabelRow } from '@/settings/applications/components/SettingsApplicationVariableLabelRow';
+import { shouldDisplayVariable } from '@/settings/applications/utils/shouldDisplayVariable';
 import { useApolloAdminClient } from '@/settings/admin-panel/apollo/hooks/useApolloAdminClient';
+
+type ConfigVariable = {
+  id: string;
+  key: string;
+  value?: string | null;
+  type?: string | null;
+  options?: ApplicationVariableOption[] | null;
+  isSecret?: boolean | null;
+  isFilled?: boolean | null;
+};
+
+const ConfigVariableInput = ({
+  variable,
+  onUpdate,
+}: {
+  variable: ConfigVariable;
+  onUpdate: (id: string, value: string) => void;
+}) => {
+  const { t } = useLingui();
+
+  const isSecretFilled =
+    variable.isSecret === true && variable.isFilled === true;
+
+  const [value, setValue] = useState(
+    isSecretFilled ? '' : (variable.value ?? ''),
+  );
+
+  const onUpdateDebounced = useDebouncedCallback((newValue: string) => {
+    onUpdate(variable.id, newValue);
+  }, 250);
+
+  return (
+    <SettingsApplicationVariableInput
+      type={variable.type}
+      value={value}
+      options={variable.options}
+      onChange={(newValue) => {
+        setValue(newValue);
+        onUpdateDebounced(newValue);
+      }}
+      placeholder={isSecretFilled ? (variable.value ?? undefined) : t`Value`}
+    />
+  );
+};
+
+const StyledContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: ${themeCssVariables.spacing[4]};
+`;
 
 export const SettingsApplicationRegistrationConfigTab = ({
   registration,
-  fromAdmin,
+  isAdminView,
 }: {
   registration: ApplicationRegistrationData;
-  fromAdmin?: boolean;
+  isAdminView?: boolean;
 }) => {
   const { t } = useLingui();
   const apolloAdminClient = useApolloAdminClient();
@@ -27,7 +87,7 @@ export const SettingsApplicationRegistrationConfigTab = ({
     FindApplicationRegistrationVariablesDocument,
     {
       variables: { applicationRegistrationId },
-      skip: !applicationRegistrationId || fromAdmin === true,
+      skip: !applicationRegistrationId || isAdminView === true,
     },
   );
 
@@ -36,38 +96,76 @@ export const SettingsApplicationRegistrationConfigTab = ({
     {
       client: apolloAdminClient,
       variables: { applicationRegistrationId },
-      skip: !applicationRegistrationId || fromAdmin !== true,
+      skip: !applicationRegistrationId || isAdminView !== true,
     },
   );
 
-  const variables = fromAdmin
-    ? (adminVariablesData?.findAdminApplicationRegistrationVariables ?? [])
-    : (workspaceVariablesData?.findApplicationRegistrationVariables ?? []);
+  const [updateWorkspaceVariable] = useMutation(
+    UpdateApplicationRegistrationVariableDocument,
+    {
+      refetchQueries: [FindApplicationRegistrationVariablesDocument],
+    },
+  );
 
-  const configVariables = variables.map((variable) => ({
-    name: variable.key,
-    description: variable.description,
-    value: variable.value ?? <Status color="gray" text={t`Not set`} />,
-    to: getSettingsPath(
-      fromAdmin
-        ? SettingsPath.AdminPanelApplicationRegistrationConfigVariableDetails
-        : SettingsPath.ApplicationRegistrationConfigVariableDetails,
-      {
-        applicationRegistrationId,
-        variableKey: variable.key,
-      },
-    ),
-  }));
+  const [updateAdminVariable] = useMutation(
+    UpdateAdminApplicationRegistrationVariableDocument,
+    {
+      client: apolloAdminClient,
+      refetchQueries: [
+        FindAdminApplicationRegistrationVariablesDocument,
+        FindOneAdminApplicationRegistrationDocument,
+      ],
+    },
+  );
+
+  const variables = (
+    isAdminView
+      ? (adminVariablesData?.findAdminApplicationRegistrationVariables ?? [])
+      : (workspaceVariablesData?.findApplicationRegistrationVariables ?? [])
+  ).filter((variable) =>
+    shouldDisplayVariable({
+      isDeprecated: variable.isDeprecated,
+      hasValue: variable.isFilled,
+    }),
+  );
+
+  const handleUpdate = (id: string, value: string) => {
+    if (isAdminView === true) {
+      updateAdminVariable({
+        variables: { input: { id, update: { value } } },
+      });
+    } else {
+      updateWorkspaceVariable({
+        variables: { input: { id, update: { value } } },
+      });
+    }
+  };
 
   return (
     variables.length > 0 && (
-      <Section>
-        <H2Title
+      <Section.Root>
+        <Section.Header
           title={t`Server Variables`}
           description={t`Server variables are applied to all workspace installations.`}
         />
-        <ConfigVariableTable configVariables={configVariables} />
-      </Section>
+        <StyledContainer>
+          {variables.map((variable) => {
+            return (
+              <div key={variable.key}>
+                <SettingsApplicationVariableLabelRow
+                  variableKey={variable.key}
+                  isDeprecated={variable.isDeprecated}
+                  description={variable.description}
+                />
+                <ConfigVariableInput
+                  variable={variable as ConfigVariable}
+                  onUpdate={handleUpdate}
+                />
+              </div>
+            );
+          })}
+        </StyledContainer>
+      </Section.Root>
     )
   );
 };

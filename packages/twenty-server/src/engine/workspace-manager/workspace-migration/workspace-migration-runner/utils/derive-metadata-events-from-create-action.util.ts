@@ -1,11 +1,11 @@
 import { assertUnreachable, isDefined } from 'twenty-shared/utils';
 
-import { type AllFlatWorkspaceMigrationAction } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/types/workspace-migration-action-common';
+import { type AllFlatWorkspaceMigrationAction } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/types/workspace-migration-action-common.type';
 import { METADATA_EVENTS_TO_EMIT } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/constants/metadata-event-to-emit.constant';
 import {
   type CreateMetadataEvent,
   type MetadataEvent,
-} from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/types/metadata-event';
+} from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/types/metadata-event.type';
 import { flatEntityToScalarFlatEntity } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/utils/flat-entity-to-scalar-flat-entity.util';
 
 export const deriveMetadataEventsFromCreateAction = (
@@ -78,6 +78,7 @@ const deriveAllMetadataEventsFromCreateAction = (
     case 'viewFieldGroup':
     case 'rowLevelPermissionPredicate':
     case 'rowLevelPermissionPredicateGroup':
+    case 'rowLevelPermissionRule':
     case 'viewFilterGroup':
     case 'index':
     case 'logicFunction':
@@ -98,7 +99,18 @@ const deriveAllMetadataEventsFromCreateAction = (
     case 'fieldPermission':
     case 'viewSort':
     case 'webhook':
+    case 'mcpServer':
+    case 'workflow':
+    case 'workflowVersion':
     case 'connectionProvider':
+    case 'messagingProvider':
+    case 'timelineActivityType':
+    case 'agentChatChannel':
+    case 'agentChatChannelRole':
+    case 'settingsMenuItem':
+    case 'fieldMetadataOption':
+    case 'relatedRecordPath':
+    case 'validationRule':
     case 'searchFieldMetadata': {
       return [
         {

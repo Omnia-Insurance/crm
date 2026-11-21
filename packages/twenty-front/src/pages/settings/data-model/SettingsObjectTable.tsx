@@ -8,39 +8,36 @@ import { isHiddenSystemField } from '@/object-metadata/utils/isHiddenSystemField
 import { useCombinedGetTotalCount } from '@/object-record/multiple-objects/hooks/useCombinedGetTotalCount';
 import { StyledSettingsDataModelTableBodyContainer } from '@/settings/data-model/components/SettingsDataModelTableBodyContainer';
 import { SettingsObjectMetadataItemTableRow } from '@/settings/data-model/object-details/components/SettingsObjectItemTableRow';
-import { TableRow } from '@/ui/layout/table/components/TableRow';
-import { TableBody } from '@/ui/layout/table/components/TableBody';
 import {
   SETTINGS_OBJECT_TABLE_ROW_GRID_TEMPLATE_COLUMNS,
   SETTINGS_OBJECT_TABLE_ROW_MOBILE_MIN_WIDTH,
   StyledStickyFirstCell,
 } from '@/settings/data-model/object-details/components/SettingsObjectItemTableRowStyledComponents';
 import { SettingsObjectInactiveMenuDropDown } from '@/settings/data-model/objects/components/SettingsObjectInactiveMenuDropDown';
-import { Dropdown } from '@/ui/layout/dropdown/components/Dropdown';
+import { DropdownRoot } from '@/ui/layout/dropdown/components/DropdownRoot';
 import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
-import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
 import { SortableTableHeader } from '@/ui/layout/table/components/SortableTableHeader';
 import { Table } from '@/ui/layout/table/components/Table';
+import { TableBody } from '@/ui/layout/table/components/TableBody';
 import { TableHeader } from '@/ui/layout/table/components/TableHeader';
+import { TableRow } from '@/ui/layout/table/components/TableRow';
 import { useSortedArray } from '@/ui/layout/table/hooks/useSortedArray';
-import { isAdvancedModeEnabledState } from '@/ui/navigation/navigation-drawer/states/isAdvancedModeEnabledState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
-import { type ReactNode, useContext, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath } from 'twenty-shared/utils';
+import { SearchInput } from 'twenty-ui/components/input';
+import { Dropdown } from 'twenty-ui/components/navigation';
+import { SettingsRow } from 'twenty-ui/components/settings';
 import { IconArchive, IconChevronRight, IconSettings } from 'twenty-ui/icon';
-import { SearchInput } from 'twenty-ui/input';
-import { MenuItemToggle } from 'twenty-ui/navigation';
-import {
-  MOBILE_VIEWPORT,
-  ThemeContext,
-  themeCssVariables,
-} from 'twenty-ui/theme-constants';
+import { MOBILE_VIEWPORT, useTheme, themeCssVariables } from 'twenty-ui/theme';
+import { useNavigateSettings } from '~/hooks/useNavigateSettings';
 import { GET_SETTINGS_OBJECT_TABLE_METADATA } from '~/pages/settings/data-model/constants/SettingsObjectTableMetadata';
 import type { SettingsObjectTableItem } from '~/pages/settings/data-model/types/SettingsObjectTableItem';
-import { normalizeSearchText } from '~/utils/normalizeSearchText';
+import { normalizeSearchText } from 'twenty-ui/utilities';
+import { SettingsSearchFilterTrigger } from '@/settings/components/SettingsSearchFilterTrigger';
 
 const StyledIconChevronRightContainer = styled.div`
   color: ${themeCssVariables.font.color.tertiary};
@@ -70,17 +67,16 @@ export const SettingsObjectTable = ({
   objectMetadataItems: EnrichedObjectMetadataItem[];
   withSearchBar?: boolean;
 }) => {
-  const { theme } = useContext(ThemeContext);
+  const theme = useTheme();
   const { t } = useLingui();
   const getIsMetadataItemCustom = useGetIsMetadataItemCustom();
+  const navigate = useNavigateSettings();
 
-  const isAdvancedModeEnabled = useAtomStateValue(isAdvancedModeEnabledState);
   const isDDLLocked = useAtomStateValue(isDDLLockedState);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [showDeactivated, setShowDeactivated] = useState(true);
-  const [showSystemObjects, setShowSystemObjects] = useState(true);
-  const shouldShowSystemObjects = isAdvancedModeEnabled && showSystemObjects;
+  const [showSystemObjects, setShowSystemObjects] = useState(false);
 
   const { deleteOneObjectMetadataItem } = useDeleteOneObjectMetadataItem();
 
@@ -103,7 +99,7 @@ export const SettingsObjectTable = ({
               installedApplications?.find(
                 (application) =>
                   application.id === objectMetadataItem.applicationId,
-              )?.name ?? (objectMetadataItem.isRemote ? 'Remote' : ''),
+              )?.name ?? (objectMetadataItem.isRemote ? t`Remote` : ''),
             fieldsCount: objectMetadataItem.fields.filter(
               (field) => !isHiddenSystemField(field),
             ).length,
@@ -117,6 +113,7 @@ export const SettingsObjectTable = ({
       objectMetadataItems,
       totalCountByObjectMetadataItemNamePlural,
       installedApplications,
+      t,
     ],
   );
 
@@ -143,18 +140,13 @@ export const SettingsObjectTable = ({
         }
 
         const isSystem = item.objectMetadataItem.isSystem;
-        if (isSystem && !shouldShowSystemObjects) {
+        if (isSystem && !showSystemObjects) {
           return false;
         }
 
         return true;
       }),
-    [
-      sortedObjectSettingsItems,
-      searchTerm,
-      showDeactivated,
-      shouldShowSystemObjects,
-    ],
+    [sortedObjectSettingsItems, searchTerm, showDeactivated, showSystemObjects],
   );
 
   return (
@@ -164,41 +156,38 @@ export const SettingsObjectTable = ({
           <SearchInput
             placeholder={t`Search for an object...`}
             value={searchTerm}
-            onChange={setSearchTerm}
-            filterDropdown={(filterButton: ReactNode) => (
-              <Dropdown
+            onValueChange={setSearchTerm}
+            actions={
+              <DropdownRoot
                 dropdownId="settings-objects-filter-dropdown"
-                dropdownPlacement="bottom-end"
-                dropdownOffset={{ x: 0, y: 8 }}
-                clickableComponent={filterButton}
-                dropdownComponents={
-                  <DropdownContent>
-                    <DropdownMenuItemsContainer>
-                      <MenuItemToggle
-                        LeftIcon={IconArchive}
-                        onToggleChange={() =>
-                          setShowDeactivated(!showDeactivated)
-                        }
-                        toggled={showDeactivated}
-                        text={t`Deactivated`}
-                        toggleSize="small"
-                      />
-                      {isAdvancedModeEnabled && (
-                        <MenuItemToggle
-                          LeftIcon={IconSettings}
-                          onToggleChange={() =>
-                            setShowSystemObjects(!showSystemObjects)
-                          }
-                          toggled={showSystemObjects}
-                          text={t`System objects`}
-                          toggleSize="small"
-                        />
-                      )}
-                    </DropdownMenuItemsContainer>
-                  </DropdownContent>
-                }
-              />
-            )}
+                type="panel"
+              >
+                <SettingsSearchFilterTrigger />
+                <DropdownContent
+                  side="bottom"
+                  align="end"
+                  sideOffset={8}
+                  alignOffset={0}
+                >
+                  <Dropdown.Section>
+                    <SettingsRow
+                      startElement={<IconArchive />}
+                      onCheckedChange={() =>
+                        setShowDeactivated(!showDeactivated)
+                      }
+                      checked={showDeactivated}
+                    >{t`Deactivated`}</SettingsRow>
+                    <SettingsRow
+                      startElement={<IconSettings />}
+                      onCheckedChange={() =>
+                        setShowSystemObjects(!showSystemObjects)
+                      }
+                      checked={showSystemObjects}
+                    >{t`System objects`}</SettingsRow>
+                  </Dropdown.Section>
+                </DropdownContent>
+              </DropdownRoot>
+            }
           />
         </StyledSearchInputContainer>
       )}
@@ -261,13 +250,21 @@ export const SettingsObjectTable = ({
                               stroke={theme.icon.stroke.sm}
                             />
                           </StyledIconChevronRightContainer>
-                        ) : isDDLLocked ? null : (
+                        ) : (
                           <SettingsObjectInactiveMenuDropDown
                             isCustomObject={getIsMetadataItemCustom(
                               objectSettingsItem.objectMetadataItem,
                             )}
+                            isReadOnly={isDDLLocked}
                             objectMetadataItemNamePlural={
                               objectSettingsItem.objectMetadataItem.namePlural
+                            }
+                            onEdit={() =>
+                              navigate(SettingsPath.ObjectDetail, {
+                                objectNamePlural:
+                                  objectSettingsItem.objectMetadataItem
+                                    .namePlural,
+                              })
                             }
                             onActivate={() =>
                               updateOneObjectMetadataItem({

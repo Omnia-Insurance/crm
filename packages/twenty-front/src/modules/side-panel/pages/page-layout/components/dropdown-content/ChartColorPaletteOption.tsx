@@ -1,20 +1,12 @@
 import { CHART_SETTINGS_PALETTE_COLOR_GROUP_COUNT } from '@/side-panel/pages/page-layout/constants/ChartSettingsPaletteColorGroupCount';
 import { createGraphColorRegistry } from '@/page-layout/widgets/graph/utils/createGraphColorRegistry';
 import { getColorSchemeByIndex } from '@/page-layout/widgets/graph/utils/getColorSchemeByIndex';
-import { SelectableListItem } from '@/ui/layout/selectable-list/components/SelectableListItem';
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
-import { useContext } from 'react';
-import { ColorSample } from 'twenty-ui/data-display';
-import { MenuItemSelect } from 'twenty-ui/navigation';
+import { ColorSample } from 'twenty-ui/primitives/data-display';
+import { Dropdown } from 'twenty-ui/components/navigation';
 import { getMainColorNameFromPaletteColorName } from 'twenty-ui/utilities';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
-import { type ThemeColor } from 'twenty-ui/theme';
-type ChartColorPaletteOptionProps = {
-  selectedItemId: string | null;
-  currentColor: string | null | undefined;
-  onSelectColor: (colorName: ThemeColor | 'auto') => void;
-};
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledColorSamplesContainer = styled.div`
   align-items: center;
@@ -22,12 +14,9 @@ const StyledColorSamplesContainer = styled.div`
   gap: ${themeCssVariables.spacing[0.5]};
 `;
 
-export const ChartColorPaletteOption = ({
-  selectedItemId,
-  currentColor,
-  onSelectColor,
-}: ChartColorPaletteOptionProps) => {
-  const { theme } = useContext(ThemeContext);
+export const ChartColorPaletteOption = () => {
+  const { t } = useLingui();
+  const theme = useTheme();
   const colorRegistry = createGraphColorRegistry(theme.color);
 
   const paletteColors = Array.from(
@@ -57,23 +46,10 @@ export const ChartColorPaletteOption = ({
   );
 
   return (
-    <SelectableListItem
-      key={'auto'}
-      itemId={'auto'}
-      onEnter={() => {
-        onSelectColor('auto');
-      }}
-    >
-      <MenuItemSelect
-        text={t`Default palette`}
-        selected={false}
-        focused={selectedItemId === 'auto' || currentColor === 'auto'}
-        contextualText={colorSamples}
-        contextualTextPosition="right"
-        onClick={() => {
-          onSelectColor('auto');
-        }}
-      />
-    </SelectableListItem>
+    <Dropdown.OptionItem
+      value="auto"
+      description={colorSamples}
+      descriptionPlacement="end"
+    >{t`Default palette`}</Dropdown.OptionItem>
   );
 };

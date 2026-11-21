@@ -13,13 +13,13 @@ export const EMPTY_COMMAND_MENU_CONTEXT_API: CommandMenuContextApi = {
   hasAnySoftDeleteFilterOnView: false,
   numberOfSelectedRecords: 0,
   objectPermissions: {
+    canCreateObjectRecords: false,
     canReadObjectRecords: false,
     canUpdateObjectRecords: false,
     canSoftDeleteObjectRecords: false,
     canDestroyObjectRecords: false,
-    editWindowMinutes: null,
-    showInSidebar: true,
-    restrictedFields: {},
+    unreadableFields: [],
+    uneditableFields: [],
     objectMetadataId: '',
     rowLevelPermissionPredicates: [],
     rowLevelPermissionPredicateGroups: [],
@@ -33,4 +33,6 @@ export const EMPTY_COMMAND_MENU_CONTEXT_API: CommandMenuContextApi = {
   canAccessFullAdminPanel: false,
   objectMetadataItem: {},
   objectMetadataLabel: '',
+  coreObjectName: null,
+  currentView: null,
 };

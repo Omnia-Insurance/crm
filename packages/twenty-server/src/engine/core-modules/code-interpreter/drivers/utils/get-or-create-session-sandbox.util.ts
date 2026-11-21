@@ -6,10 +6,14 @@ import { SESSION_SANDBOX_METADATA_KEY } from 'src/engine/core-modules/code-inter
 
 type SandboxApi = typeof Sandbox;
 
+const SESSION_ACTOR_METADATA_KEY = 'twentySessionActor';
+
 type GetOrCreateSessionSandboxArgs = {
   sandboxApi: SandboxApi;
   apiKey: string;
+  template: string;
   sessionId: string;
+  actorKey?: string;
   timeoutMs: number;
   idleTimeoutMs: number;
 };
@@ -33,8 +37,7 @@ const listSandboxesForSession = async (
     sandboxes.push(...(await paginator.nextItems()));
   }
 
-  // Re-check the tag client-side so a loose server-side match can never reuse
-  // another tenant's sandbox.
+  // A loose server-side tag match must never reuse another tenant's sandbox.
   return sandboxes.filter(
     (sandbox) => sandbox.metadata?.[SESSION_SANDBOX_METADATA_KEY] === sessionId,
   );
@@ -59,7 +62,6 @@ const connectAndKeepAlive = async (
 
     return sandbox;
   } catch {
-    // Couldn't refresh the timeout — kill it instead of leaking a running sandbox.
     await sandbox.kill().catch(() => undefined);
 
     return undefined;
@@ -75,28 +77,35 @@ const killSandboxById = (
 const createSessionSandbox = (
   sandboxApi: SandboxApi,
   apiKey: string,
+  template: string,
   sessionId: string,
   timeoutMs: number,
+  actorKey?: string,
 ) =>
-  sandboxApi.create({
+  sandboxApi.create(template, {
     apiKey,
     timeoutMs,
     lifecycle: { onTimeout: 'pause', autoResume: true },
-    metadata: { [SESSION_SANDBOX_METADATA_KEY]: sessionId },
+    metadata: {
+      [SESSION_SANDBOX_METADATA_KEY]: sessionId,
+      ...(isDefined(actorKey)
+        ? { [SESSION_ACTOR_METADATA_KEY]: actorKey }
+        : {}),
+    },
   });
 
 export const getOrCreateSessionSandbox = async ({
   sandboxApi,
   apiKey,
+  template,
   sessionId,
   timeoutMs,
   idleTimeoutMs,
+  actorKey,
 }: GetOrCreateSessionSandboxArgs): Promise<{
   sandbox: Sandbox;
   isReused: boolean;
 }> => {
-  // The sandbox must outlive a single execution and the idle window before it
-  // auto-pauses, so take the larger of the two.
   const aliveTimeoutMs = Math.max(timeoutMs, idleTimeoutMs);
 
   const sessionSandboxes = await listSandboxesForSession(
@@ -108,7 +117,11 @@ export const getOrCreateSessionSandbox = async ({
   let reusedSandbox: Sandbox | undefined;
   let reusedSandboxId: string | undefined;
 
-  for (const { sandboxId } of sessionSandboxes) {
+  for (const { sandboxId, metadata } of sessionSandboxes) {
+    if (metadata?.[SESSION_ACTOR_METADATA_KEY] !== actorKey) {
+      await killSandboxById(sandboxApi, apiKey, sandboxId);
+      continue;
+    }
     const sandbox = await connectAndKeepAlive(
       sandboxApi,
       apiKey,
@@ -136,8 +149,10 @@ export const getOrCreateSessionSandbox = async ({
   const sandbox = await createSessionSandbox(
     sandboxApi,
     apiKey,
+    template,
     sessionId,
     aliveTimeoutMs,
+    actorKey,
   );
 
   return { sandbox, isReused: false };

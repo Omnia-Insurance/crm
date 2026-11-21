@@ -1,11 +1,11 @@
 import { ROLE_SETTINGS_DELETE_ROLE_CONFIRMATION_MODAL_ID } from '@/settings/roles/role-settings/components/constants/RoleSettingsDeleteRoleConfirmationModalId';
 import { SettingsRoleSettingsDeleteRoleConfirmationModalSubtitle } from '@/settings/roles/role-settings/components/SettingsRoleSettingsDeleteRoleConfirmationModalSubtitle';
-import { ConfirmationModal } from '@/ui/layout/modal/components/ConfirmationModal';
-import { t } from '@lingui/core/macro';
+import { ConfirmationDialog } from '@/ui/layout/dialog/components/ConfirmationDialog';
 import { SettingsPath } from 'twenty-shared/types';
 import { useMutation } from '@apollo/client/react';
 import { DeleteOneRoleDocument } from '~/generated-metadata/graphql';
 import { useNavigateSettings } from '~/hooks/useNavigateSettings';
+import { useLingui } from '@lingui/react/macro';
 
 type SettingsRoleSettingsDeleteRoleConfirmationModalProps = {
   roleId: string;
@@ -14,6 +14,7 @@ type SettingsRoleSettingsDeleteRoleConfirmationModalProps = {
 export const SettingsRoleSettingsDeleteRoleConfirmationModal = ({
   roleId,
 }: SettingsRoleSettingsDeleteRoleConfirmationModalProps) => {
+  const { t } = useLingui();
   const [deleteRole] = useMutation(DeleteOneRoleDocument);
 
   const navigateSettings = useNavigateSettings();
@@ -26,8 +27,8 @@ export const SettingsRoleSettingsDeleteRoleConfirmationModal = ({
   };
 
   return (
-    <ConfirmationModal
-      modalInstanceId={ROLE_SETTINGS_DELETE_ROLE_CONFIRMATION_MODAL_ID}
+    <ConfirmationDialog
+      dialogId={ROLE_SETTINGS_DELETE_ROLE_CONFIRMATION_MODAL_ID}
       title={t`Delete Role Permanently`}
       subtitle={
         <SettingsRoleSettingsDeleteRoleConfirmationModalSubtitle
@@ -36,7 +37,7 @@ export const SettingsRoleSettingsDeleteRoleConfirmationModal = ({
       }
       onConfirmClick={handleConfirmClick}
       confirmButtonText={t`Confirm`}
-      confirmButtonAccent="danger"
+      confirmButtonColor="danger"
     />
   );
 };

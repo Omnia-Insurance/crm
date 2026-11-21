@@ -1,28 +1,27 @@
-// Runtime-facing barrel for logic-function authors.
-//
-// Anything imported from this entry point is allowed to reach the Lambda
-// runtime. Today we only re-export type-only payload shapes; all of these
-// disappear at TS compile time so the compiled bundle is empty.
-//
-// `defineLogicFunction`, `definePostInstallLogicFunction`, etc. intentionally
-// stay in `twenty-sdk/define` — they are build-time metadata factories that
-// the SDK CLI stubs out before bundling. Logic-function source files keep
-// importing them from `twenty-sdk/define`, but should reach for *types* (and
-// future runtime helpers) here, never directly from `twenty-shared/*`.
+// Only what may reach the Lambda runtime; build-time define* factories stay in twenty-sdk/define.
+// Logic functions import types from here, never directly from twenty-shared/*.
 
+export type { LogicFunctionConfig } from '@/sdk/define/common/types/loose-shared-types.type';
 export type {
-  LogicFunctionConfig,
   LogicFunctionHandler,
+  ServerRouteResolverResult,
 } from '@/sdk/define/logic-functions/logic-function-config';
+export type { ServerRouteDispatchResult } from 'twenty-shared/application';
 
 export type {
   InstallHandler,
   InstallPayload,
 } from '@/sdk/define/logic-functions/install-payload-type';
 
+export type {
+  UninstallHandler,
+  UninstallPayload,
+} from '@/sdk/define/logic-functions/uninstall-payload-type';
+
 export type { CronPayload } from '@/sdk/define/logic-functions/triggers/cron-payload-type';
 
 export type {
+  DatabaseEventBatchPayload,
   DatabaseEventPayload,
   ObjectRecordBaseEvent,
   ObjectRecordCreateEvent,
@@ -38,18 +37,103 @@ export type { RoutePayload } from '@/sdk/define/logic-functions/triggers/route-p
 
 export {
   jsonSchemaToInputSchema,
+  RetryableLogicFunctionError,
   type InputJsonSchema,
+  type LogicFunctionExecutionContext,
 } from 'twenty-shared/logic-function';
 
 export { getConnection } from '@/sdk/logic-function/connections/get-connection';
 export { listConnections } from '@/sdk/logic-function/connections/list-connections';
 export type { ListConnectionsFilter } from '@/sdk/logic-function/connections/list-connections';
 export { findConnectionForRequest } from '@/sdk/logic-function/connections/find-connection-for-request';
+export { reportConnectionAuthFailure } from '@/sdk/logic-function/connections/report-connection-auth-failure';
 export { AppConnectionAuthFailedError } from '@/sdk/logic-function/connections/errors/app-connection-auth-failed.error';
 export type { AppConnection } from '@/sdk/logic-function/connections/types/app-connection.type';
+export type {
+  AuthorizeConnectionPayload,
+  AuthorizeConnectionResult,
+  ConnectionCallbackPayload,
+  ConnectionCallbackResult,
+  IdentifyAccountPayload,
+  IdentifyAccountResult,
+  SendAppMessagePayload,
+  SendAppMessageRecipient,
+  SendAppMessageResult,
+} from 'twenty-shared/application';
+
+export { createMessageChannel } from '@/sdk/logic-function/messaging/create-message-channel';
+export type { CreateMessageChannelInput } from '@/sdk/logic-function/messaging/create-message-channel';
+export { listMessageChannels } from '@/sdk/logic-function/messaging/list-message-channels';
+export type { ListMessageChannelsFilter } from '@/sdk/logic-function/messaging/list-message-channels';
+export { updateMessageChannel } from '@/sdk/logic-function/messaging/update-message-channel';
+export type { UpdateMessageChannelInput } from '@/sdk/logic-function/messaging/update-message-channel';
+export { deleteMessageChannel } from '@/sdk/logic-function/messaging/delete-message-channel';
+export { ingestMessages } from '@/sdk/logic-function/messaging/ingest-messages';
+export { uploadMessageAttachment } from '@/sdk/logic-function/messaging/upload-message-attachment';
+export type {
+  IngestedMessage,
+  IngestMessage,
+  IngestMessageAttachment,
+  IngestMessageParticipant,
+} from '@/sdk/logic-function/messaging/types/ingest-message.type';
+export type { AppMessageChannel } from '@/sdk/logic-function/messaging/types/app-message-channel.type';
+export { listMessageFolders } from '@/sdk/logic-function/messaging/list-message-folders';
+export type { ListMessageFoldersFilter } from '@/sdk/logic-function/messaging/list-message-folders';
+export { syncMessageFolders } from '@/sdk/logic-function/messaging/sync-message-folders';
+export type { SyncMessageFoldersInput } from '@/sdk/logic-function/messaging/sync-message-folders';
+export type { AppMessageFolder } from '@/sdk/logic-function/messaging/types/app-message-folder.type';
 
 export { runAgent } from '@/sdk/logic-function/agents/run-agent';
 export type { RunAgentInput, RunAgentResult } from 'twenty-shared/application';
+export { listConversationMessages } from '@/sdk/logic-function/agents/list-conversation-messages';
+export { streamConversation } from '@/sdk/logic-function/agents/stream-conversation';
+export type { StreamConversationInput } from '@/sdk/logic-function/agents/stream-conversation';
+export type {
+  AgentConversationHistory,
+  AgentConversationInput,
+  AgentConversationMessage,
+} from '@/sdk/logic-function/agents/types/agent-conversation.type';
+export type { AgentChatSubscriptionEvent } from 'twenty-shared/ai';
+export { isAgentChatTurnEndEvent } from 'twenty-shared/ai';
+
+export { ai, type GenerateInput } from '@/sdk/logic-function/ai/ai';
+export type { GenerateResult } from 'twenty-shared/application';
+export type { AiRunScope } from 'twenty-shared/ai';
+
+export { sendInboxMessage } from '@/sdk/inbox/send-inbox-message';
+export { inboxMention } from '@/sdk/inbox/mentions/inbox-mention';
+export { inboxReferenceRecord } from '@/sdk/inbox/mentions/inbox-reference-record';
+export { INBOX_ASSISTANT_MENTION } from '@/sdk/inbox/mentions/inbox-assistant-mention';
+export { attachRecordToInboxThread } from '@/sdk/inbox/attach-record-to-inbox-thread';
+export { detachRecordFromInboxThread } from '@/sdk/inbox/detach-record-from-inbox-thread';
+export { archiveInboxThread } from '@/sdk/inbox/archive-inbox-thread';
+export type { SendInboxMessageInput } from '@/sdk/define/common/types/loose-shared-types.type';
+export type { SendInboxMessageResult } from 'twenty-shared/application';
+export type { InboxThreadRecordInput } from 'twenty-shared/application';
+export type { ArchiveInboxThreadInput } from 'twenty-shared/application';
+
+export { enqueueJob } from '@/sdk/logic-function/jobs/enqueue-job';
+export { enqueueJobs } from '@/sdk/logic-function/jobs/enqueue-jobs';
+export { getJobs } from '@/sdk/logic-function/jobs/get-jobs';
+export type {
+  EnqueueJobInput,
+  EnqueueJobItem,
+  EnqueueJobOptions,
+  EnqueueJobResult,
+  EnqueueJobsInput,
+  EnqueueJobsResult,
+  JobStatusResult,
+  JobStatusState,
+} from 'twenty-shared/application';
+
+export { createTimelineActivity } from '@/sdk/logic-function/timeline/create-timeline-activity';
+export type {
+  CreatedTimelineActivity,
+  CreateTimelineActivityInput,
+} from '@/sdk/logic-function/timeline/create-timeline-activity';
+
+export { kv } from '@/sdk/logic-function/key-value/kv';
+export type { AppKeyValue, AppKeyValueScope } from 'twenty-shared/application';
 
 export { Response } from '@/sdk/logic-function/response';
 export type { ResponseInit } from '@/sdk/logic-function/response';

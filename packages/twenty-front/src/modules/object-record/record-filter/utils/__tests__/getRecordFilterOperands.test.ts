@@ -1,5 +1,9 @@
 import { getRecordFilterOperands } from '@/object-record/record-filter/utils/getRecordFilterOperands';
-import { type FilterableAndTSVectorFieldType } from 'twenty-shared/types';
+import {
+  type FilterableAndTSVectorFieldType,
+  RecordFilterOperand,
+  RelationType,
+} from 'twenty-shared/types';
 
 const filterTypesWithoutSubField: FilterableAndTSVectorFieldType[] = [
   'TEXT',
@@ -91,6 +95,52 @@ describe('getRecordFilterOperands', () => {
       });
 
       expect(operands).toMatchSnapshot();
+    });
+  });
+
+  // OMNIA-CUSTOM: one-to-many relation filters without a target field
+  describe('RELATION with a relation type', () => {
+    it('returns only emptiness operands for a one-to-many relation', () => {
+      expect(
+        getRecordFilterOperands({
+          filterType: 'RELATION',
+          relationType: RelationType.ONE_TO_MANY,
+        }),
+      ).toEqual([
+        RecordFilterOperand.IS_EMPTY,
+        RecordFilterOperand.IS_NOT_EMPTY,
+      ]);
+    });
+
+    it('ignores a target field name left in subFieldName by legacy filters', () => {
+      expect(
+        getRecordFilterOperands({
+          filterType: 'RELATION',
+          subFieldName: 'status',
+          relationType: RelationType.ONE_TO_MANY,
+        }),
+      ).toEqual([
+        RecordFilterOperand.IS_EMPTY,
+        RecordFilterOperand.IS_NOT_EMPTY,
+      ]);
+    });
+
+    it('keeps the relation operands for a many-to-one relation', () => {
+      expect(
+        getRecordFilterOperands({
+          filterType: 'RELATION',
+          relationType: RelationType.MANY_TO_ONE,
+        }),
+      ).toEqual(getRecordFilterOperands({ filterType: 'RELATION' }));
+    });
+
+    it('does not restrict a field reached through a one-to-many relation', () => {
+      expect(
+        getRecordFilterOperands({
+          filterType: 'SELECT',
+          relationType: RelationType.ONE_TO_MANY,
+        }),
+      ).toEqual(getRecordFilterOperands({ filterType: 'SELECT' }));
     });
   });
 });

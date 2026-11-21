@@ -1,26 +1,40 @@
-import { Logger, Scope } from '@nestjs/common';
-import { In, type ObjectLiteral } from 'typeorm';
-import { type QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
+import { ForbiddenException, Logger, Scope } from '@nestjs/common';
 
-import { DatabaseEventAction } from 'src/engine/api/graphql/graphql-query-runner/enums/database-event-action';
+import { plural, t } from '@lingui/core/macro';
+import { isNonEmptyString } from '@sniptt/guards';
+import { PermissionFlagType, QUERY_MAX_RECORDS } from 'twenty-shared/constants';
+import { FieldActorSource } from 'twenty-shared/types';
+import { isDefined, isPlainObject } from 'twenty-shared/utils';
+import { In } from 'typeorm';
+import { v4 } from 'uuid';
+
+import { ActorFromAuthContextService } from 'src/engine/core-modules/actor/services/actor-from-auth-context.service';
+import { AuthException } from 'src/engine/core-modules/auth/auth.exception';
+import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import { IMPORT_JOB_PROCESSOR_NAME } from 'src/engine/core-modules/import-job/constants/import-job-processor-name.constant';
+import { type ImportJobEntity } from 'src/engine/core-modules/import-job/entities/import-job.entity';
+import { ImportJobStatus } from 'src/engine/core-modules/import-job/enums/import-job-status.enum';
+import { ImportJobService } from 'src/engine/core-modules/import-job/import-job.service';
+import { type ImportJobData } from 'src/engine/core-modules/import-job/types/import-job-data.type';
+import {
+  type RelatedRecordUpdate,
+  type RelationBehavior,
+  type RelationResolutionError,
+  type RelationResolutionPlan,
+} from 'src/engine/core-modules/import-job/utils/relation-resolution.types';
+import { resolveImportRelations } from 'src/engine/core-modules/import-job/utils/resolve-import-relations.util';
 import { Process } from 'src/engine/core-modules/message-queue/decorators/process.decorator';
 import { Processor } from 'src/engine/core-modules/message-queue/decorators/processor.decorator';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
-import {
-  ImportJobService,
-  IMPORT_JOB_PROCESSOR_NAME,
-  type ImportJobData,
-} from 'src/engine/core-modules/import-job/import-job.service';
-import { ImportJobStatus } from 'src/engine/core-modules/import-job/enums/import-job-status.enum';
-import { type RelationBehavior } from 'src/engine/core-modules/import-job/utils/relation-resolution.types';
-import { resolveImportRelations } from 'src/engine/core-modules/import-job/utils/resolve-import-relations.util';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
-import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { UserWorkspaceAuthContextService } from 'src/engine/core-modules/user-workspace/services/user-workspace-auth-context.service';
+import { SettingPermissionsService } from 'src/engine/permissions/setting-permissions.service';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 
-const BATCH_SIZE = 200;
 const INTER_BATCH_DELAY_MS = 500;
 const RELATION_UPDATE_CONCURRENCY = 10;
+
+type ImportRow = Record<string, unknown>;
 
 @Processor({ queueName: MessageQueue.importQueue, scope: Scope.REQUEST })
 export class ImportJobProcessor {
@@ -28,22 +42,22 @@ export class ImportJobProcessor {
 
   constructor(
     private readonly importJobService: ImportJobService,
-    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly workspaceOrmManager: WorkspaceOrmManager,
     private readonly workspaceCacheService: WorkspaceCacheService,
+    private readonly userWorkspaceAuthContextService: UserWorkspaceAuthContextService,
+    private readonly settingPermissionsService: SettingPermissionsService,
+    private readonly actorFromAuthContextService: ActorFromAuthContextService,
   ) {}
 
   @Process(IMPORT_JOB_PROCESSOR_NAME)
   async handle(data: ImportJobData): Promise<void> {
-    const { importJobId, workspaceId } = data;
+    const { importJobId } = data;
 
     this.logger.log(`Starting import job ${importJobId}`);
 
-    const importJob = await this.importJobService.getImportJob(
-      importJobId,
-      workspaceId,
-    );
+    const importJob = await this.importJobService.findById(data);
 
-    if (!importJob) {
+    if (!isDefined(importJob)) {
       this.logger.error(`Import job ${importJobId} not found`);
 
       return;
@@ -55,376 +69,532 @@ export class ImportJobProcessor {
       return;
     }
 
-    await this.importJobService.updateProgress(importJobId, {
-      status: ImportJobStatus.PROCESSING,
+    // Only a stalled or crashed worker hands the job back while it is processing (maxStalledCount 1);
+    // a re-run would start again from row 0, so the job fails instead
+    if (importJob.status === ImportJobStatus.PROCESSING) {
+      this.logger.error(
+        `Import job ${importJobId} was redelivered while processing; marking it failed`,
+      );
+
+      await this.failImportJob(
+        data,
+        t`The import worker restarted while processing this import; re-run the import.`,
+      );
+
+      return;
+    }
+
+    if (importJob.status !== ImportJobStatus.PENDING) {
+      this.logger.log(
+        `Import job ${importJobId} is already ${importJob.status}; nothing to do`,
+      );
+
+      return;
+    }
+
+    if (!(await this.importJobService.claimPendingImportJob(data))) {
+      this.logger.log(
+        `Import job ${importJobId} was cancelled or claimed by another delivery before start`,
+      );
+
+      return;
+    }
+
+    let authContext: WorkspaceAuthContext;
+
+    try {
+      authContext = await this.resolveRequesterOrThrow(importJob);
+    } catch (error) {
+      this.logger.warn(
+        `Import job ${importJobId} failed: its requester could not be verified`,
+      );
+
+      await this.failImportJob(
+        data,
+        error instanceof ForbiddenException
+          ? error.message
+          : t`The import could not start. Re-run the import.`,
+      );
+
+      return;
+    }
+
+    await this.runImport({ importJob, authContext });
+  }
+
+  // Membership, role and IMPORT_CSV can change after the upload or mid-run, so they are checked before every write
+  private async resolveRequesterOrThrow({
+    workspaceId,
+    userWorkspaceId,
+  }: ImportJobEntity): Promise<WorkspaceAuthContext> {
+    if (!isDefined(userWorkspaceId)) {
+      throw new ForbiddenException(
+        t`This import has no requester. Re-run the import.`,
+      );
+    }
+
+    let authContext: WorkspaceAuthContext;
+
+    try {
+      authContext = await this.userWorkspaceAuthContextService.resolve({
+        workspaceId,
+        userWorkspaceId,
+      });
+    } catch (error) {
+      if (error instanceof AuthException) {
+        throw new ForbiddenException(
+          t`The import requester is no longer a workspace member.`,
+        );
+      }
+
+      throw error;
+    }
+
+    const canImport = await this.settingPermissionsService.hasPermissionFlag({
+      authContext,
+      permissionFlag: PermissionFlagType.IMPORT_CSV,
     });
 
-    let validatedRows = importJob.validatedRows ?? [];
+    if (!canImport) {
+      throw new ForbiddenException(
+        t`You do not have permission to import records.`,
+      );
+    }
+
+    return authContext;
+  }
+
+  private async runImport({
+    importJob,
+    authContext,
+  }: {
+    importJob: ImportJobEntity;
+    authContext: WorkspaceAuthContext;
+  }): Promise<void> {
+    const jobData: ImportJobData = {
+      importJobId: importJob.id,
+      workspaceId: importJob.workspaceId,
+    };
+    const { importJobId } = jobData;
+
+    let validatedRows: ImportRow[] = importJob.validatedRows ?? [];
     const totalRecords = validatedRows.length;
     let processedRecords = 0;
     let successCount = 0;
-    let warningCount = 0;
     let failureCount = 0;
-    const allWarnings: Record<string, unknown>[] = [];
+    const allWarnings: RelationResolutionError[] = [];
     const allErrors: Record<string, unknown>[] = [];
-    let relationResolutionHandledStatus = false;
 
     try {
-      const authContext = buildSystemAuthContext(workspaceId);
+      const relationBehaviors = (importJob.columnMappings?.relationBehaviors ??
+        []) as RelationBehavior[];
+      const hasRelationResolution = relationBehaviors.some(
+        (relationBehavior) => relationBehavior.behavior !== 'SKIP',
+      );
 
-      // Check if this import includes relation sub-field data
-      const columnMappings = importJob.columnMappings as Record<
-        string,
-        unknown
-      > | null;
-      const relationBehaviors = (
-        columnMappings?.relationBehaviors ?? []
-      ) as RelationBehavior[];
-      const hasRelationResolution =
-        relationBehaviors.length > 0 &&
-        relationBehaviors.some((rb) => rb.behavior !== 'SKIP');
+      if (hasRelationResolution) {
+        this.logger.log(
+          `Resolving ${relationBehaviors.length} relation behaviors for ${totalRecords} rows`,
+        );
 
-      await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-        async () => {
-          // Event emission policy is configured on executeInWorkspaceContext
-          // below (see the eventEmissionPolicy option).
-          // ── Relation Resolution (pre-processing) ──────────────
-          if (hasRelationResolution) {
-            this.logger.log(
-              `Resolving ${relationBehaviors.length} relation behaviors for ${totalRecords} rows`,
-            );
+        await this.importJobService.updateProgress({
+          ...jobData,
+          updates: { result: { phase: t`Resolving relations...` } },
+        });
 
-            await this.importJobService.updateProgress(importJobId, {
-              result: { phase: 'Resolving relations...' },
-            });
-
-            const { flatObjectMetadataMaps, flatFieldMetadataMaps } =
-              await this.workspaceCacheService.getOrRecompute(workspaceId, [
-                'flatObjectMetadataMaps',
-                'flatFieldMetadataMaps',
-              ]);
-
-            const getRepository = async (objectName: string) =>
-              this.globalWorkspaceOrmManager.getRepository(
-                workspaceId,
-                objectName,
-                { shouldBypassPermissionChecks: true },
-              );
-
-            const plan = await resolveImportRelations(
+        const plan = await this.workspaceOrmManager.executeInWorkspaceContext(
+          () =>
+            this.resolveRelations({
+              importJob,
               validatedRows,
               relationBehaviors,
-              importJob.objectNameSingular,
-              flatObjectMetadataMaps,
-              flatFieldMetadataMaps,
-              getRepository,
-            );
+            }),
+          authContext,
+        );
 
-            // All-or-nothing: if any resolution errors, fail the job
-            if (plan.errors.length > 0) {
-              this.logger.warn(
-                `Relation resolution failed with ${plan.errors.length} errors: ${JSON.stringify(plan.errors)}`,
-              );
-
-              relationResolutionHandledStatus = true;
-
-              await this.importJobService.updateProgress(importJobId, {
-                status: ImportJobStatus.FAILED,
-                processedRecords: totalRecords,
-                failureCount: plan.errors.length,
-                result: { errors: plan.errors },
-              });
-
-              return;
-            }
-
-            // Apply relation changes before main record upsert
-
-            // 1. Create new related records (and capture their IDs)
-            for (const newRecord of plan.newRecords) {
-              const repo = await getRepository(
-                newRecord.objectNameSingular,
-              );
-              const created = (await repo.save(
-                newRecord.data,
-              )) as Record<string, unknown>;
-
-              if (typeof created.id === 'string') {
-                // Apply the pending reassignment to the processed rows
-                for (const row of plan.processedRows) {
-                  if (
-                    row.id === newRecord.reassignment.mainRecordId
-                  ) {
-                    row[newRecord.reassignment.joinColumnName] =
-                      created.id;
-                  }
-                }
-              }
-            }
-
-            // 2. Update existing related records — grouped by object,
-            //    with controlled concurrency to avoid pool exhaustion
-            const updatesByObject = new Map<
-              string,
-              typeof plan.relatedRecordUpdates
-            >();
-
-            for (const update of plan.relatedRecordUpdates) {
-              const group =
-                updatesByObject.get(update.objectNameSingular) ?? [];
-
-              group.push(update);
-              updatesByObject.set(update.objectNameSingular, group);
-            }
-
-            for (const [
-              objectName,
-              updates,
-            ] of updatesByObject.entries()) {
-              const repo = await getRepository(objectName);
-
-              for (
-                let i = 0;
-                i < updates.length;
-                i += RELATION_UPDATE_CONCURRENCY
-              ) {
-                const chunk = updates.slice(
-                  i,
-                  i + RELATION_UPDATE_CONCURRENCY,
-                );
-
-                await Promise.all(
-                  chunk.map((u) => repo.update(u.recordId, u.fields)),
-                );
-              }
-            }
-
-            this.logger.log(
-              `Relation resolution complete: ${plan.relatedRecordUpdates.length} updates, ${plan.reassignments.length} reassignments, ${plan.newRecords.length} new records`,
-            );
-
-            // Use the processed rows (direct fields only, FKs resolved)
-            validatedRows = plan.processedRows;
-          }
-
-          // ── Batch Upsert ──────────────────────────────────────
-          await this.importJobService.updateProgress(importJobId, {
-            result: { phase: 'Importing records...' },
-          });
-
-          const repository =
-            await this.globalWorkspaceOrmManager.getRepository(
-              workspaceId,
-              importJob.objectNameSingular,
-              { shouldBypassPermissionChecks: true },
-            );
-
-          const numberOfBatches = Math.ceil(
-            validatedRows.length / BATCH_SIZE,
+        // All-or-nothing: one unresolved relation fails the whole job before any write
+        if (plan.errors.length > 0) {
+          this.logger.warn(
+            `Import job ${importJobId}: relation resolution failed with ${plan.errors.length} errors`,
           );
 
-          for (
-            let batchIndex = 0;
-            batchIndex < numberOfBatches;
-            batchIndex++
-          ) {
-            // Check for cancellation between batches
-            const currentJob = await this.importJobService.getImportJob(
-              importJobId,
-              workspaceId,
-            );
+          await this.importJobService.updateProgress({
+            ...jobData,
+            updates: {
+              status: ImportJobStatus.FAILED,
+              processedRecords: totalRecords,
+              failureCount: plan.errors.length,
+              result: { errors: plan.errors },
+            },
+          });
 
-            if (currentJob?.status === ImportJobStatus.CANCELLED) {
-              this.logger.log(
-                `Import job ${importJobId} cancelled at batch ${batchIndex}`,
-              );
-              break;
-            }
+          return;
+        }
 
-            const batchStart = batchIndex * BATCH_SIZE;
-            const batchRows = validatedRows.slice(
-              batchStart,
-              batchStart + BATCH_SIZE,
-            );
+        // Resolution can take minutes, so a cancel during it must stop the job before its first write
+        if (await this.isCancelled(jobData)) {
+          this.logger.log(
+            `Import job ${importJobId} cancelled during relation resolution`,
+          );
 
-            try {
-              // Split the batch into genuine INSERTs and UPDATEs so that
-              // updates to existing records emit UPDATED events. A blind
-              // upsert() only emits CREATED/UPSERTED, so import-driven
-              // updates produced NO `<object>.updated` timeline activity
-              // (and re-imports mislabelled existing records as created).
-              // insert() -> CREATED (new records); updateMany() -> a
-              // batched UPDATED event carrying a before/after diff, which
-              // is what the timeline pipeline consumes.
-              const batchIds = batchRows
-                .map((row) => row.id)
-                .filter((id): id is string => typeof id === 'string');
+          return;
+        }
 
-              const existingRecords =
-                batchIds.length > 0
-                  ? await repository.find({
-                      where: { id: In(batchIds) },
-                      select: { id: true },
-                    })
-                  : [];
+        const relationPlanAuthContext =
+          await this.resolveRequesterOrThrow(importJob);
 
-              const existingIds = new Set(
-                existingRecords.map((record) => record.id as string),
-              );
+        await this.workspaceOrmManager.executeInWorkspaceContext(
+          () =>
+            this.applyRelationPlan({
+              plan,
+              authContext: relationPlanAuthContext,
+            }),
+          relationPlanAuthContext,
+        );
 
-              const rowsToInsert = batchRows.filter(
-                (row) =>
-                  typeof row.id !== 'string' || !existingIds.has(row.id),
-              );
-              const rowsToUpdate = batchRows.filter(
-                (row) =>
-                  typeof row.id === 'string' && existingIds.has(row.id),
-              );
+        this.logger.log(
+          `Relation resolution complete: ${plan.relatedRecordUpdates.length} updates, ${plan.reassignments.length} reassignments, ${plan.newRecords.length} new records`,
+        );
 
-              if (rowsToInsert.length > 0) {
-                await repository.insert(rowsToInsert);
-              }
-
-              if (rowsToUpdate.length > 0) {
-                await repository.updateMany(
-                  rowsToUpdate.map((row) => {
-                    const partialEntity = { ...row };
-
-                    delete partialEntity.id;
-
-                    return {
-                      criteria: row.id as string,
-                      partialEntity:
-                        partialEntity as QueryDeepPartialEntity<ObjectLiteral>,
-                    };
-                  }),
-                );
-              }
-
-              successCount += batchRows.length;
-            } catch (error: unknown) {
-              if (
-                error instanceof Error &&
-                'code' in error &&
-                (error as Record<string, unknown>).code ===
-                  'IMPORT_PARTIAL_SUCCESS'
-              ) {
-                const errorObj = error as Record<string, unknown>;
-                const savedCount =
-                  (errorObj.savedRecordCount as number) ??
-                  batchRows.length;
-                const warnings =
-                  (errorObj.importWarnings as Record<
-                    string,
-                    unknown
-                  >[]) ?? [];
-
-                successCount += savedCount;
-                warningCount += warnings.length;
-                allWarnings.push(...warnings);
-              } else {
-                failureCount += batchRows.length;
-                allErrors.push({
-                  batchIndex,
-                  error:
-                    error instanceof Error
-                      ? error.message
-                      : 'Unknown error',
-                });
-              }
-            }
-
-            processedRecords = Math.min(
-              batchStart + batchRows.length,
-              totalRecords,
-            );
-
-            await this.importJobService.updateProgress(importJobId, {
-              processedRecords,
-              successCount,
-              warningCount,
-              failureCount,
-            });
-
-            // Space out batches so workers can process the event cascade
-            // from each batch before the next wave arrives
-            if (batchIndex < numberOfBatches - 1) {
-              await new Promise((resolve) =>
-                setTimeout(resolve, INTER_BATCH_DELAY_MS),
-              );
-            }
-          }
-        },
-        authContext,
-        {
-          eventEmissionPolicy: {
-            // Allow CREATED (new records) and UPDATED (existing records) so
-            // both halves of an import produce timeline activities. 'import'
-            // origin lets downstream listeners skip webhook/trigger jobs for
-            // large imports. NOTE: origin propagation through the ORM query
-            // builders is a separate pre-existing gap (documented in
-            // CUSTOMIZATIONS.md); the insert/updateMany split above is what
-            // restores update timeline activities today.
-            allowedActions: [
-              DatabaseEventAction.CREATED,
-              DatabaseEventAction.UPDATED,
-            ],
-            origin: 'import',
-          },
-        },
-      );
-
-      // If relation resolution already set the final status, don't overwrite
-      if (relationResolutionHandledStatus) {
-        return;
+        validatedRows = plan.processedRows;
+        allWarnings.push(...plan.warnings);
       }
 
-      // Determine final status
-      const finalJob = await this.importJobService.getImportJob(
-        importJobId,
-        workspaceId,
+      await this.importJobService.updateProgress({
+        ...jobData,
+        updates: { result: { phase: t`Importing records...` } },
+      });
+
+      const numberOfBatches = Math.ceil(
+        validatedRows.length / QUERY_MAX_RECORDS,
       );
 
-      const finalStatus =
-        finalJob?.status === ImportJobStatus.CANCELLED
-          ? ImportJobStatus.CANCELLED
-          : failureCount === totalRecords
-            ? ImportJobStatus.FAILED
-            : ImportJobStatus.COMPLETED;
+      for (let batchIndex = 0; batchIndex < numberOfBatches; batchIndex++) {
+        if (await this.isCancelled(jobData)) {
+          this.logger.log(
+            `Import job ${importJobId} cancelled at batch ${batchIndex}`,
+          );
+          break;
+        }
 
-      await this.importJobService.updateProgress(importJobId, {
-        status: finalStatus,
-        processedRecords,
-        successCount,
-        warningCount,
-        failureCount,
-        result: {
-          warnings: allWarnings,
-          errors: allErrors,
+        // A fresh context per batch, so a removed member, a new role or a revoked IMPORT_CSV stops the next write
+        const batchAuthContext = await this.resolveRequesterOrThrow(importJob);
+
+        const batchStart = batchIndex * QUERY_MAX_RECORDS;
+        const batchRows = validatedRows.slice(
+          batchStart,
+          batchStart + QUERY_MAX_RECORDS,
+        );
+
+        try {
+          const writtenCount =
+            await this.workspaceOrmManager.executeInWorkspaceContext(
+              () =>
+                this.writeBatch({
+                  rows: batchRows,
+                  objectNameSingular: importJob.objectNameSingular,
+                  authContext: batchAuthContext,
+                }),
+              batchAuthContext,
+            );
+          const skippedCount = batchRows.length - writtenCount;
+
+          successCount += writtenCount;
+
+          if (skippedCount > 0) {
+            failureCount += skippedCount;
+            allErrors.push({
+              batchIndex,
+              error: t`${plural(skippedCount, { one: '# record', other: '# records' })} could not be updated. You may not have permission to edit them.`,
+            });
+          }
+        } catch (error) {
+          failureCount += batchRows.length;
+          allErrors.push({
+            batchIndex,
+            error: error instanceof Error ? error.message : t`Unknown error`,
+          });
+        }
+
+        processedRecords = Math.min(
+          batchStart + batchRows.length,
+          totalRecords,
+        );
+
+        await this.importJobService.updateProgress({
+          ...jobData,
+          updates: {
+            processedRecords,
+            successCount,
+            warningCount: allWarnings.length,
+            failureCount,
+          },
+        });
+
+        // Gives workers time to drain the event cascade of one batch before the next arrives
+        if (batchIndex < numberOfBatches - 1) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, INTER_BATCH_DELAY_MS),
+          );
+        }
+      }
+
+      const finalStatus = (await this.isCancelled(jobData))
+        ? ImportJobStatus.CANCELLED
+        : failureCount === totalRecords
+          ? ImportJobStatus.FAILED
+          : ImportJobStatus.COMPLETED;
+
+      await this.importJobService.updateProgress({
+        ...jobData,
+        updates: {
+          status: finalStatus,
+          processedRecords,
+          successCount,
+          warningCount: allWarnings.length,
+          failureCount,
+          result: { warnings: allWarnings, errors: allErrors },
         },
       });
 
       this.logger.log(
-        `Import job ${importJobId} ${finalStatus}: ${successCount} success, ${warningCount} warnings, ${failureCount} failures`,
+        `Import job ${importJobId} ${finalStatus}: ${successCount} success, ${allWarnings.length} warnings, ${failureCount} failures`,
       );
     } catch (error) {
-      this.logger.error(
-        `Import job ${importJobId} failed unexpectedly: ${error}`,
-      );
+      if (error instanceof ForbiddenException) {
+        this.logger.warn(
+          `Import job ${importJobId} stopped: its requester lost access`,
+        );
+      } else {
+        this.logger.error(`Import job ${importJobId} failed unexpectedly`);
+      }
 
-      await this.importJobService.updateProgress(importJobId, {
-        status: ImportJobStatus.FAILED,
-        result: {
-          warnings: allWarnings,
-          errors: [
-            ...allErrors,
-            {
-              error:
-                error instanceof Error ? error.message : 'Unexpected error',
-            },
-          ],
+      await this.importJobService.updateProgress({
+        ...jobData,
+        updates: {
+          status: ImportJobStatus.FAILED,
+          result: {
+            warnings: allWarnings,
+            errors: [
+              ...allErrors,
+              {
+                error:
+                  error instanceof Error ? error.message : t`Unexpected error`,
+              },
+            ],
+          },
         },
       });
     }
+  }
+
+  // insert() emits CREATED and updateMany() emits UPDATED with a before/after diff, so a re-import
+  // leaves timeline history; a blind upsert would not
+  private async writeBatch({
+    rows,
+    objectNameSingular,
+    authContext,
+  }: {
+    rows: ImportRow[];
+    objectNameSingular: string;
+    authContext: WorkspaceAuthContext;
+  }): Promise<number> {
+    const repository =
+      this.workspaceOrmManager.getRepository(objectNameSingular);
+    const batchIds = rows.map((row) => row.id).filter(isNonEmptyString);
+
+    const existingRecords =
+      batchIds.length > 0
+        ? await repository.find({
+            where: { id: In(batchIds) },
+            select: { id: true },
+          })
+        : [];
+
+    const existingIds = new Set(existingRecords.map((record) => record.id));
+
+    const rowsToInsert = rows.filter(
+      (row) => !isNonEmptyString(row.id) || !existingIds.has(row.id),
+    );
+    const rowsToUpdate = rows.filter(
+      (row): row is ImportRow & { id: string } =>
+        isNonEmptyString(row.id) && existingIds.has(row.id),
+    );
+
+    let writtenCount = 0;
+
+    if (rowsToInsert.length > 0) {
+      const { identifiers } = await repository.insert(
+        await this.injectImportActorFieldsOnCreate({
+          records: rowsToInsert,
+          objectNameSingular,
+          authContext,
+        }),
+      );
+
+      writtenCount += identifiers.length;
+    }
+
+    if (rowsToUpdate.length > 0) {
+      // As in an upstream upsert, an update never rewrites who created the record
+      const partialEntities =
+        await this.actorFromAuthContextService.injectUpdatedBy({
+          records: rowsToUpdate.map(
+            ({ id: _id, createdBy: _createdBy, ...fields }) => fields,
+          ),
+          objectMetadataNameSingular: objectNameSingular,
+          authContext,
+        });
+
+      // updateMany skips records the requester cannot edit, so only the affected count is a success
+      const { affected } = await repository.updateMany(
+        rowsToUpdate.map((row, index) => ({
+          criteria: row.id,
+          partialEntity: partialEntities[index],
+        })),
+      );
+
+      writtenCount += affected ?? 0;
+    }
+
+    return writtenCount;
+  }
+
+  private async applyRelationPlan({
+    plan,
+    authContext,
+  }: {
+    plan: RelationResolutionPlan;
+    authContext: WorkspaceAuthContext;
+  }): Promise<void> {
+    // The id is fixed before the insert: reading the record back could be denied by RLS
+    for (const newRecord of plan.newRecords) {
+      const newRecordId = v4();
+      const recordsToInsert = await this.injectImportActorFieldsOnCreate({
+        records: [{ ...newRecord.data, id: newRecordId }],
+        objectNameSingular: newRecord.objectNameSingular,
+        authContext,
+      });
+
+      await this.workspaceOrmManager
+        .getRepository(newRecord.objectNameSingular)
+        .insert(recordsToInsert);
+
+      for (const row of plan.processedRows) {
+        if (row.id === newRecord.reassignment.mainRecordId) {
+          row[newRecord.reassignment.joinColumnName] = newRecordId;
+        }
+      }
+    }
+
+    const updatesByObject = new Map<string, RelatedRecordUpdate[]>();
+
+    for (const update of plan.relatedRecordUpdates) {
+      const group = updatesByObject.get(update.objectNameSingular) ?? [];
+
+      group.push(update);
+      updatesByObject.set(update.objectNameSingular, group);
+    }
+
+    for (const [objectNameSingular, updates] of updatesByObject.entries()) {
+      const repository =
+        this.workspaceOrmManager.getRepository(objectNameSingular);
+      const fieldsWithUpdatedBy =
+        await this.actorFromAuthContextService.injectUpdatedBy({
+          records: updates.map((update) => update.fields),
+          objectMetadataNameSingular: objectNameSingular,
+          authContext,
+        });
+
+      // Bounded concurrency keeps a large plan from exhausting the connection pool
+      for (
+        let chunkStart = 0;
+        chunkStart < updates.length;
+        chunkStart += RELATION_UPDATE_CONCURRENCY
+      ) {
+        await Promise.all(
+          updates
+            .slice(chunkStart, chunkStart + RELATION_UPDATE_CONCURRENCY)
+            .map((update, offset) =>
+              repository.update(
+                update.recordId,
+                fieldsWithUpdatedBy[chunkStart + offset],
+              ),
+            ),
+        );
+      }
+    }
+  }
+
+  // createdBy keeps source IMPORT, as in the browser import; a row that brings its own createdBy keeps it
+  private async injectImportActorFieldsOnCreate({
+    records,
+    objectNameSingular,
+    authContext,
+  }: {
+    records: ImportRow[];
+    objectNameSingular: string;
+    authContext: WorkspaceAuthContext;
+  }): Promise<ImportRow[]> {
+    const recordsWithActors =
+      await this.actorFromAuthContextService.injectActorFieldsOnCreate({
+        records,
+        objectMetadataNameSingular: objectNameSingular,
+        authContext,
+      });
+
+    return recordsWithActors.map((record, index) =>
+      isDefined(records[index].createdBy) || !isPlainObject(record.createdBy)
+        ? record
+        : {
+            ...record,
+            createdBy: { ...record.createdBy, source: FieldActorSource.IMPORT },
+          },
+    );
+  }
+
+  private async resolveRelations({
+    importJob,
+    validatedRows,
+    relationBehaviors,
+  }: {
+    importJob: ImportJobEntity;
+    validatedRows: ImportRow[];
+    relationBehaviors: RelationBehavior[];
+  }): Promise<RelationResolutionPlan> {
+    const { flatObjectMetadataMaps, flatFieldMetadataMaps } =
+      await this.workspaceCacheService.getOrRecompute(importJob.workspaceId, [
+        'flatObjectMetadataMaps',
+        'flatFieldMetadataMaps',
+      ]);
+
+    return resolveImportRelations(
+      validatedRows,
+      relationBehaviors,
+      importJob.objectNameSingular,
+      flatObjectMetadataMaps,
+      flatFieldMetadataMaps,
+      async (objectName) => this.workspaceOrmManager.getRepository(objectName),
+    );
+  }
+
+  private async isCancelled(data: ImportJobData): Promise<boolean> {
+    return (
+      (await this.importJobService.findStatusById(data)) ===
+      ImportJobStatus.CANCELLED
+    );
+  }
+
+  private async failImportJob(
+    data: ImportJobData,
+    errorMessage: string,
+  ): Promise<void> {
+    await this.importJobService.updateProgress({
+      ...data,
+      updates: {
+        status: ImportJobStatus.FAILED,
+        result: { errors: [{ error: errorMessage }] },
+      },
+    });
   }
 }

@@ -1,4 +1,4 @@
-import { sidePanelPageState } from '@/side-panel/states/sidePanelPageState';
+import { sidePanelPageInfoSelector } from '@/side-panel/states/sidePanelPageInfoSelector';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useEffect } from 'react';
 import { SidePanelPages } from 'twenty-shared/types';
@@ -10,12 +10,13 @@ type SidePanelTopBarInputFocusEffectProps = {
 export const SidePanelTopBarInputFocusEffect = ({
   inputRef,
 }: SidePanelTopBarInputFocusEffectProps) => {
-  const sidePanelPage = useAtomStateValue(sidePanelPageState);
+  const sidePanelPage = useAtomStateValue(sidePanelPageInfoSelector).page;
 
   useEffect(() => {
     if (
       sidePanelPage === SidePanelPages.CommandMenuDisplay ||
-      sidePanelPage === SidePanelPages.SearchRecords
+      sidePanelPage === SidePanelPages.SearchRecords ||
+      sidePanelPage === SidePanelPages.SearchAiChats
     ) {
       inputRef.current?.focus();
     }

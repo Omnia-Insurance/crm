@@ -1,10 +1,9 @@
 import { styled } from '@linaria/react';
-import { useContext } from 'react';
-
 import { TopBar } from '@/ui/layout/top-bar/components/TopBar';
-import { TintedIconTile } from 'twenty-ui/data-display';
+import { TintedIconTile } from 'twenty-ui/components/data-display';
 import { IconBuildingSkyscraper, IconChevronDown } from 'twenty-ui/icon';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledViewPicker = styled.div`
   align-items: center;
@@ -31,14 +30,18 @@ const StyledRightAction = styled.div`
 `;
 
 export const BackgroundMockViewBar = () => {
-  const { theme } = useContext(ThemeContext);
+  const { t } = useLingui();
+  const theme = useTheme();
 
   return (
     <TopBar
       leftComponent={
         <StyledViewPicker>
-          <TintedIconTile Icon={IconBuildingSkyscraper} color="blue" />
-          <span>All Companies</span>
+          <TintedIconTile
+            icon={<IconBuildingSkyscraper size={theme.icon.size.md} />}
+            color="blue"
+          />
+          <span>{t`All Companies`}</span>
           <StyledViewPickerCount>· 599</StyledViewPickerCount>
           <IconChevronDown
             size={theme.icon.size.sm}
@@ -48,9 +51,9 @@ export const BackgroundMockViewBar = () => {
       }
       rightComponent={
         <>
-          <StyledRightAction>Filter</StyledRightAction>
-          <StyledRightAction>Sort</StyledRightAction>
-          <StyledRightAction>Options</StyledRightAction>
+          <StyledRightAction>{t`Filter`}</StyledRightAction>
+          <StyledRightAction>{t`Sort`}</StyledRightAction>
+          <StyledRightAction>{t`Options`}</StyledRightAction>
         </>
       }
     />

@@ -1,11 +1,8 @@
 import { useAuth } from '@/auth/hooks/useAuth';
 import { useSignInWithGoogle } from '@/auth/sign-in-up/hooks/useSignInWithGoogle';
+import { BILLING_CHECKOUT_SESSION_DEFAULT_VALUE } from '@/settings/billing/constants/BillingCheckoutSessionDefaultValue';
 import { renderHook } from '@testing-library/react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import {
-  BillingPlanKey,
-  SubscriptionInterval,
-} from '~/generated-metadata/graphql';
 import { getJestMetadataAndApolloMocksWrapper } from '~/testing/jest/getJestMetadataAndApolloMocksWrapper';
 
 jest.mock('react-router-dom', () => ({
@@ -19,12 +16,6 @@ jest.mock('@/auth/hooks/useAuth', () => ({
 }));
 
 describe('useSignInWithGoogle', () => {
-  const mockBillingCheckoutSession = {
-    plan: BillingPlanKey.PRO,
-    interval: SubscriptionInterval.Month,
-    requirePaymentMethod: true,
-  };
-
   const Wrapper = getJestMetadataAndApolloMocksWrapper({
     apolloMocks: [],
   });
@@ -54,7 +45,7 @@ describe('useSignInWithGoogle', () => {
       action: 'join-workspace',
       workspaceInviteHash: 'testHash',
       workspacePersonalInviteToken: 'testToken',
-      billingCheckoutSession: mockBillingCheckoutSession,
+      billingCheckoutSession: BILLING_CHECKOUT_SESSION_DEFAULT_VALUE,
     });
   });
 
@@ -80,7 +71,36 @@ describe('useSignInWithGoogle', () => {
       action: 'join-workspace',
       workspaceInviteHash: 'testHash',
       workspacePersonalInviteToken: undefined,
-      billingCheckoutSession: mockBillingCheckoutSession,
+      billingCheckoutSession: BILLING_CHECKOUT_SESSION_DEFAULT_VALUE,
     });
+  });
+
+  // OMNIA-CUSTOM: trusted sibling URL (omniaagent.com dashboard)
+  it('should forward a trusted sibling URL from the query as returnToPath', () => {
+    const signInWithGoogleMock = jest.fn();
+
+    window.history.replaceState(
+      {},
+      '',
+      `/welcome?postSignInRedirect=${encodeURIComponent('https://localhost/retention')}`,
+    );
+    (useParams as jest.Mock).mockReturnValue({});
+    (useSearchParams as jest.Mock).mockReturnValue([new URLSearchParams()]);
+    (useAuth as jest.Mock).mockReturnValue({
+      signInWithGoogle: signInWithGoogleMock,
+    });
+
+    const { result } = renderHook(() => useSignInWithGoogle(), {
+      wrapper: Wrapper,
+    });
+    result.current.signInWithGoogle({
+      action: 'join-workspace',
+    });
+
+    expect(signInWithGoogleMock).toHaveBeenCalledWith(
+      expect.objectContaining({ returnToPath: 'https://localhost/retention' }),
+    );
+
+    window.history.replaceState({}, '', '/');
   });
 });

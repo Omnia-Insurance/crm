@@ -2,7 +2,8 @@ import { createManyOperationFactory } from 'test/integration/graphql/utils/creat
 import { deleteManyOperationFactory } from 'test/integration/graphql/utils/delete-many-operation-factory.util';
 import { destroyManyOperationFactory } from 'test/integration/graphql/utils/destroy-many-operation-factory.util';
 import { findManyOperationFactory } from 'test/integration/graphql/utils/find-many-operation-factory.util';
-import { makeGraphqlAPIRequest } from 'test/integration/graphql/utils/make-graphql-api-request.util';
+import { makeGraphqlApiRequest } from 'test/integration/graphql/utils/make-graphql-api-request.util';
+import { waitForAllJobsToFinish } from 'test/integration/utils/wait-for-all-jobs-to-finish.util';
 import { QUERY_MAX_RECORDS_FROM_RELATION } from 'twenty-shared/constants';
 
 const HOT_COMPANY_ID = '20202020-ffff-4000-8000-000000000001';
@@ -59,10 +60,10 @@ describe('Nested relation per-parent limit (e2e)', () => {
         { id: SOFT_DELETED_COMPANY_ID, name: 'Soft-deleted relation company' },
         { id: EMPTY_COMPANY_ID, name: 'Empty relation company' },
       ],
-      upsert: true,
+      upsert: false,
     });
 
-    await makeGraphqlAPIRequest(createCompanies);
+    await makeGraphqlApiRequest(createCompanies);
 
     const createPeople = createManyOperationFactory({
       objectMetadataSingularName: 'person',
@@ -76,10 +77,10 @@ describe('Nested relation per-parent limit (e2e)', () => {
           companyId: SOFT_DELETED_COMPANY_ID,
         })),
       ],
-      upsert: true,
+      upsert: false,
     });
 
-    await makeGraphqlAPIRequest(createPeople);
+    await makeGraphqlApiRequest(createPeople);
 
     // Soft-delete a subset so the per-parent selection must exclude them.
     const softDeletePeople = deleteManyOperationFactory({
@@ -89,7 +90,7 @@ describe('Nested relation per-parent limit (e2e)', () => {
       filter: { id: { in: SOFT_DELETED_REMOVED_PERSON_IDS } },
     });
 
-    await makeGraphqlAPIRequest(softDeletePeople);
+    await makeGraphqlApiRequest(softDeletePeople);
   });
 
   afterAll(async () => {
@@ -100,7 +101,7 @@ describe('Nested relation per-parent limit (e2e)', () => {
       filter: { id: { in: ALL_PERSON_IDS } },
     });
 
-    await makeGraphqlAPIRequest(destroyPeople);
+    await makeGraphqlApiRequest(destroyPeople);
 
     const destroyCompanies = destroyManyOperationFactory({
       objectMetadataSingularName: 'company',
@@ -109,7 +110,9 @@ describe('Nested relation per-parent limit (e2e)', () => {
       filter: { id: { in: ALL_COMPANY_IDS } },
     });
 
-    await makeGraphqlAPIRequest(destroyCompanies);
+    await makeGraphqlApiRequest(destroyCompanies);
+    // a shard's last suite has no next suite to drain the jobs its cleanup starts
+    await waitForAllJobsToFinish();
   });
 
   it('caps a hot parent at the per-parent limit without starving siblings', async () => {
@@ -129,7 +132,7 @@ describe('Nested relation per-parent limit (e2e)', () => {
       filter: { id: { in: [HOT_COMPANY_ID, SMALL_COMPANY_ID] } },
     });
 
-    const response = await makeGraphqlAPIRequest(queryData);
+    const response = await makeGraphqlApiRequest(queryData);
 
     expect(response.body.data).toBeDefined();
     expect(response.body.errors).toBeUndefined();
@@ -171,7 +174,7 @@ describe('Nested relation per-parent limit (e2e)', () => {
       filter: { id: { in: [SOFT_DELETED_COMPANY_ID] } },
     });
 
-    const response = await makeGraphqlAPIRequest(queryData);
+    const response = await makeGraphqlApiRequest(queryData);
 
     expect(response.body.errors).toBeUndefined();
 
@@ -207,7 +210,7 @@ describe('Nested relation per-parent limit (e2e)', () => {
       filter: { id: { in: [EMPTY_COMPANY_ID] } },
     });
 
-    const response = await makeGraphqlAPIRequest(queryData);
+    const response = await makeGraphqlApiRequest(queryData);
 
     expect(response.body.errors).toBeUndefined();
     expect(
@@ -228,7 +231,7 @@ describe('Nested relation per-parent limit (e2e)', () => {
       filter: { id: { in: SMALL_PERSON_IDS } },
     });
 
-    const response = await makeGraphqlAPIRequest(queryData);
+    const response = await makeGraphqlApiRequest(queryData);
 
     expect(response.body.errors).toBeUndefined();
 

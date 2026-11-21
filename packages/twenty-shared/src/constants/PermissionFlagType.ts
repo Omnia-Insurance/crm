@@ -1,5 +1,4 @@
 export enum PermissionFlagType {
-  // Settings permissions
   API_KEYS_AND_WEBHOOKS = 'API_KEYS_AND_WEBHOOKS',
   WORKSPACE = 'WORKSPACE',
   WORKSPACE_MEMBERS = 'WORKSPACE_MEMBERS',
@@ -19,7 +18,6 @@ export enum PermissionFlagType {
   // grant explicitly to any non-admin reconciliation operator role.
   RECONCILIATION = 'RECONCILIATION',
 
-  // Tool permissions
   AI = 'AI',
   VIEWS = 'VIEWS',
   UPLOAD_FILE = 'UPLOAD_FILE',

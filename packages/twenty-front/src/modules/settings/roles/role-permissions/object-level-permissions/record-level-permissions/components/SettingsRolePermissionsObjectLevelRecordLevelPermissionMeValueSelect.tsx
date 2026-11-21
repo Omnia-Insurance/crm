@@ -1,68 +1,42 @@
 /* @license Enterprise */
 
-import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
+import { SelectOptionIcon } from '@/ui/input/components/SelectOptionIcon';
+import { isNonEmptyString } from '@sniptt/guards';
 import { useState } from 'react';
+import { Dropdown } from 'twenty-ui/components/navigation';
+import { IconUserCircle } from 'twenty-ui/icon';
+import { useIcons } from 'twenty-ui/icon/provider';
+import { Field } from 'twenty-ui/primitives/input';
 import {
-  compositeTypeDefinitions,
+  StandardObjectNameSingular,
   FieldMetadataType,
-  CoreObjectNameSingular,
+  compositeTypeDefinitions,
 } from 'twenty-shared/types';
-import { isDefined } from 'twenty-shared/utils';
-import { IconUserCircle, IconX, useIcons } from 'twenty-ui/icon';
-import { MenuItem } from 'twenty-ui/navigation';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { isDefined, isNonEmptyArray } from 'twenty-shared/utils';
 
+// OMNIA-CUSTOM: relations to member-owned records (contract C2)
 import { useFilteredObjectMetadataItems } from '@/object-metadata/hooks/useFilteredObjectMetadataItems';
-import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { hasRelationToWorkspaceMember } from '@/settings/roles/role-permissions/object-level-permissions/record-level-permissions/utils/hasRelationToWorkspaceMember';
+import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { fieldMetadataItemUsedInDropdownComponentSelector } from '@/object-record/object-filter-dropdown/states/fieldMetadataItemUsedInDropdownComponentSelector';
 import { getCompositeSubFieldLabel } from '@/object-record/object-filter-dropdown/utils/getCompositeSubFieldLabel';
 import { getCompositeSubFieldType } from '@/object-record/object-filter-dropdown/utils/getCompositeSubFieldType';
 import { getFieldMetadataTypeLabel } from '@/object-record/object-filter-dropdown/utils/getFieldMetadataTypeLabel';
 import { isCompositeFieldType } from '@/object-record/object-filter-dropdown/utils/isCompositeFieldType';
 import { currentRecordFiltersComponentState } from '@/object-record/record-filter/states/currentRecordFiltersComponentState';
+import { type RLSDynamicValue } from '@/object-record/record-filter/types/RecordFilter';
 import { SETTINGS_COMPOSITE_FIELD_TYPE_CONFIGS } from '@/settings/data-model/constants/SettingsCompositeFieldTypeConfigs';
 import { type CompositeFieldSubFieldName } from '@/settings/data-model/types/CompositeFieldSubFieldName';
 import { type CompositeFieldType } from '@/settings/data-model/types/CompositeFieldType';
 import { RECORD_LEVEL_PERMISSION_PREDICATE_FIELD_TYPES } from '@/settings/roles/role-permissions/object-level-permissions/record-level-permissions/constants/RecordLevelPermissionPredicateFieldTypes';
-import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
-import { DropdownMenuHeader } from '@/ui/layout/dropdown/components/DropdownMenuHeader/DropdownMenuHeader';
-import { DropdownMenuHeaderLeftComponent } from '@/ui/layout/dropdown/components/DropdownMenuHeader/internal/DropdownMenuHeaderLeftComponent';
-import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
-import { GenericDropdownContentWidth } from '@/ui/layout/dropdown/constants/GenericDropdownContentWidth';
-import { useCloseDropdown } from '@/ui/layout/dropdown/hooks/useCloseDropdown';
+import { getComparableWorkspaceMemberRelationFields } from '@/settings/roles/role-permissions/object-level-permissions/record-level-permissions/utils/getComparableWorkspaceMemberRelationFields';
 import { useAtomComponentSelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorValue';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
-
-const StyledSearchInput = styled.input`
-  background: transparent;
-  border: none;
-  border-bottom: 1px solid ${themeCssVariables.border.color.light};
-  border-radius: 0;
-  color: ${themeCssVariables.font.color.primary};
-  font-family: inherit;
-  font-size: ${themeCssVariables.font.size.sm};
-  font-weight: inherit;
-  margin: 0;
-  max-width: 100%;
-  min-height: 19px;
-  outline: none;
-  overflow: hidden;
-  padding: ${themeCssVariables.spacing[2]};
-  text-decoration: none;
-
-  &::placeholder {
-    color: ${themeCssVariables.font.color.light};
-  }
-`;
+import { useLingui } from '@lingui/react/macro';
 
 type SettingsRolePermissionsObjectLevelRecordLevelPermissionMeValueSelectProps =
   {
-    onSelect: (
-      workspaceMemberFieldMetadataId: string,
-      workspaceMemberSubFieldName?: string | null,
-    ) => void;
+    onSelect: (selection: RLSDynamicValue) => void;
     recordFilterId: string;
   };
 
@@ -71,14 +45,17 @@ export const SettingsRolePermissionsObjectLevelRecordLevelPermissionMeValueSelec
     onSelect,
     recordFilterId,
   }: SettingsRolePermissionsObjectLevelRecordLevelPermissionMeValueSelectProps) => {
+    const { t } = useLingui();
     const { getIcon } = useIcons();
-    const { closeDropdown } = useCloseDropdown();
     const [searchInput, setSearchInput] = useState('');
 
     const { objectMetadataItem: workspaceMemberMetadataItem } =
       useObjectMetadataItem({
-        objectNameSingular: CoreObjectNameSingular.WorkspaceMember,
+        objectNameSingular: StandardObjectNameSingular.WorkspaceMember,
       });
+
+    // OMNIA-CUSTOM: targets of relations to member-owned records (contract C2)
+    const { activeObjectMetadataItems } = useFilteredObjectMetadataItems();
 
     const selectedFieldMetadataItem = useAtomComponentSelectorValue(
       fieldMetadataItemUsedInDropdownComponentSelector,
@@ -112,68 +89,71 @@ export const SettingsRolePermissionsObjectLevelRecordLevelPermissionMeValueSelec
       }
     }
 
-    const compatibleWorkspaceMemberFields = !isDefined(
-      workspaceMemberMetadataItem,
-    )
-      ? []
-      : workspaceMemberMetadataItem.fields.filter((field) => {
-          if (
-            field.name === 'createdAt' ||
-            field.name === 'updatedAt' ||
-            field.name === 'deletedAt' ||
-            field.name === 'id'
-          ) {
-            return false;
-          }
-
-          if (!targetFieldType) {
-            return true;
-          }
-
-          if (
-            !RECORD_LEVEL_PERMISSION_PREDICATE_FIELD_TYPES.includes(
-              targetFieldType,
-            )
-          ) {
-            return false;
-          }
-
-          if (field.type === targetFieldType) {
-            return true;
-          }
-
-          if (isCompositeFieldType(field.type)) {
-            const fieldCompositeType = compositeTypeDefinitions.get(field.type);
-
-            if (isDefined(fieldCompositeType)) {
-              return fieldCompositeType.properties.some(
-                (property) => property.type === targetFieldType,
-              );
-            }
-          }
-
-          return false;
-        });
-
-    const handleSelectField = (
-      fieldMetadataId: string,
-      subFieldName?: string | null,
-    ) => {
-      onSelect(fieldMetadataId, subFieldName);
-      closeDropdown();
-    };
-
-    const { activeObjectMetadataItems } = useFilteredObjectMetadataItems();
-
     const isRelationToWorkspaceMember =
       selectedFieldMetadataItem?.type === FieldMetadataType.RELATION &&
       (selectedFieldMetadataItem.relation?.targetObjectMetadata.nameSingular ===
-        CoreObjectNameSingular.WorkspaceMember ||
-        hasRelationToWorkspaceMember(
-          selectedFieldMetadataItem.relation?.targetObjectMetadata
-            .nameSingular ?? '',
-          activeObjectMetadataItems,
-        ));
+        StandardObjectNameSingular.WorkspaceMember ||
+        // OMNIA-CUSTOM: "Me" on Policy ▸ Agent, saved as the C2 hop
+        hasRelationToWorkspaceMember({
+          relationFieldMetadataItem: selectedFieldMetadataItem,
+          objectMetadataItems: activeObjectMetadataItems,
+        }));
+
+    const getCompatibleWorkspaceMemberFields = () => {
+      if (!isDefined(workspaceMemberMetadataItem)) {
+        return [];
+      }
+
+      if (selectedFieldMetadataItem?.type === FieldMetadataType.RELATION) {
+        return getComparableWorkspaceMemberRelationFields({
+          workspaceMemberFieldMetadataItems: workspaceMemberMetadataItem.fields,
+          targetObjectMetadataId:
+            selectedFieldMetadataItem.relation?.targetObjectMetadata.id,
+        });
+      }
+
+      return workspaceMemberMetadataItem.fields.filter((field) => {
+        if (
+          field.name === 'createdAt' ||
+          field.name === 'updatedAt' ||
+          field.name === 'deletedAt' ||
+          field.name === 'id'
+        ) {
+          return false;
+        }
+
+        if (!targetFieldType) {
+          return true;
+        }
+
+        if (
+          !RECORD_LEVEL_PERMISSION_PREDICATE_FIELD_TYPES.includes(
+            targetFieldType,
+          )
+        ) {
+          return false;
+        }
+
+        if (field.type === targetFieldType) {
+          return true;
+        }
+
+        if (isCompositeFieldType(field.type)) {
+          const fieldCompositeType = compositeTypeDefinitions.get(field.type);
+
+          if (isDefined(fieldCompositeType)) {
+            return fieldCompositeType.properties.some(
+              (property) => property.type === targetFieldType,
+            );
+          }
+        }
+
+        return false;
+      });
+    };
+
+    const compatibleWorkspaceMemberFields =
+      getCompatibleWorkspaceMemberFields();
 
     const menuItems: Array<{
       id: string;
@@ -277,44 +257,46 @@ export const SettingsRolePermissionsObjectLevelRecordLevelPermissionMeValueSelec
       : t`Search 1 field`;
 
     return (
-      <DropdownContent widthInPixels={GenericDropdownContentWidth.Medium}>
-        <DropdownMenuHeader
-          StartComponent={
-            <DropdownMenuHeaderLeftComponent
-              onClick={() => closeDropdown()}
-              Icon={IconX}
-            />
-          }
-        >
-          {headerText}
-        </DropdownMenuHeader>
-        <StyledSearchInput
-          value={searchInput}
-          autoFocus
-          placeholder={placeholderText}
-          onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
-            setSearchInput(event.target.value)
-          }
-        />
-        <DropdownMenuItemsContainer>
+      <>
+        <Dropdown.Header>
+          <Dropdown.Title>{headerText}</Dropdown.Title>
+          <Dropdown.Close aria-label={t`Close`} />
+        </Dropdown.Header>
+        <Field.Root>
+          <Dropdown.Search
+            value={searchInput}
+            placeholder={placeholderText}
+            aria-label={placeholderText}
+            onValueChange={setSearchInput}
+          />
+        </Field.Root>
+        <Dropdown.Section>
           {filteredMenuItems.map((item) => (
-            <MenuItem
+            <Dropdown.OptionItem
               key={item.id}
-              LeftIcon={item.icon ? getIcon(item.icon) : IconUserCircle}
-              text={item.label}
-              onClick={() =>
-                handleSelectField(item.fieldMetadataId, item.subFieldName)
+              startIcon={
+                <SelectOptionIcon
+                  Icon={
+                    isNonEmptyString(item.icon)
+                      ? getIcon(item.icon)
+                      : IconUserCircle
+                  }
+                />
               }
-            />
+              onSelect={() =>
+                onSelect({
+                  workspaceMemberFieldMetadataId: item.fieldMetadataId,
+                  workspaceMemberSubFieldName: item.subFieldName,
+                })
+              }
+            >
+              {item.label}
+            </Dropdown.OptionItem>
           ))}
-          {filteredMenuItems.length === 0 && (
-            <MenuItem
-              text={t`No compatible fields`}
-              onClick={() => {}}
-              disabled
-            />
+          {!isNonEmptyArray(filteredMenuItems) && (
+            <Dropdown.Empty>{t`No compatible fields`}</Dropdown.Empty>
           )}
-        </DropdownMenuItemsContainer>
-      </DropdownContent>
+        </Dropdown.Section>
+      </>
     );
   };

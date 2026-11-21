@@ -5,6 +5,7 @@ export const GET_MY_MESSAGE_CHANNELS = gql`
     myMessageChannels(connectedAccountId: $connectedAccountId) {
       id
       handle
+      displayName
       visibility
       type
       isContactAutoCreationEnabled
@@ -13,9 +14,11 @@ export const GET_MY_MESSAGE_CHANNELS = gql`
       excludeNonProfessionalEmails
       excludeGroupEmails
       isSyncEnabled
+      messagingProviderUniversalIdentifier
       syncStatus
       syncStage
       syncStageStartedAt
+      importProgress
       connectedAccountId
       connectedAccount {
         id

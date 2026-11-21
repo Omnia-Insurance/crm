@@ -1,15 +1,12 @@
 import { SettingsTableCard } from '@/settings/components/SettingsTableCard';
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
-import { H2Title } from 'twenty-ui/typography';
-import { Section } from 'twenty-ui/layout';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { Section } from 'twenty-ui/components/layout';
+import { themeCssVariables } from 'twenty-ui/theme';
 
-const StyledSettingsTableCardContainer = styled.div`
-  > * {
-    padding-left: ${themeCssVariables.spacing[2]};
-    padding-right: ${themeCssVariables.spacing[2]};
-  }
+const StyledSettingsTableCard = styled(SettingsTableCard)`
+  padding-left: ${themeCssVariables.spacing[2]};
+  padding-right: ${themeCssVariables.spacing[2]};
 `;
 
 export const SettingsAdminHealthAccountSyncCountersTable = ({
@@ -47,17 +44,14 @@ export const SettingsAdminHealthAccountSyncCountersTable = ({
   ];
 
   return (
-    <Section>
-      <H2Title title={title} description={description} />
-      <StyledSettingsTableCardContainer>
-        <SettingsTableCard
-          items={items}
-          rounded
-          gridAutoColumns="1fr 1fr"
-          labelAlign="left"
-          valueAlign="right"
-        />
-      </StyledSettingsTableCardContainer>
-    </Section>
+    <Section.Root>
+      <Section.Header title={title} description={description} />
+      <StyledSettingsTableCard
+        items={items}
+        gridAutoColumns="1fr 1fr"
+        labelAlign="left"
+        valueAlign="right"
+      />
+    </Section.Root>
   );
 };

@@ -73,10 +73,12 @@ const EXTERNAL_LINK_OWNERS = new Set([
 // src/icons/twenty-logo.tsx for the mockup's brand-image-by-URL path).
 const PUBLIC_SVG_BRAND_FILES = new Set([
   'public/images/logo-bar/otiima.svg',
-  'public/images/logo-bar/civicactions.svg',
-  'public/images/logo-bar/fora.svg',
+  'public/images/logo-bar/zabka.svg',
+  'public/images/logo-bar/faz.svg',
   'public/images/logo-bar/wazoku.svg',
+  'public/images/pricing/plans/apps/call-recorder.svg',
   'public/images/shared/companies/logos/linear.svg',
+  'public/images/shared/companies/logos/microsoft.svg',
   'public/images/shared/companies/logos/twenty.svg',
   // The halftone studio's default image input: fetched at runtime as an
   // <img> and fed through the halftone shader, not rendered as an icon glyph.
@@ -96,6 +98,8 @@ const PUBLIC_SVG_README_DOC_PATHS = [
 // where layout is genuinely multi-axis (wrapping rows, multi-column
 // tracks) — listed here explicitly.
 const ROW_GAP_MULTI_AXIS_FILES = new Set([
+  'sections/affiliate-program/AffiliateIntegratorStrip.tsx',
+  'sections/affiliate-program/AffiliateProgramTerms.tsx',
   'sections/case-study-detail/CaseStudyHero.tsx',
   'sections/faq/Faq.tsx',
   'sections/faq/FaqItems.tsx',
@@ -104,6 +108,8 @@ const ROW_GAP_MULTI_AXIS_FILES = new Set([
   'sections/releases-feed/ReleasesFeed.tsx',
   'sections/product-stepper/ProductStepper.tsx',
   'sections/home-stepper/HomeStepper.tsx',
+  'sections/partner-lead/PartnerBecomeStrip.tsx',
+  'sections/partner-lead/PartnerServicesExplainer.tsx',
   'sections/testimonials/PartnerTestimonialsCarousel.tsx',
   'sections/testimonials/TestimonialsCarousel.tsx',
   'sections/trusted-by/TrustedBy.tsx',
@@ -223,6 +229,7 @@ function walk(directory) {
       (relativePath.startsWith('sections' + path.sep) ||
         relativePath.startsWith('case-studies' + path.sep) ||
         relativePath.startsWith('app-preview' + path.sep) ||
+        relativePath.startsWith('client-brief' + path.sep) ||
         relativePath.startsWith('contact-cal' + path.sep) ||
         relativePath.startsWith('partner-application' + path.sep) ||
         relativePath.startsWith('partners-marketplace' + path.sep) ||
@@ -279,21 +286,14 @@ function walk(directory) {
       }
     }
 
-    // twenty-ui's theme is pure data, baked by Linaria at build time — consume
-    // it directly so the mockups can't drift from the product. Its components
-    // are React runtime (+ react-tooltip): importing them would weigh down the
-    // marketing bundle, so the mockups stay on lean primitives built against
-    // the theme.
     const badTwentyUiSubpath = [
       ...content.matchAll(/from 'twenty-ui(\/[a-z-]+)?'/g),
     ]
       .map((match) => match[1] ?? '')
-      .find(
-        (subpath) => subpath !== '/theme' && subpath !== '/theme-constants',
-      );
+      .find((subpath) => subpath !== '/theme');
     if (badTwentyUiSubpath !== undefined) {
       failures.push(
-        `src/${relativePath}: only twenty-ui/theme is importable (pure data, baked at build); twenty-ui${badTwentyUiSubpath} pulls React runtime into the bundle — build a lean primitive instead.`,
+        `src/${relativePath}: only twenty-ui/theme is importable for static tokens baked at build; twenty-ui${badTwentyUiSubpath} pulls React runtime into the bundle — build a lean primitive instead.`,
       );
     }
 

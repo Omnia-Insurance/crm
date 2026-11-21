@@ -1,12 +1,14 @@
-import { styled } from '@linaria/react';
-import { useContext } from 'react';
-import { AvatarOrIcon } from 'twenty-ui/data-display';
+import { AvatarOrIcon } from '@/ui/field/display/components/internal/AvatarOrIcon/AvatarOrIcon';
+import { LightIconButton } from 'twenty-ui/components/input';
 import { IconX } from 'twenty-ui/icon';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { Chip } from 'twenty-ui/primitives/data-display';
 
 import { getFileType } from '@/activities/files/utils/getFileType';
 import { useFileCategoryColors } from '@/file/hooks/useFileCategoryColors';
 import { IconMapping } from '@/file/utils/fileIconMappings';
+import { useLingui } from '@lingui/react/macro';
+
+const ATTACHMENT_CHIP_MAX_WIDTH = 140;
 
 type AttachmentChipProps = {
   file: { id: string; name: string };
@@ -14,58 +16,14 @@ type AttachmentChipProps = {
   readonly?: boolean;
 };
 
-const StyledChip = styled.div<{ deletable: boolean }>`
-  align-items: center;
-  background-color: ${themeCssVariables.background.transparent.light};
-  border: 1px solid ${themeCssVariables.border.color.medium};
-  border-radius: ${themeCssVariables.border.radius.sm};
-  column-gap: ${themeCssVariables.spacing[1]};
-  display: inline-flex;
-  flex-direction: row;
-  flex-shrink: 0;
-  max-width: 140px;
-  padding-left: ${themeCssVariables.spacing[1]};
-`;
-
-const StyledLabel = styled.span`
-  color: ${themeCssVariables.font.color.primary};
-  font-size: ${themeCssVariables.font.size.sm};
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`;
-
-const StyledDelete = styled.button`
-  align-items: center;
-  background: none;
-  border: none;
-  border-bottom-right-radius: ${themeCssVariables.border.radius.sm};
-  border-top-right-radius: ${themeCssVariables.border.radius.sm};
-  color: ${themeCssVariables.font.color.tertiary};
-  cursor: pointer;
-  display: flex;
-  flex-shrink: 0;
-  font-size: ${themeCssVariables.font.size.sm};
-  height: 20px;
-  justify-content: center;
-  margin: 0;
-  padding: 0;
-  user-select: none;
-  width: 20px;
-
-  &:hover {
-    background-color: ${themeCssVariables.background.transparent.medium};
-    color: ${themeCssVariables.font.color.primary};
-  }
-`;
-
 export const AttachmentChip = ({
   file,
   onRemove,
   readonly = false,
 }: AttachmentChipProps) => {
-  const { theme } = useContext(ThemeContext);
+  const { t } = useLingui();
   const iconColors = useFileCategoryColors();
+  const fileType = getFileType(file.name);
 
   const handleChipClick = (event: React.MouseEvent) => {
     event.stopPropagation();
@@ -77,18 +35,31 @@ export const AttachmentChip = ({
   };
 
   return (
-    <StyledChip deletable={!readonly} onClick={handleChipClick}>
-      <AvatarOrIcon
-        Icon={IconMapping[getFileType(file.name)]}
-        IconBackgroundColor={iconColors[getFileType(file.name)]}
-      />
-      <StyledLabel title={file.name}>{file.name}</StyledLabel>
-
-      {!readonly && (
-        <StyledDelete onClick={handleRemoveClick}>
-          <IconX size={theme.icon.size.sm} stroke={theme.icon.stroke.sm} />
-        </StyledDelete>
-      )}
-    </StyledChip>
+    <Chip
+      variant="soft"
+      clickable={false}
+      maxWidth={ATTACHMENT_CHIP_MAX_WIDTH}
+      onClick={handleChipClick}
+      startElement={
+        <AvatarOrIcon
+          Icon={IconMapping[fileType]}
+          IconBackgroundColor={iconColors[fileType]}
+        />
+      }
+      endElement={
+        !readonly && (
+          <LightIconButton
+            size="xs"
+            emphasis="subtle"
+            aria-label={t`Remove ${file.name}`}
+            onClick={handleRemoveClick}
+          >
+            <IconX />
+          </LightIconButton>
+        )
+      }
+    >
+      {file.name}
+    </Chip>
   );
 };

@@ -2,16 +2,30 @@ import { type MessageDescriptor } from '@lingui/core';
 
 import { type PlansHostingMode } from '@/pricing-state';
 
-export type PlanTableTierId = 'organization' | 'pro';
+export type PlanTableTierId = 'enterprise' | 'organization' | 'pro';
 
 export type PlanTableCellType =
   | { kind: 'dash' }
-  | { kind: 'text'; text: MessageDescriptor }
+  | {
+      detail?: MessageDescriptor;
+      kind: 'metric';
+      prefix?: MessageDescriptor;
+      unit: MessageDescriptor;
+      value: MessageDescriptor;
+    }
+  | {
+      detail?: MessageDescriptor;
+      kind: 'text';
+      suffix?: MessageDescriptor;
+      text: MessageDescriptor;
+    }
+  | { kind: 'unlimited' }
   | { kind: 'yes'; label?: MessageDescriptor };
 
 export type PlanTableTierColumnType = {
+  highlighted?: boolean;
   id: PlanTableTierId;
-  label: MessageDescriptor;
+  label: Record<PlansHostingMode, MessageDescriptor>;
 };
 
 export type PlanTableCategoryRowDataType = {
@@ -23,8 +37,9 @@ export type PlanTableCategoryRowDataType = {
 export type PlanTableFeatureRowDataType = {
   appliesTo?: PlansHostingMode;
   featureLabel: MessageDescriptor;
-  selfHostTiers?: Record<PlanTableTierId, PlanTableCellType>;
-  tiers: Record<PlanTableTierId, PlanTableCellType>;
+  selfHostTiers?: Partial<Record<PlanTableTierId, PlanTableCellType>>;
+  tiers: Partial<Record<PlanTableTierId, PlanTableCellType>>;
+  tooltip?: MessageDescriptor;
   type: 'row';
 };
 

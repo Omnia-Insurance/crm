@@ -1,9 +1,8 @@
+import { msg } from '@lingui/core/macro';
 import { Injectable } from '@nestjs/common';
-
 import crypto from 'crypto';
-
-import { v4 } from 'uuid';
 import { isDefined } from 'twenty-shared/utils';
+import { v4 } from 'uuid';
 
 import { ApplicationService } from 'src/engine/core-modules/application/application.service';
 import { type FlatApplication } from 'src/engine/core-modules/application/types/flat-application.type';
@@ -14,16 +13,17 @@ import { findFlatEntityByIdInFlatEntityMapsOrThrow } from 'src/engine/metadata-m
 import { CreateLogicFunctionFromSourceInput } from 'src/engine/metadata-modules/logic-function/dtos/create-logic-function-from-source.input';
 import { LogicFunctionExecutionResultDTO } from 'src/engine/metadata-modules/logic-function/dtos/logic-function-execution-result.dto';
 import { LogicFunctionDTO } from 'src/engine/metadata-modules/logic-function/dtos/logic-function.dto';
+import { type UpdateLogicFunctionFromSourceInput } from 'src/engine/metadata-modules/logic-function/dtos/update-logic-function-from-source.input';
 import { LogicFunctionExecutionMode } from 'src/engine/metadata-modules/logic-function/logic-function.entity';
 import {
   LogicFunctionException,
   LogicFunctionExceptionCode,
 } from 'src/engine/metadata-modules/logic-function/logic-function.exception';
 import { LogicFunctionFromSourceHelperService } from 'src/engine/metadata-modules/logic-function/services/logic-function-from-source-helper.service';
-import { type UpdateLogicFunctionFromSourceInput } from 'src/engine/metadata-modules/logic-function/dtos/update-logic-function-from-source.input';
 import { buildUniversalFlatLogicFunctionToCreate } from 'src/engine/metadata-modules/logic-function/utils/build-universal-flat-logic-function-to-create.util';
 import { fromCreateLogicFunctionFromSourceInputToUniversalFlatLogicFunctionToCreate } from 'src/engine/metadata-modules/logic-function/utils/from-create-logic-function-from-source-input-to-universal-flat-logic-function-to-create.util';
 import { fromFlatLogicFunctionToLogicFunctionDto } from 'src/engine/metadata-modules/logic-function/utils/from-flat-logic-function-to-logic-function-dto.util';
+import { fromLogicFunctionExecuteResultToDTO } from 'src/engine/metadata-modules/logic-function/utils/from-logic-function-execute-result-to-dto.util';
 import { fromUpdateLogicFunctionFromSourceInputToFlatLogicFunctionToUpdate } from 'src/engine/metadata-modules/logic-function/utils/from-update-logic-function-from-source-input-to-flat-logic-function-to-update.util';
 import { WorkspaceMigrationBuilderException } from 'src/engine/workspace-manager/workspace-migration/exceptions/workspace-migration-builder-exception';
 import { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspace-manager/workspace-migration/services/workspace-migration-validate-build-and-run-service';
@@ -135,7 +135,7 @@ export class LogicFunctionFromSourceService {
     workspaceId: string;
   }): Promise<{ id: string }> {
     const { flatLogicFunction: existingLogicFunction, ownerFlatApplication } =
-      await this.helperService.findLogicFunctionAndApplicationOrThrow({
+      await this.helperService.findWorkspaceCustomLogicFunctionOrThrow({
         id: existingLogicFunctionId,
         workspaceId,
       });
@@ -209,13 +209,26 @@ export class LogicFunctionFromSourceService {
     workspaceId: string;
   }): Promise<void> {
     const { flatLogicFunction, ownerFlatApplication } =
-      await this.helperService.findLogicFunctionAndApplicationOrThrow({
+      await this.helperService.findWorkspaceCustomLogicFunctionOrThrow({
         id: updateLogicFunctionFromSourceInput.id,
         workspaceId,
       });
 
     const sourceHandlerCode =
       updateLogicFunctionFromSourceInput.update.sourceHandlerCode;
+
+    if (
+      isDefined(sourceHandlerCode) &&
+      flatLogicFunction.executionMode === LogicFunctionExecutionMode.PREBUILT
+    ) {
+      throw new LogicFunctionException(
+        'Cannot edit the source of a prebuilt logic function: create a draft of its workflow version and edit the draft step logic function instead',
+        LogicFunctionExceptionCode.INVALID_LOGIC_FUNCTION_INPUT,
+        {
+          userFriendlyMessage: msg`This code belongs to a published workflow version. Edit it from a draft.`,
+        },
+      );
+    }
 
     if (sourceHandlerCode) {
       await this.logicFunctionResourceService.uploadSourceFile({
@@ -253,14 +266,14 @@ export class LogicFunctionFromSourceService {
   }): Promise<LogicFunctionDTO> {
     const {
       flatLogicFunction: existingFlatLogicFunction,
-      ownerFlatApplication: resolvedOwnerFlatApplication,
+      workspaceCustomFlatApplication,
     } = await this.helperService.findLogicFunctionAndApplicationOrThrow({
       id,
       workspaceId,
     });
 
     const effectiveOwnerFlatApplication =
-      ownerFlatApplication ?? resolvedOwnerFlatApplication;
+      ownerFlatApplication ?? workspaceCustomFlatApplication;
 
     const validateAndBuildResult =
       await this.workspaceMigrationValidateBuildAndRunService.validateBuildAndRunWorkspaceMigration(
@@ -299,7 +312,7 @@ export class LogicFunctionFromSourceService {
     workspaceId: string;
   }): Promise<void> {
     const { flatLogicFunction, ownerFlatApplication } =
-      await this.helperService.findLogicFunctionAndApplicationOrThrow({
+      await this.helperService.findWorkspaceCustomLogicFunctionOrThrow({
         id,
         workspaceId,
       });
@@ -318,6 +331,7 @@ export class LogicFunctionFromSourceService {
     }
 
     const { builtCode } = await this.logicFunctionExecutorService.transpile({
+      targetRuntime: flatLogicFunction.runtime,
       sourceCode,
       sourceFileName: flatLogicFunction.sourceHandlerPath,
       builtFileName: flatLogicFunction.builtHandlerPath,
@@ -348,13 +362,17 @@ export class LogicFunctionFromSourceService {
     id,
     payload,
     workspaceId,
+    userId,
+    userWorkspaceId,
   }: {
     id: string;
     payload: object;
     workspaceId: string;
+    userId?: string;
+    userWorkspaceId?: string;
   }): Promise<LogicFunctionExecutionResultDTO> {
     const { flatLogicFunction } =
-      await this.helperService.findLogicFunctionAndApplicationOrThrow({
+      await this.helperService.findLogicFunctionRunnableOnDemandOrThrow({
         id,
         workspaceId,
       });
@@ -367,24 +385,12 @@ export class LogicFunctionFromSourceService {
       logicFunctionId: id,
       workspaceId,
       payload,
+      userId,
+      userWorkspaceId,
       executionMode: LogicFunctionExecutionMode.LIVE,
     });
 
-    return {
-      data: result.data as LogicFunctionExecutionResultDTO['data'],
-      logs: result.logs,
-      duration: result.duration,
-      status: result.status,
-      error: result.error
-        ? {
-            errorType: result.error.errorType,
-            errorMessage: result.error.errorMessage,
-            stackTrace: Array.isArray(result.error.stackTrace)
-              ? result.error.stackTrace.join('\n')
-              : result.error.stackTrace,
-          }
-        : undefined,
-    };
+    return fromLogicFunctionExecuteResultToDTO(result);
   }
 
   async getSourceCode({
@@ -395,7 +401,7 @@ export class LogicFunctionFromSourceService {
     workspaceId: string;
   }): Promise<string | null> {
     const { flatLogicFunction, ownerFlatApplication } =
-      await this.helperService.findLogicFunctionAndApplicationOrThrow({
+      await this.helperService.findWorkspaceCustomLogicFunctionOrThrow({
         id,
         workspaceId,
       });

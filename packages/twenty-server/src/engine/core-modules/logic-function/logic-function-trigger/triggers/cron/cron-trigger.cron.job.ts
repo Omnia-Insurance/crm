@@ -5,15 +5,24 @@ import { isDefined } from 'twenty-shared/utils';
 import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
 import { Repository } from 'typeorm';
 
+import { buildLogicFunctionJobLimiter } from 'src/engine/core-modules/logic-function/utils/build-logic-function-job-limiter.util';
+import { findActiveFlatApplicationById } from 'src/engine/core-modules/application/utils/find-active-flat-application-by-id.util';
 import { CronTriggerDeduplicationService } from 'src/engine/core-modules/cron/services/cron-trigger-deduplication.service';
 import { SentryCronMonitor } from 'src/engine/core-modules/cron/sentry-cron-monitor.decorator';
+import { ApplicationRepeatedEventRecorderService } from 'src/engine/core-modules/event-logs/emit/application-repeated-event-recorder.service';
 import { ExceptionHandlerService } from 'src/engine/core-modules/exception-handler/exception-handler.service';
 import { InjectMessageQueue } from 'src/engine/core-modules/message-queue/decorators/message-queue.decorator';
 import { Process } from 'src/engine/core-modules/message-queue/decorators/process.decorator';
 import { Processor } from 'src/engine/core-modules/message-queue/decorators/processor.decorator';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
+import { MessageQueueException } from 'src/engine/core-modules/message-queue/message-queue.exception';
+import { ApplicationJobEnqueueThrottlerService } from 'src/engine/core-modules/message-queue/services/application-job-enqueue-throttler.service';
 import { MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
+import { ThrottlerException } from 'src/engine/core-modules/throttler/throttler.exception';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { LOGIC_FUNCTION_QUEUE_RETRY_BACKOFF } from 'src/engine/core-modules/logic-function/logic-function-trigger/constants/logic-function-queue-retry-backoff.constant';
+import { buildApplicationJobMemoryLimitLogEntry } from 'src/engine/core-modules/logic-function/logic-function-trigger/utils/build-application-job-memory-limit-log-entry.util';
+import { buildApplicationJobThrottledLogEntry } from 'src/engine/core-modules/logic-function/logic-function-trigger/utils/build-application-job-throttled-log-entry.util';
 import {
   LogicFunctionTriggerJob,
   LogicFunctionTriggerJobData,
@@ -34,6 +43,8 @@ export class CronTriggerCronJob {
     private readonly workspaceCacheService: WorkspaceCacheService,
     private readonly exceptionHandlerService: ExceptionHandlerService,
     private readonly cronTriggerDeduplicationService: CronTriggerDeduplicationService,
+    private readonly applicationJobEnqueueThrottlerService: ApplicationJobEnqueueThrottlerService,
+    private readonly applicationRepeatedEventRecorderService: ApplicationRepeatedEventRecorderService,
   ) {}
 
   @Process(CronTriggerCronJob.name)
@@ -50,9 +61,10 @@ export class CronTriggerCronJob {
 
     for (const activeWorkspace of activeWorkspaces) {
       try {
-        const { flatLogicFunctionMaps } =
+        const { flatLogicFunctionMaps, flatApplicationMaps } =
           await this.workspaceCacheService.getOrRecompute(activeWorkspace.id, [
             'flatLogicFunctionMaps',
+            'flatApplicationMaps',
           ]);
 
         const logicFunctions = Object.values(
@@ -85,17 +97,78 @@ export class CronTriggerCronJob {
             continue;
           }
 
-          await this.messageQueueService.add<LogicFunctionTriggerJobData[]>(
-            LogicFunctionTriggerJob.name,
-            [
+          const application = findActiveFlatApplicationById(
+            flatApplicationMaps,
+            logicFunction.applicationId,
+          );
+          const applicationRegistrationId =
+            application?.applicationRegistrationId;
+
+          if (
+            !isDefined(application) ||
+            !isDefined(applicationRegistrationId)
+          ) {
+            continue;
+          }
+
+          try {
+            await this.applicationJobEnqueueThrottlerService.throttleOrThrow({
+              applicationId: logicFunction.applicationId,
+              applicationRegistrationId,
+            });
+          } catch (error) {
+            if (!(error instanceof ThrottlerException)) {
+              throw error;
+            }
+
+            this.applicationRepeatedEventRecorderService.record({
+              entry: buildApplicationJobThrottledLogEntry({
+                workspaceId: activeWorkspace.id,
+                application,
+              }),
+            });
+
+            continue;
+          }
+
+          try {
+            await this.messageQueueService.add<LogicFunctionTriggerJobData>(
+              LogicFunctionTriggerJob.name,
               {
                 logicFunctionId: logicFunction.id,
                 workspaceId: activeWorkspace.id,
+                ...(isDefined(application)
+                  ? {
+                      applicationUniversalIdentifier:
+                        application.universalIdentifier,
+                    }
+                  : {}),
                 payload: {},
               },
-            ],
-            { retryLimit: 3 },
-          );
+              {
+                retryLimit: 10,
+                backoff: LOGIC_FUNCTION_QUEUE_RETRY_BACKOFF,
+                limiter: buildLogicFunctionJobLimiter({
+                  logicFunctionId: logicFunction.id,
+                  limiter: logicFunction.jobConfig?.limiter,
+                }),
+                workspaceId: activeWorkspace.id,
+                applicationUniversalIdentifier: application.universalIdentifier,
+              },
+            );
+          } catch (error) {
+            if (!(error instanceof MessageQueueException)) {
+              throw error;
+            }
+
+            this.applicationRepeatedEventRecorderService.record({
+              entry: buildApplicationJobMemoryLimitLogEntry({
+                workspaceId: activeWorkspace.id,
+                application,
+                exception: error,
+              }),
+            });
+          }
         }
       } catch (error) {
         this.logger.error(

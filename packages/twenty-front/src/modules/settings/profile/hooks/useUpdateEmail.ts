@@ -1,15 +1,15 @@
 import { CombinedGraphQLErrors } from '@apollo/client/errors';
-
-import { t } from '@lingui/core/macro';
-
 import { currentUserState } from '@/auth/states/currentUserState';
+import { getToastOptionsFromError } from '@/error-handler/utils/getToastOptionsFromError';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { useMutation } from '@apollo/client/react';
+import { useToast } from 'twenty-ui/components/feedback';
 import { UpdateUserEmailDocument } from '~/generated-metadata/graphql';
+import { useLingui } from '@lingui/react/macro';
 
 export const useUpdateEmail = () => {
-  const { enqueueErrorSnackBar, enqueueInfoSnackBar } = useSnackBar();
+  const { t } = useLingui();
+  const { enqueueToast } = useToast();
 
   const currentUser = useAtomStateValue(currentUserState);
 
@@ -27,12 +27,13 @@ export const useUpdateEmail = () => {
         },
       });
 
-      enqueueInfoSnackBar({
-        message: t`Check your inbox to verify your new email address.`,
+      enqueueToast({
+        status: 'info',
+        children: t`Check your inbox to verify your new email address.`,
       });
     } catch (error) {
       if (CombinedGraphQLErrors.is(error)) {
-        enqueueErrorSnackBar({ apolloError: error });
+        enqueueToast(getToastOptionsFromError({ error }));
       }
     }
   };

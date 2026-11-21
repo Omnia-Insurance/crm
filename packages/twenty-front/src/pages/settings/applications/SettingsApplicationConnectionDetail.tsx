@@ -1,22 +1,22 @@
 import { useMutation, useQuery } from '@apollo/client/react';
 import { styled } from '@linaria/react';
 import { Trans, useLingui } from '@lingui/react/macro';
+import { isNonEmptyString } from '@sniptt/guards';
 import { type ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath } from 'twenty-shared/utils';
-import { Status, Tag } from 'twenty-ui/data-display';
-import { IconRefresh, IconTrash, IconUser, IconUsers } from 'twenty-ui/icon';
-import { H2Title } from 'twenty-ui/typography';
-import { Button } from 'twenty-ui/input';
-import { Section } from 'twenty-ui/layout';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { Section } from 'twenty-ui/components/layout';
+import { Status, Tag } from 'twenty-ui/primitives/data-display';
+import { IconRefresh, IconTrash } from 'twenty-ui/icon';
+import { Button } from 'twenty-ui/primitives/input';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 import { GET_MY_CONNECTED_ACCOUNTS } from '@/settings/accounts/graphql/queries/getMyConnectedAccounts';
 import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
 import { SettingsSectionSkeletonLoader } from '@/settings/components/SettingsSectionSkeletonLoader';
-import { ConfirmationModal } from '@/ui/layout/modal/components/ConfirmationModal';
-import { useModal } from '@/ui/layout/modal/hooks/useModal';
+import { ConfirmationDialog } from '@/ui/layout/dialog/components/ConfirmationDialog';
+import { useDialog } from '@/ui/layout/dialog/hooks/useDialog';
 import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
 import { Table } from '@/ui/layout/table/components/Table';
 import { TableCell } from '@/ui/layout/table/components/TableCell';
@@ -24,16 +24,19 @@ import { TableHeader } from '@/ui/layout/table/components/TableHeader';
 import { TableRow } from '@/ui/layout/table/components/TableRow';
 import { TableSection } from '@/ui/layout/table/components/TableSection';
 import {
+  ApplicationConnectedAccountsDocument,
   DeleteConnectedAccountDocument,
   FindOneApplicationDocument,
 } from '~/generated-metadata/graphql';
 import { useNavigateSettings } from '~/hooks/useNavigateSettings';
+import { SettingsApplicationConnectionMessageFolders } from '~/pages/settings/applications/components/SettingsApplicationConnectionMessageFolders';
 import { useFindApplicationConnectionProviders } from '~/pages/settings/applications/hooks/useFindApplicationConnectionProviders';
 import {
-  type AppConnectedAccount,
-  useMyAppConnectedAccounts,
-} from '~/pages/settings/applications/hooks/useMyAppConnectedAccounts';
-import { useTriggerAppOAuth } from '~/pages/settings/applications/hooks/useTriggerAppOAuth';
+  type ApplicationConnectedAccount,
+  useApplicationConnectedAccounts,
+} from '~/pages/settings/applications/hooks/useApplicationConnectedAccounts';
+import { SettingsSyncFailedStatus } from '@/settings/applications/components/SettingsSyncFailedStatus';
+import { useTriggerAppOAuth } from '@/settings/applications/hooks/useTriggerAppOAuth';
 import { type FrontendApplicationConnectionProvider } from '~/pages/settings/applications/types/FrontendApplicationConnectionProvider';
 
 const DETAIL_GRID_TEMPLATE = '220px 1fr';
@@ -82,12 +85,12 @@ export const SettingsApplicationConnectionDetail = () => {
   }>();
 
   const navigate = useNavigateSettings();
-  const { openModal } = useModal();
+  const { openDialog } = useDialog();
   const { triggerAppOAuth } = useTriggerAppOAuth();
   const { connectionProviders, loading: providersLoading } =
     useFindApplicationConnectionProviders(applicationId);
   const { accounts: connectedAccounts, loading: accountsLoading } =
-    useMyAppConnectedAccounts();
+    useApplicationConnectedAccounts(applicationId);
 
   const { data, loading: applicationLoading } = useQuery(
     FindOneApplicationDocument,
@@ -100,13 +103,21 @@ export const SettingsApplicationConnectionDetail = () => {
   const [deleteConnectedAccount, { loading: isDeleting }] = useMutation(
     DeleteConnectedAccountDocument,
     {
-      refetchQueries: [{ query: GET_MY_CONNECTED_ACCOUNTS }],
+      refetchQueries: [
+        {
+          query: ApplicationConnectedAccountsDocument,
+          variables: { applicationId },
+        },
+        { query: GET_MY_CONNECTED_ACCOUNTS },
+      ],
     },
   );
 
   const application = data?.findOneApplication;
   const providerIds = new Set(
-    connectionProviders.map((provider) => provider.id),
+    connectionProviders
+      .filter((provider) => provider.scope === 'WORKSPACE')
+      .map((provider) => provider.id),
   );
   const connection = connectedAccounts.find(
     (account) =>
@@ -127,13 +138,12 @@ export const SettingsApplicationConnectionDetail = () => {
     connection.name.trim() !== ''
       ? connection.name
       : (connection?.handle ?? t`Connection`);
-  const deleteModalId = `delete-application-connection-modal-${connectedAccountId}`;
-  const changeVisibilityModalId = `change-application-connection-visibility-modal-${connectedAccountId}`;
+  const removeDialogId = `remove-application-connection-modal-${connectedAccountId}`;
   const applicationSettingsPath = getSettingsPath(
     SettingsPath.ApplicationDetail,
     { applicationId },
     undefined,
-    'settings',
+    'general',
   );
   const detailPath = getSettingsPath(SettingsPath.ApplicationConnectionDetail, {
     applicationId,
@@ -148,27 +158,12 @@ export const SettingsApplicationConnectionDetail = () => {
     triggerAppOAuth({
       applicationId,
       providerName: provider.name,
-      visibility: connection.visibility === 'workspace' ? 'workspace' : 'user',
       reconnectingConnectedAccountId: connection.id,
       redirectLocation: detailPath,
     });
   };
 
-  const handleChangeVisibility = () => {
-    if (connection === undefined || provider === undefined) {
-      return;
-    }
-
-    triggerAppOAuth({
-      applicationId,
-      providerName: provider.name,
-      visibility: connection.visibility === 'workspace' ? 'user' : 'workspace',
-      reconnectingConnectedAccountId: connection.id,
-      redirectLocation: detailPath,
-    });
-  };
-
-  const handleDelete = async () => {
+  const handleRemove = async () => {
     if (connection === undefined) {
       return;
     }
@@ -180,7 +175,7 @@ export const SettingsApplicationConnectionDetail = () => {
       { applicationId },
       undefined,
       { replace: true },
-      'settings',
+      'general',
     );
   };
 
@@ -190,7 +185,7 @@ export const SettingsApplicationConnectionDetail = () => {
     connection,
     provider,
   }: {
-    connection: AppConnectedAccount;
+    connection: ApplicationConnectedAccount;
     provider: FrontendApplicationConnectionProvider;
   }): { key: string; label: string; value: ReactNode }[] => {
     const scopes = connection.scopes ?? [];
@@ -207,26 +202,12 @@ export const SettingsApplicationConnectionDetail = () => {
         value: <StyledMonoText>{connection.handle}</StyledMonoText>,
       },
       {
-        key: 'visibility',
-        label: t`Visibility`,
-        value: (
-          <Status
-            color={connection.visibility === 'workspace' ? 'blue' : 'gray'}
-            text={
-              connection.visibility === 'workspace'
-                ? t`Workspace shared`
-                : t`Just for me`
-            }
-          />
-        ),
-      },
-      {
         key: 'status',
         label: t`Status`,
         value: connection.authFailedAt ? (
-          <Status color="red" text={t`Reconnect needed`} />
+          <SettingsSyncFailedStatus />
         ) : (
-          <Status color="green" text={t`Connected`} />
+          <Status color="green" weight="medium">{t`Connected`}</Status>
         ),
       },
       {
@@ -236,7 +217,9 @@ export const SettingsApplicationConnectionDetail = () => {
           scopes.length > 0 ? (
             <StyledScopeList>
               {scopes.map((scope) => (
-                <Tag key={scope} color="gray" text={scope} />
+                <Tag key={scope} color="gray">
+                  {scope}
+                </Tag>
               ))}
             </StyledScopeList>
           ) : (
@@ -257,6 +240,13 @@ export const SettingsApplicationConnectionDetail = () => {
         key: 'authFailedAt',
         label: t`Auth failed at`,
         value: formatDateTime(connection.authFailedAt),
+      },
+      {
+        key: 'authFailedReason',
+        label: t`Auth failure reason`,
+        value: isNonEmptyString(connection.authFailedReason)
+          ? connection.authFailedReason
+          : '-',
       },
       {
         key: 'createdAt',
@@ -299,53 +289,38 @@ export const SettingsApplicationConnectionDetail = () => {
         {isLoading ? (
           <SettingsSectionSkeletonLoader />
         ) : connection === undefined || provider === undefined ? (
-          <Section>
-            <H2Title
+          <Section.Root>
+            <Section.Header
               title={t`Connection not found`}
               description={t`This connection does not exist or is not available for this application.`}
             />
-          </Section>
+          </Section.Root>
         ) : (
           <>
-            <Section>
-              <H2Title
+            <Section.Root>
+              <Section.Header
                 title={connectionLabel}
                 description={t`Manage this application's OAuth connection.`}
               />
               <StyledActions>
                 {connection.authFailedAt && (
                   <Button
-                    title={t`Reconnect`}
-                    Icon={IconRefresh}
-                    variant="secondary"
-                    accent="blue"
+                    startIcon={<IconRefresh />}
                     onClick={handleReconnect}
-                  />
+                    variant="outline"
+                    color="accent"
+                  >{t`Reconnect`}</Button>
                 )}
                 <Button
-                  title={
-                    connection.visibility === 'workspace'
-                      ? t`Make private`
-                      : t`Share with workspace`
-                  }
-                  Icon={
-                    connection.visibility === 'workspace' ? IconUser : IconUsers
-                  }
-                  variant="secondary"
-                  accent="default"
-                  onClick={() => openModal(changeVisibilityModalId)}
-                />
-                <Button
-                  title={t`Disconnect`}
-                  Icon={IconTrash}
-                  variant="secondary"
-                  accent="danger"
-                  onClick={() => openModal(deleteModalId)}
-                />
+                  startIcon={<IconTrash />}
+                  onClick={() => openDialog(removeDialogId)}
+                  variant="outline"
+                  color="danger"
+                >{t`Remove`}</Button>
               </StyledActions>
-            </Section>
-            <Section>
-              <H2Title
+            </Section.Root>
+            <Section.Root>
+              <Section.Header
                 title={t`Details`}
                 description={t`OAuth credential metadata for this application connection`}
               />
@@ -370,31 +345,22 @@ export const SettingsApplicationConnectionDetail = () => {
                   ))}
                 </TableSection>
               </Table>
-            </Section>
-            <ConfirmationModal
-              modalInstanceId={deleteModalId}
-              title={t`Disconnect connection?`}
-              subtitle={
-                <Trans>
-                  This will disconnect {connectionLabel} from this application.
-                </Trans>
-              }
-              onConfirmClick={handleDelete}
-              confirmButtonText={t`Disconnect`}
-              loading={isDeleting}
+            </Section.Root>
+            <SettingsApplicationConnectionMessageFolders
+              connectedAccountId={connection.id}
             />
-            <ConfirmationModal
-              modalInstanceId={changeVisibilityModalId}
-              title={t`Change visibility?`}
+            <ConfirmationDialog
+              dialogId={removeDialogId}
+              title={t`Remove connection?`}
               subtitle={
                 <Trans>
-                  Changing visibility requires reconnecting this OAuth
-                  connection. You will be redirected to authorize it again.
+                  This permanently removes {connectionLabel}. The app loses
+                  access to it.
                 </Trans>
               }
-              onConfirmClick={handleChangeVisibility}
-              confirmButtonText={t`Reconnect and change visibility`}
-              confirmButtonAccent="blue"
+              onConfirmClick={handleRemove}
+              confirmButtonText={t`Remove`}
+              loading={isDeleting}
             />
           </>
         )}

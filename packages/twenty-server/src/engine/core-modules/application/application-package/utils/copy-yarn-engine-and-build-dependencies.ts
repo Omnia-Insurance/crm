@@ -1,11 +1,14 @@
-import { execFile } from 'child_process';
 import { promises as fs, statSync } from 'fs';
 import { join } from 'path';
-import { promisify } from 'util';
+import { z } from 'zod';
 
 import { YARN_ENGINE_DIRNAME } from 'src/engine/core-modules/application/application-package/constants/yarn-engine-dirname';
+import { installYarnDependencies } from 'src/engine/core-modules/application/application-package/constants/yarn-engine/install-yarn-dependencies.cjs';
 
-const execFilePromise = promisify(execFile);
+const installErrorOutputSchema = z.object({
+  stdout: z.string().optional(),
+  stderr: z.string().optional(),
+});
 
 export const copyYarnEngineAndBuildDependencies = async (
   buildDirectory: string,
@@ -14,29 +17,20 @@ export const copyYarnEngineAndBuildDependencies = async (
     recursive: true,
   });
 
-  await fs.cp(YARN_ENGINE_DIRNAME, buildDirectory, {
-    recursive: true,
-  });
-
-  const localYarnPath = join(buildDirectory, '.yarn/releases/yarn-4.9.2.cjs');
-
-  // Strip NODE_OPTIONS to prevent tsx loader from interfering with yarn
-  const { NODE_OPTIONS: _nodeOptions, ...cleanEnv } = process.env;
-
   try {
-    await execFilePromise(
-      process.execPath,
-      [localYarnPath, 'workspaces', 'focus', '--all', '--production'],
-      {
-        cwd: buildDirectory,
-        env: cleanEnv,
-      },
-    );
-    // oxlint-disable-next-line typescript/no-explicit-any
-  } catch (error: any) {
+    await installYarnDependencies({
+      directory: buildDirectory,
+      yarnEngineDirectory: YARN_ENGINE_DIRNAME,
+      args: ['workspaces', 'focus', '--all', '--production'],
+    });
+  } catch (error: unknown) {
+    const parsedError = installErrorOutputSchema.safeParse(error);
     const errorMessage =
-      [error?.stdout, error?.stderr].filter(Boolean).join('\n') ||
-      'Failed to install logic function executor dependencies';
+      (parsedError.success
+        ? [parsedError.data.stdout, parsedError.data.stderr]
+            .filter(Boolean)
+            .join('\n')
+        : '') || 'Failed to install logic function executor dependencies';
 
     throw new Error(errorMessage);
   }

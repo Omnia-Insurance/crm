@@ -1,40 +1,37 @@
+import { StyledAiChatContentContainer } from '@/ai/components/StyledAiChatContentContainer';
 import { styled } from '@linaria/react';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 import { AiChatErrorRenderer } from '@/ai/components/AiChatErrorRenderer';
-import { agentChatErrorComponentFamilyState } from '@/ai/states/agentChatErrorComponentFamilyState';
-import { agentChatHasMessageComponentSelector } from '@/ai/states/selectors/agentChatHasMessageComponentSelector';
-import { agentChatIsLoadingState } from '@/ai/states/agentChatIsLoadingState';
-import { currentAiChatThreadState } from '@/ai/states/currentAiChatThreadState';
-import { useAtomComponentFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentFamilyStateValue';
-import { useAtomComponentSelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorValue';
+import { agentChatErrorFamilyState } from '@/ai/states/agentChatErrorFamilyState';
+import { agentChatHasMessageSelector } from '@/ai/states/selectors/agentChatHasMessageSelector';
+import { agentChatIsLoadingSelector } from '@/ai/states/selectors/agentChatIsLoadingSelector';
+import { agentChatDisplayedThreadState } from '@/ai/states/agentChatDisplayedThreadState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { isDefined } from 'twenty-shared/utils';
+import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
 
-const StyledErrorContainer = styled.div`
-  box-sizing: border-box;
+const StyledErrorContainer = styled(StyledAiChatContentContainer)`
   display: flex;
   flex: 1;
   flex-direction: column;
   padding: ${themeCssVariables.spacing[3]};
-  width: 100%;
 `;
 
 export const AiChatStandaloneError = () => {
-  const agentChatIsLoading = useAtomStateValue(agentChatIsLoadingState);
+  const agentChatIsLoading = useAtomStateValue(agentChatIsLoadingSelector);
 
-  const currentAiChatThread = useAtomStateValue(currentAiChatThreadState);
-  const agentChatError = useAtomComponentFamilyStateValue(
-    agentChatErrorComponentFamilyState,
-    { threadId: currentAiChatThread },
+  const agentChatDisplayedThread = useAtomStateValue(
+    agentChatDisplayedThreadState,
   );
+  const agentChatError = useAtomFamilyStateValue(agentChatErrorFamilyState, {
+    threadId: agentChatDisplayedThread,
+  });
 
-  const hasMessages = useAtomComponentSelectorValue(
-    agentChatHasMessageComponentSelector,
-  );
+  const agentChatHasMessage = useAtomStateValue(agentChatHasMessageSelector);
 
   const shouldRender =
-    !hasMessages && isDefined(agentChatError) && !agentChatIsLoading;
+    !agentChatHasMessage && isDefined(agentChatError) && !agentChatIsLoading;
 
   if (!shouldRender) {
     return null;

@@ -1,0 +1,165 @@
+import { Logger } from '@nestjs/common';
+
+import chunk from 'lodash.chunk';
+import { isDefined } from 'twenty-shared/utils';
+
+import type { ObjectRecordEvent } from 'twenty-shared/database-events';
+
+import { InjectMessageQueue } from 'src/engine/core-modules/message-queue/decorators/message-queue.decorator';
+import { Process } from 'src/engine/core-modules/message-queue/decorators/process.decorator';
+import { Processor } from 'src/engine/core-modules/message-queue/decorators/processor.decorator';
+import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
+import { MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
+import { type PermissionsAuthContext } from 'src/engine/permissions/principal/types/permissions-auth-context.type';
+import { RecordEventPermissionsReadService } from 'src/engine/permissions/record-event-permissions-read.service';
+import { AGENT_TRIGGER_RUN_LIMITS } from 'src/engine/metadata-modules/ai/ai-agent-trigger/constants/agent-trigger-run-limits.const';
+import { RunAgentTriggerJob } from 'src/engine/metadata-modules/ai/ai-agent-trigger/jobs/run-agent-trigger.job';
+import { AgentTriggerThrottlerService } from 'src/engine/metadata-modules/ai/ai-agent-trigger/services/agent-trigger-throttler.service';
+import { type RunAgentTriggerJobData } from 'src/engine/metadata-modules/ai/ai-agent-trigger/types/run-agent-trigger-job-data.type';
+import { findAgentDatabaseEventTriggersMatchingEvent } from 'src/engine/metadata-modules/ai/ai-agent-trigger/utils/find-agent-database-event-triggers-matching-event.util';
+import { isDatabaseEventCausedByAgent } from 'src/engine/metadata-modules/ai/ai-agent-trigger/utils/is-database-event-caused-by-agent.util';
+import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
+import { type WorkspaceEventBatch } from 'src/engine/workspace-event-emitter/types/workspace-event-batch.type';
+import { buildDatabaseEventTriggerConditionFields } from 'src/engine/workspace-event-emitter/utils/build-database-event-trigger-condition-fields.util';
+import { filterEventsMatchingDatabaseEventTrigger } from 'src/engine/workspace-event-emitter/utils/filter-events-matching-database-event-trigger.util';
+
+@Processor(MessageQueue.triggerQueue)
+export class CallAgentDatabaseEventTriggersJob {
+  private readonly logger = new Logger(CallAgentDatabaseEventTriggersJob.name);
+
+  constructor(
+    @InjectMessageQueue(MessageQueue.aiQueue)
+    private readonly messageQueueService: MessageQueueService,
+    private readonly workspaceCacheService: WorkspaceCacheService,
+    private readonly recordEventPermissionsReadService: RecordEventPermissionsReadService,
+    private readonly agentTriggerThrottlerService: AgentTriggerThrottlerService,
+  ) {}
+
+  @Process(CallAgentDatabaseEventTriggersJob.name)
+  async handle(workspaceEventBatch: WorkspaceEventBatch<ObjectRecordEvent>) {
+    const {
+      workspaceId,
+      name: eventName,
+      objectMetadata,
+    } = workspaceEventBatch;
+
+    const {
+      flatAgentMaps,
+      flatApplicationMaps,
+      flatRoleTargetByAgentIdMaps,
+      flatFieldMetadataMaps,
+    } = await this.workspaceCacheService.getOrRecompute(workspaceId, [
+      'flatAgentMaps',
+      'flatApplicationMaps',
+      'flatRoleTargetByAgentIdMaps',
+      'flatFieldMetadataMaps',
+    ]);
+
+    const matchingAgentTriggers = findAgentDatabaseEventTriggersMatchingEvent({
+      flatAgentMaps,
+      eventName,
+    });
+
+    if (matchingAgentTriggers.length === 0) {
+      return;
+    }
+
+    const conditionFields = buildDatabaseEventTriggerConditionFields({
+      flatObjectMetadata: objectMetadata,
+      flatFieldMetadataMaps,
+    });
+
+    for (const { flatAgent, trigger } of matchingAgentTriggers) {
+      const application = flatApplicationMaps.byId[flatAgent.applicationId];
+
+      if (!isDefined(application) || isDefined(application.deletedAt)) {
+        continue;
+      }
+
+      const agentAuthContext: PermissionsAuthContext = {
+        type: 'application',
+        workspace: { id: workspaceId },
+        application,
+        agentId: flatAgent.id,
+      };
+      const readableEvents =
+        await this.recordEventPermissionsReadService.filterReadableEvents({
+          authContext: agentAuthContext,
+          eventBatch: workspaceEventBatch,
+          // Masking can drop the actor fields, so the agent's own writes are skipped first
+          events: workspaceEventBatch.events.filter(
+            (event) =>
+              !isDatabaseEventCausedByAgent({
+                event,
+                eventName,
+                agentId: flatAgent.id,
+              }),
+          ),
+        });
+
+      const { events: eventsToRunOn, conditionErrorMessage } =
+        filterEventsMatchingDatabaseEventTrigger({
+          events: readableEvents,
+          eventName,
+          watchedFields: trigger.settings.updatedFields,
+          condition: trigger.settings.condition,
+          fields: conditionFields,
+        });
+
+      if (isDefined(conditionErrorMessage)) {
+        this.logger.warn(
+          `Condition of trigger ${trigger.id} on agent ${flatAgent.id} in workspace ${workspaceId} failed to evaluate: ${conditionErrorMessage}`,
+        );
+      }
+
+      if (eventsToRunOn.length === 0) {
+        continue;
+      }
+
+      const eventGroups = trigger.settings.batchMode
+        ? chunk(
+            eventsToRunOn,
+            AGENT_TRIGGER_RUN_LIMITS.MAX_EVENTS_PER_BATCHED_RUN,
+          )
+        : eventsToRunOn.map((event) => [event]);
+
+      const grantedRunCount =
+        await this.agentTriggerThrottlerService.consumeAvailableRuns({
+          workspaceId,
+          agentId: flatAgent.id,
+          requestedRunCount: eventGroups.length,
+        });
+
+      if (grantedRunCount < eventGroups.length) {
+        this.logger.warn(
+          `Run limit reached for agent ${flatAgent.id} in workspace ${workspaceId}: skipping ${eventGroups.length - grantedRunCount} run(s) of trigger ${trigger.id}`,
+        );
+      }
+
+      if (grantedRunCount === 0) {
+        continue;
+      }
+
+      await this.messageQueueService.bulkAdd<RunAgentTriggerJobData>(
+        RunAgentTriggerJob.name,
+        eventGroups.slice(0, grantedRunCount).map((events) => ({
+          data: {
+            workspaceId,
+            agentId: flatAgent.id,
+            triggerId: trigger.id,
+            dispatchedRoleId: flatRoleTargetByAgentIdMaps[flatAgent.id]?.roleId,
+            payload: {
+              type: 'DATABASE_EVENT',
+              eventName,
+              objectNameSingular: objectMetadata.nameSingular,
+              events,
+            },
+          },
+          workspaceId,
+          applicationUniversalIdentifier:
+            flatAgent.applicationUniversalIdentifier,
+        })),
+      );
+    }
+  }
+}

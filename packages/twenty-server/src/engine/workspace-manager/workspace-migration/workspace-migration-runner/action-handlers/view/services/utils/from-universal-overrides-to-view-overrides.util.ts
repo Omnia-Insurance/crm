@@ -4,6 +4,8 @@ import { findFlatEntityByUniversalIdentifier } from 'src/engine/metadata-modules
 import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
 import { type ViewOverrides } from 'src/engine/metadata-modules/view/entities/view.entity';
+import { type AuthoredOverrides } from 'src/engine/metadata-modules/overrides/types/authored-overrides.type';
+import { mapAuthoredOverrideEntries } from 'src/engine/metadata-modules/overrides/utils/map-authored-override-entries.util';
 
 type UniversalViewOverrides =
   FormatRecordSerializedRelationProperties<ViewOverrides>;
@@ -11,6 +13,7 @@ type UniversalViewOverrides =
 const VIEW_OVERRIDES_UNIVERSAL_FIELD_METADATA_PROPERTIES = [
   'kanbanAggregateOperationFieldMetadataUniversalIdentifier',
   'calendarFieldMetadataUniversalIdentifier',
+  'calendarEndFieldMetadataUniversalIdentifier',
   'mainGroupByFieldMetadataUniversalIdentifier',
 ] as const;
 
@@ -25,7 +28,7 @@ const toForeignKeyProperty = (
     'Id',
   ) as keyof ViewOverrides;
 
-export const fromUniversalOverridesToViewOverrides = ({
+const fromUniversalOverridesToViewOverridesEntry = ({
   universalOverrides,
   flatFieldMetadataMaps,
 }: {
@@ -35,6 +38,7 @@ export const fromUniversalOverridesToViewOverrides = ({
   const {
     kanbanAggregateOperationFieldMetadataUniversalIdentifier: _kanban,
     calendarFieldMetadataUniversalIdentifier: _calendar,
+    calendarEndFieldMetadataUniversalIdentifier: _calendarEnd,
     mainGroupByFieldMetadataUniversalIdentifier: _mainGroupBy,
     ...scalarOverrides
   } = universalOverrides;
@@ -64,3 +68,20 @@ export const fromUniversalOverridesToViewOverrides = ({
     scalarOverrides,
   );
 };
+
+export const fromUniversalOverridesToViewOverrides = ({
+  universalOverrides,
+  flatFieldMetadataMaps,
+}: {
+  universalOverrides: AuthoredOverrides<UniversalViewOverrides>;
+  flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
+}): AuthoredOverrides<ViewOverrides> =>
+  mapAuthoredOverrideEntries({
+    metadataName: 'view',
+    overrides: universalOverrides,
+    mapEntry: (entry) =>
+      fromUniversalOverridesToViewOverridesEntry({
+        universalOverrides: entry,
+        flatFieldMetadataMaps,
+      }),
+  });

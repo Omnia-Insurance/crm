@@ -1,10 +1,15 @@
 import { type MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
+import { AI_CHAT_ASSISTANT_DISPLAY_NAME_MAX_LENGTH } from 'twenty-shared/ai';
+import { MAX_ALLOWED_IFRAME_ORIGINS } from 'twenty-shared/constants';
 import { assertUnreachable } from 'twenty-shared/utils';
 
 import { CustomException } from 'src/utils/custom-exception';
 
 export enum WorkspaceExceptionCode {
+  IFRAME_ORIGIN_LIMIT_EXCEEDED = 'IFRAME_ORIGIN_LIMIT_EXCEEDED',
+  IFRAME_MEDIA_PERMISSION_ORIGIN_NOT_VALID = 'IFRAME_MEDIA_PERMISSION_ORIGIN_NOT_VALID',
+  IFRAME_MEDIA_PERMISSIONS_POLICY_TOO_LARGE = 'IFRAME_MEDIA_PERMISSIONS_POLICY_TOO_LARGE',
   SUBDOMAIN_NOT_FOUND = 'SUBDOMAIN_NOT_FOUND',
   SUBDOMAIN_ALREADY_TAKEN = 'SUBDOMAIN_ALREADY_TAKEN',
   SUBDOMAIN_NOT_VALID = 'SUBDOMAIN_NOT_VALID',
@@ -13,12 +18,22 @@ export enum WorkspaceExceptionCode {
   WORKSPACE_CUSTOM_DOMAIN_DISABLED = 'WORKSPACE_CUSTOM_DOMAIN_DISABLED',
   ENVIRONMENT_VAR_NOT_ENABLED = 'ENVIRONMENT_VAR_NOT_ENABLED',
   CUSTOM_DOMAIN_NOT_FOUND = 'CUSTOM_DOMAIN_NOT_FOUND',
+  APPLICATION_UNINSTALL_IN_PROGRESS = 'APPLICATION_UNINSTALL_IN_PROGRESS',
+  AI_MODEL_PIN_NOT_VALID = 'AI_MODEL_PIN_NOT_VALID',
+  AI_CHAT_ASSISTANT_PROFILE_NOT_VALID = 'AI_CHAT_ASSISTANT_PROFILE_NOT_VALID',
+  EVENT_LOG_RETENTION_DISABLED = 'EVENT_LOG_RETENTION_DISABLED',
 }
 
 const getWorkspaceExceptionUserFriendlyMessage = (
   code: WorkspaceExceptionCode,
 ) => {
   switch (code) {
+    case WorkspaceExceptionCode.IFRAME_ORIGIN_LIMIT_EXCEEDED:
+      return msg`You can allow up to ${MAX_ALLOWED_IFRAME_ORIGINS} origins.`;
+    case WorkspaceExceptionCode.IFRAME_MEDIA_PERMISSION_ORIGIN_NOT_VALID:
+      return msg`Enter an HTTPS origin without a path or wildcard`;
+    case WorkspaceExceptionCode.IFRAME_MEDIA_PERMISSIONS_POLICY_TOO_LARGE:
+      return msg`These origins are too long to allow together. Remove one and try again.`;
     case WorkspaceExceptionCode.SUBDOMAIN_NOT_FOUND:
       return msg`Subdomain not found.`;
     case WorkspaceExceptionCode.SUBDOMAIN_ALREADY_TAKEN:
@@ -35,6 +50,14 @@ const getWorkspaceExceptionUserFriendlyMessage = (
       return msg`This feature is not enabled.`;
     case WorkspaceExceptionCode.CUSTOM_DOMAIN_NOT_FOUND:
       return msg`Custom domain not found.`;
+    case WorkspaceExceptionCode.APPLICATION_UNINSTALL_IN_PROGRESS:
+      return msg`Application cleanup is still in progress. Please try again.`;
+    case WorkspaceExceptionCode.AI_MODEL_PIN_NOT_VALID:
+      return msg`This model cannot be used for this tier.`;
+    case WorkspaceExceptionCode.AI_CHAT_ASSISTANT_PROFILE_NOT_VALID:
+      return msg`Enter a name between 1 and ${AI_CHAT_ASSISTANT_DISPLAY_NAME_MAX_LENGTH} characters and supported assistant appearance options.`;
+    case WorkspaceExceptionCode.EVENT_LOG_RETENTION_DISABLED:
+      return msg`Changing log retention requires an Organization subscription.`;
     default:
       assertUnreachable(code);
   }

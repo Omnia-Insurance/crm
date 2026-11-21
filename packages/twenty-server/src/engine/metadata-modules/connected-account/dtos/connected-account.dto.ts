@@ -3,6 +3,7 @@ import { Field, HideField, ObjectType } from '@nestjs/graphql';
 import {
   IsArray,
   IsDateString,
+  IsEnum,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -11,6 +12,8 @@ import {
 
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
 import { type ImapSmtpCaldavParams } from 'src/engine/core-modules/imap-smtp-caldav-connection/types/imap-smtp-caldav-connection.type';
+import { type ConnectedAccountScope } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
+import { ConnectedAccountScopeEnum } from 'src/engine/metadata-modules/connected-account/enums/connected-account-scope.enum';
 
 @ObjectType('ConnectedAccountDTO')
 export class ConnectedAccountDTO {
@@ -45,8 +48,13 @@ export class ConnectedAccountDTO {
   @Field(() => Date, { nullable: true })
   authFailedAt: Date | null;
 
-  // Set when the account is frozen after its owner is removed from the
-  // workspace: synced data is kept but the account is read-only.
+  @IsString()
+  @IsOptional()
+  @Field(() => String, { nullable: true })
+  authFailedReason: string | null;
+
+  // Set when the account is disconnected or frozen: synced data is kept but
+  // cannot be updated until the account is reconnected.
   @IsDateString()
   @IsOptional()
   @Field(() => Date, { nullable: true })
@@ -93,12 +101,13 @@ export class ConnectedAccountDTO {
   @Field(() => String, { nullable: true })
   name: string | null;
 
-  // 'user' = private to the connecting user.
-  // 'workspace' = shared with all members.
-  // Named `visibility` to disambiguate from the OAuth `scopes` array.
+  @IsEnum(ConnectedAccountScopeEnum)
+  @Field(() => ConnectedAccountScopeEnum)
+  scope: ConnectedAccountScope;
+
   @IsString()
-  @Field(() => String)
-  visibility: string;
+  @Field(() => String, { deprecationReason: 'Use scope instead.' })
+  visibility: 'user' | 'workspace';
 
   @HideField()
   workspaceId: string;

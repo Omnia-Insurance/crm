@@ -19,6 +19,7 @@ import { useStore } from 'jotai';
 import { useCallback } from 'react';
 import { SidePanelPages } from 'twenty-shared/types';
 import { appendCopySuffix, isDefined } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
 import { v4 as uuidv4 } from 'uuid';
 
 export const useDuplicatePageLayoutTab = ({
@@ -79,7 +80,7 @@ export const useDuplicatePageLayoutTab = ({
       );
 
       if (!isDefined(sourceTab)) {
-        throw new Error(`Tab with id ${tabId} not found`);
+        throw new Error(doNotTranslate(`Tab with id ${tabId} not found`));
       }
 
       const newTabId = uuidv4();
@@ -135,17 +136,14 @@ export const useDuplicatePageLayoutTab = ({
         ...generateDuplicatedTimestamps(),
       };
 
-      const sourceLayouts = allTabLayouts[tabId] ?? {
-        desktop: [],
-        mobile: [],
-      };
+      const sourceLayouts = allTabLayouts[tabId];
 
       const newLayouts = {
-        desktop: sourceLayouts.desktop.map((layout) => ({
+        desktop: (sourceLayouts?.desktop ?? []).map((layout) => ({
           ...layout,
           i: widgetOldIdNewIdMap.get(layout.i) || layout.i,
         })),
-        mobile: sourceLayouts.mobile.map((layout) => ({
+        mobile: (sourceLayouts?.mobile ?? []).map((layout) => ({
           ...layout,
           i: widgetOldIdNewIdMap.get(layout.i) || layout.i,
         })),

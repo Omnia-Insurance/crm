@@ -1,34 +1,36 @@
-import { useHasAccessTokenPair } from '@/auth/hooks/useHasAccessTokenPair';
+import { useStore } from 'jotai';
 import { useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { isDefined, isExternalRedirectTrusted } from 'twenty-shared/utils';
 
-// OMNIA-CUSTOM: when an already-authed user lands on /welcome with a trusted
-// absolute returnToPath (e.g. omniaagent.com bounces them here on token refresh),
-// honor the redirect instead of dropping them on Twenty's default landing.
-// SignInUpGlobalScopeFormEffect and VerifyLoginTokenEffect only handle the
-// fresh-token flow (tokenPair in URL / loginToken exchange); they do not run
-// when the user already has a valid refresh-token cookie. Without this effect,
-// usePageChangeEffectNavigateLocation ignores the external returnToPath and
-// routes them to the default home page.
+import { useAuth } from '@/auth/hooks/useAuth';
+import { useIsLogged } from '@/auth/hooks/useIsLogged';
+import { useRedirectToTrustedExternalReturnUrl } from '@/auth/sign-in-up/hooks/useRedirectToTrustedExternalReturnUrl';
+import { consumeTrustedSiblingSignOutRequest } from '@/auth/sign-in-up/utils/consumeTrustedSiblingSignOutRequest';
+import { isPendingServerSignOutState } from '@/auth/states/isPendingServerSignOutState';
+
+// The omniaagent.com dashboard sends users here when its cookie expires; a signed-in user goes straight back.
+// Its Sign out lands here too, flagged: only the CRM can revoke the session, so that ends it (single logout).
 export const SignInUpExternalRedirectEffect = () => {
-  const [searchParams] = useSearchParams();
-  const returnToPath =
-    searchParams.get('returnToPath') ?? searchParams.get('postSignInRedirect');
-  const hasAccessTokenPair = useHasAccessTokenPair();
+  const store = useStore();
+  const isLogged = useIsLogged();
+  const { signOut } = useAuth();
+  const { redirectToTrustedExternalReturnUrl } =
+    useRedirectToTrustedExternalReturnUrl();
 
   useEffect(() => {
-    if (
-      hasAccessTokenPair &&
-      isDefined(returnToPath) &&
-      isExternalRedirectTrusted(returnToPath, window.location.origin)
-    ) {
-      // External destination — bypass react-router. window.location.href is
-      // synchronous full-page nav and will preempt any pending navigate() from
-      // PageChangeEffect.
-      window.location.href = returnToPath;
+    // Even when the CRM shows signed out: the server may still hold a session for this browser.
+    if (consumeTrustedSiblingSignOutRequest()) {
+      void signOut();
+
+      return;
     }
-  }, [hasAccessTokenPair, returnToPath]);
+
+    // signOut raises this synchronously; leaving for the sibling app now would race it.
+    if (!isLogged || store.get(isPendingServerSignOutState.atom)) {
+      return;
+    }
+
+    void redirectToTrustedExternalReturnUrl();
+  }, [isLogged, redirectToTrustedExternalReturnUrl, signOut, store]);
 
   return <></>;
 };

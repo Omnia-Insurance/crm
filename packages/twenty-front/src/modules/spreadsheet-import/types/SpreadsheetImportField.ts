@@ -5,21 +5,16 @@ import { type FieldMetadataType } from 'twenty-shared/types';
 import { type IconComponent } from 'twenty-ui/icon';
 
 export type SpreadsheetImportField = {
-  // Icon
   Icon: IconComponent | null | undefined;
-  // UI-facing field label
   label: string;
-  // Field's unique identifier
+  alternateMatches?: string[];
   key: string;
   // Field's metadata item id - same for all associated nested fields
   fieldMetadataItemId: string;
   // UI-facing additional information displayed via tooltip and ? icon
   description?: string;
-  // Validations used for field entries
   fieldValidationDefinitions?: SpreadsheetImportFieldValidationDefinition[];
-  // Field entry component, default: Input
   fieldType: SpreadsheetImportFieldType;
-  // Field metadata type
   fieldMetadataType: FieldMetadataType;
   // if true, it can be a composite sub-field or a relation connect field (or both)
   isNestedField: boolean;
@@ -31,11 +26,10 @@ export type SpreadsheetImportField = {
   isRelationConnectField?: boolean;
   // defined only if isRelationConnectField is true
   uniqueFieldMetadataItem?: FieldMetadataItem;
-  // true for relation update fields (not matching, but updating related record data)
+  // OMNIA-CUSTOM: relation update columns write targetFieldMetadataItem on the
+  // related record; read-only columns only match exported headers and are
+  // dropped before import.
   isRelationUpdateField?: boolean;
-  // the target object's field metadata item (for relation update fields)
   targetFieldMetadataItem?: FieldMetadataItem;
-  // OMNIA-CUSTOM: true for columns exported for reference only (not imported).
-  // These fields auto-match export headers but their data is stripped before import.
   isReadOnly?: boolean;
 };

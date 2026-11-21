@@ -1,40 +1,27 @@
 import { useParams, useSearchParams } from 'react-router-dom';
 
 import { useAuth } from '@/auth/hooks/useAuth';
-import { type BillingCheckoutSession } from '@/auth/types/billingCheckoutSession.type';
-import { type SocialSSOSignInUpActionType } from '@/auth/types/socialSSOSignInUp.type';
-import {
-  BillingPlanKey,
-  SubscriptionInterval,
-} from '~/generated-metadata/graphql';
+import { getTrustedExternalReturnUrl } from '@/auth/sign-in-up/utils/getTrustedExternalReturnUrl';
+import { type SocialSsoSignInUpActionType } from '@/auth/types/SocialSsoSignInUpActionType';
+import { BILLING_CHECKOUT_SESSION_DEFAULT_VALUE } from '@/settings/billing/constants/BillingCheckoutSessionDefaultValue';
 
 export const useSignInWithGoogle = () => {
   const workspaceInviteHash = useParams().workspaceInviteHash;
   const [searchParams] = useSearchParams();
   const workspacePersonalInviteToken =
     searchParams.get('inviteToken') ?? undefined;
-  // OMNIA-CUSTOM: returnToPath can carry trusted absolute URLs. Keep
-  // postSignInRedirect as an input-only compatibility fallback.
-  const returnToPath =
-    searchParams.get('returnToPath') ??
-    searchParams.get('postSignInRedirect') ??
-    undefined;
-  const billingCheckoutSession = {
-    plan: BillingPlanKey.PRO,
-    interval: SubscriptionInterval.Month,
-    requirePaymentMethod: true,
-  } as BillingCheckoutSession;
 
   const { signInWithGoogle } = useAuth();
 
   return {
-    signInWithGoogle: ({ action }: { action: SocialSSOSignInUpActionType }) =>
+    signInWithGoogle: ({ action }: { action: SocialSsoSignInUpActionType }) =>
       signInWithGoogle({
         workspaceInviteHash,
         workspacePersonalInviteToken,
-        billingCheckoutSession,
+        billingCheckoutSession: BILLING_CHECKOUT_SESSION_DEFAULT_VALUE,
         action,
-        returnToPath,
+        // OMNIA-CUSTOM: carries a trusted sibling URL (omniaagent.com dashboard) through SSO
+        returnToPath: getTrustedExternalReturnUrl() ?? undefined,
       }),
   };
 };

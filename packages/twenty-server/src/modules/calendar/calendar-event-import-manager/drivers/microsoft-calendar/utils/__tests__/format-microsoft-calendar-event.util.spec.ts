@@ -53,6 +53,24 @@ describe('formatMicrosoftCalendarEvents', () => {
     },
   };
 
+  it('should lowercase attendee handles', () => {
+    const [formattedEvent] = formatMicrosoftCalendarEvents([
+      {
+        ...mockMicrosoftEvent,
+        attendees: [
+          {
+            emailAddress: {
+              address: 'John.Doe@Example.com',
+              name: 'John Doe',
+            },
+          },
+        ],
+      },
+    ]);
+
+    expect(formattedEvent.participants[0].handle).toBe('john.doe@example.com');
+  });
+
   it('should correctly format a normal Microsoft Calendar event', () => {
     const result = formatMicrosoftCalendarEvents([mockMicrosoftEvent]);
 
@@ -103,4 +121,21 @@ describe('formatMicrosoftCalendarEvents', () => {
     expect(result[0].iCalUid).toBe('eventStrange@microsoft.com');
     expect(result[1].iCalUid).toBe('>\u0015-;_�^�W&�p\u001f�');
   });
+
+  it.each([
+    [undefined, false],
+    ['normal', false],
+    ['personal', false],
+    ['private', true],
+    ['confidential', true],
+  ] as const)(
+    'should map sensitivity %s to isPrivate %s',
+    (sensitivity, isPrivate) => {
+      const [formattedEvent] = formatMicrosoftCalendarEvents([
+        { ...mockMicrosoftEvent, sensitivity },
+      ]);
+
+      expect(formattedEvent.isPrivate).toBe(isPrivate);
+    },
+  );
 });

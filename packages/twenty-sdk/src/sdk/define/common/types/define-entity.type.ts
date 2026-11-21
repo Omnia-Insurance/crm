@@ -1,5 +1,6 @@
 import { type ApplicationConfig } from '@/sdk/define/application/application-config';
 import { type CommandMenuItemConfig } from '@/sdk/define/command-menu-items/command-menu-item-config';
+import { type LooseEnumValues } from '@/sdk/define/common/types/loose-enum-values.type';
 import { type FrontComponentConfig } from '@/sdk/define/front-component/front-component-config';
 import { type IndexConfig } from '@/sdk/define/indexes/index-config';
 import { type LogicFunctionConfig } from '@/sdk/define/logic-functions/logic-function-config';
@@ -10,14 +11,21 @@ import { type PermissionFlagConfig } from '@/sdk/define/permission-flags/permiss
 import { type ViewConfig } from '@/sdk/define/views/view-config';
 import { type PostInstallLogicFunctionConfig } from '@/sdk/define/logic-functions/post-install-logic-function-config';
 import { type PreInstallLogicFunctionConfig } from '@/sdk/define/logic-functions/pre-install-logic-function-config';
+import { type UninstallLogicFunctionConfig } from '@/sdk/define/logic-functions/uninstall-logic-function-config';
 import { type RoleConfig } from '@/sdk/define/roles/role-config';
+import { type SettingsMenuItemConfig } from '@/sdk/define/settings-menu-items/settings-menu-item-config';
 import {
   type AgentManifest,
   type ConnectionProviderManifest,
   type FieldManifest,
+  type McpServerManifest,
+  type MessagingProviderManifest,
   type NavigationMenuItemManifest,
+  type RelatedRecordPathManifest,
   type SkillManifest,
+  type StandalonePageLayoutWidgetManifest,
   type StandaloneViewFieldManifest,
+  type WorkflowManifest,
 } from 'twenty-shared/application';
 
 export type ValidationResult<T> = {
@@ -36,18 +44,25 @@ export type DefinableEntity =
   | LogicFunctionConfig
   | PostInstallLogicFunctionConfig
   | PreInstallLogicFunctionConfig
+  | UninstallLogicFunctionConfig
   | AgentManifest
   | ConnectionProviderManifest
+  | MessagingProviderManifest
+  | McpServerManifest
   | RoleConfig
   | SkillManifest
   | ViewConfig
   | StandaloneViewFieldManifest
   | NavigationMenuItemManifest
+  | RelatedRecordPathManifest
   | PageLayoutConfig
   | PageLayoutTabConfig
+  | StandalonePageLayoutWidgetManifest
   | PermissionFlagConfig
-  | CommandMenuItemConfig;
+  | CommandMenuItemConfig
+  | SettingsMenuItemConfig
+  | WorkflowManifest;
 
 export type DefineEntity<T extends DefinableEntity = DefinableEntity> = (
-  config: T,
-) => ValidationResult<T>;
+  config: LooseEnumValues<T>,
+) => ValidationResult<LooseEnumValues<T>>;

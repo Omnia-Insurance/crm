@@ -1,5 +1,7 @@
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { useRefetchAggregateQueries } from '@/object-record/hooks/useRefetchAggregateQueries';
+import { getGroupByAggregateQueryName } from '@/object-record/record-aggregate/utils/getGroupByAggregateQueryName';
+import { getAggregateQueryName } from '@/object-record/utils/getAggregateQueryName';
 import { renderHook } from '@testing-library/react';
 
 jest.mock('@/object-metadata/hooks/useApolloCoreClient', () => ({
@@ -17,24 +19,35 @@ describe('useRefetchAggregateQueries', () => {
     (useApolloCoreClient as jest.Mock).mockReturnValue(mockApolloClient);
   });
 
-  it('should refetch queries by evicting cache for the object', async () => {
+  it('should refetch queries', async () => {
     const objectMetadataNamePlural = 'opportunities';
+    const expectedQueryName = getAggregateQueryName(objectMetadataNamePlural);
+    const expectedQueryNameGroupBy = getGroupByAggregateQueryName({
+      objectMetadataNamePlural,
+    });
 
     const { result } = renderHook(() => useRefetchAggregateQueries());
     await result.current.refetchAggregateQueries({ objectMetadataNamePlural });
 
     expect(mockRefetchQueries).toHaveBeenCalledTimes(1);
     expect(mockRefetchQueries).toHaveBeenCalledWith({
-      updateCache: expect.any(Function),
+      include: [expectedQueryName, expectedQueryNameGroupBy],
+      onQueryUpdated: expect.any(Function),
+    });
+  });
+
+  it('should not refetch skipped queries', async () => {
+    const { result } = renderHook(() => useRefetchAggregateQueries());
+    await result.current.refetchAggregateQueries({
+      objectMetadataNamePlural: 'opportunities',
     });
 
-    // Verify the updateCache callback evicts the correct field
-    const mockCache = { evict: jest.fn() };
-    const { updateCache } = mockRefetchQueries.mock.calls[0][0];
-    updateCache(mockCache);
-    expect(mockCache.evict).toHaveBeenCalledWith({
-      fieldName: objectMetadataNamePlural,
-    });
+    const { onQueryUpdated } = mockRefetchQueries.mock.calls[0][0];
+
+    expect(onQueryUpdated({ options: { fetchPolicy: 'standby' } })).toBe(false);
+    expect(onQueryUpdated({ options: { fetchPolicy: 'cache-first' } })).toBe(
+      true,
+    );
   });
 
   it('should handle errors during refetch', async () => {

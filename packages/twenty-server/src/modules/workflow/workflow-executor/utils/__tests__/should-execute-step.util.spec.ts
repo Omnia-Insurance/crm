@@ -4,6 +4,7 @@ import { WorkflowRunStatus } from 'src/modules/workflow/common/standard-objects/
 import {
   createMockCodeStep,
   createMockIfElseStep,
+  createMockIteratorStep,
 } from 'src/modules/workflow/workflow-executor/utils/create-mock-workflow-steps.util';
 import { shouldExecuteStep } from 'src/modules/workflow/workflow-executor/utils/should-execute-step.util';
 import { type WorkflowAction } from 'src/modules/workflow/workflow-executor/workflow-actions/types/workflow-action.type';
@@ -16,7 +17,7 @@ describe('shouldExecuteStep', () => {
       settings: {
         errorHandlingOptions: {
           continueOnFailure: { value: false },
-          retryOnFailure: { value: false },
+          retryOnFailure: { value: 0 },
         },
       },
       nextStepIds: ['step-3'],
@@ -27,7 +28,7 @@ describe('shouldExecuteStep', () => {
       settings: {
         errorHandlingOptions: {
           continueOnFailure: { value: false },
-          retryOnFailure: { value: false },
+          retryOnFailure: { value: 0 },
         },
       },
       nextStepIds: ['step-3'],
@@ -38,7 +39,7 @@ describe('shouldExecuteStep', () => {
       settings: {
         errorHandlingOptions: {
           continueOnFailure: { value: false },
-          retryOnFailure: { value: false },
+          retryOnFailure: { value: 0 },
         },
       },
       nextStepIds: [],
@@ -248,7 +249,7 @@ describe('shouldExecuteStep', () => {
           },
           errorHandlingOptions: {
             continueOnFailure: { value: false },
-            retryOnFailure: { value: false },
+            retryOnFailure: { value: 0 },
           },
           outputSchema: {},
         },
@@ -294,52 +295,6 @@ describe('shouldExecuteStep', () => {
     expect(result).toBe(false);
   });
 
-  it('should handle undefined parent steps gracefully', () => {
-    const stepsWithUndefined = [
-      {
-        id: 'step-1',
-        type: WorkflowActionType.CODE,
-        settings: {
-          errorHandlingOptions: {
-            continueOnFailure: { value: false },
-            retryOnFailure: { value: false },
-          },
-        },
-        nextStepIds: ['step-3'],
-      },
-      undefined as unknown as WorkflowAction,
-      {
-        id: 'step-3',
-        type: WorkflowActionType.SEND_EMAIL,
-        settings: {
-          errorHandlingOptions: {
-            continueOnFailure: { value: false },
-            retryOnFailure: { value: false },
-          },
-        },
-        nextStepIds: [],
-      },
-    ] as WorkflowAction[];
-
-    const stepInfos = {
-      'step-1': {
-        status: StepStatus.SUCCESS,
-      },
-      'step-3': {
-        status: StepStatus.NOT_STARTED,
-      },
-    };
-
-    const result = shouldExecuteStep({
-      stepInfos,
-      steps: stepsWithUndefined,
-      step: stepsWithUndefined[2],
-      workflowRunStatus: WorkflowRunStatus.RUNNING,
-    });
-
-    expect(result).toBe(true);
-  });
-
   it('should return false when at least one parent is FAILED', () => {
     const result = shouldExecuteStep({
       stepInfos: {
@@ -369,7 +324,7 @@ describe('shouldExecuteStep', () => {
         settings: {
           errorHandlingOptions: {
             continueOnFailure: { value: false },
-            retryOnFailure: { value: false },
+            retryOnFailure: { value: 0 },
           },
         },
         nextStepIds: ['step-4'],
@@ -380,7 +335,7 @@ describe('shouldExecuteStep', () => {
         settings: {
           errorHandlingOptions: {
             continueOnFailure: { value: false },
-            retryOnFailure: { value: false },
+            retryOnFailure: { value: 0 },
           },
         },
         nextStepIds: ['step-4'],
@@ -391,7 +346,7 @@ describe('shouldExecuteStep', () => {
         settings: {
           errorHandlingOptions: {
             continueOnFailure: { value: false },
-            retryOnFailure: { value: false },
+            retryOnFailure: { value: 0 },
           },
         },
         nextStepIds: ['step-4'],
@@ -402,7 +357,7 @@ describe('shouldExecuteStep', () => {
         settings: {
           errorHandlingOptions: {
             continueOnFailure: { value: false },
-            retryOnFailure: { value: false },
+            retryOnFailure: { value: 0 },
           },
         },
         nextStepIds: [],
@@ -503,6 +458,96 @@ describe('shouldExecuteStep', () => {
       stepInfos: {
         'if-else': { status: StepStatus.SKIPPED },
         'step-a': { status: StepStatus.NOT_STARTED },
+      },
+      workflowRunStatus: WorkflowRunStatus.RUNNING,
+    });
+
+    expect(result).toBe(false);
+  });
+  it('should return true for a loop body listed in both initialLoopStepIds and the iterator nextStepIds while the iterator is running', () => {
+    const iterator = createMockIteratorStep('iterator', ['body'], ['body']);
+    const body = createMockCodeStep('body', ['iterator']);
+    const allSteps: WorkflowAction[] = [iterator, body];
+
+    const result = shouldExecuteStep({
+      step: body,
+      steps: allSteps,
+      stepInfos: {
+        iterator: { status: StepStatus.RUNNING },
+        body: { status: StepStatus.NOT_STARTED },
+      },
+      workflowRunStatus: WorkflowRunStatus.RUNNING,
+    });
+
+    expect(result).toBe(true);
+  });
+
+  it('should return true for a loop body listed only in initialLoopStepIds while the iterator is running', () => {
+    const iterator = createMockIteratorStep('iterator', [], ['body']);
+    const body = createMockCodeStep('body', ['iterator']);
+    const allSteps: WorkflowAction[] = [iterator, body];
+
+    const result = shouldExecuteStep({
+      step: body,
+      steps: allSteps,
+      stepInfos: {
+        iterator: { status: StepStatus.RUNNING },
+        body: { status: StepStatus.NOT_STARTED },
+      },
+      workflowRunStatus: WorkflowRunStatus.RUNNING,
+    });
+
+    expect(result).toBe(true);
+  });
+
+  it('should return false for a post-loop step while the iterator is running', () => {
+    const iterator = createMockIteratorStep('iterator', ['after'], ['body']);
+    const body = createMockCodeStep('body', ['iterator']);
+    const after = createMockCodeStep('after');
+    const allSteps: WorkflowAction[] = [iterator, body, after];
+
+    const result = shouldExecuteStep({
+      step: after,
+      steps: allSteps,
+      stepInfos: {
+        iterator: { status: StepStatus.RUNNING },
+        body: { status: StepStatus.SUCCESS },
+        after: { status: StepStatus.NOT_STARTED },
+      },
+      workflowRunStatus: WorkflowRunStatus.RUNNING,
+    });
+
+    expect(result).toBe(false);
+  });
+  it('should return true for a loop body whose iterator is skipped, because skip propagation into a loop is dispatched by the iterator and not inferred from parents', () => {
+    const iterator = createMockIteratorStep('iterator', ['body'], ['body']);
+    const body = createMockCodeStep('body', ['iterator']);
+    const allSteps: WorkflowAction[] = [iterator, body];
+
+    const result = shouldExecuteStep({
+      step: body,
+      steps: allSteps,
+      stepInfos: {
+        iterator: { status: StepStatus.SKIPPED },
+        body: { status: StepStatus.NOT_STARTED },
+      },
+      workflowRunStatus: WorkflowRunStatus.RUNNING,
+    });
+
+    expect(result).toBe(true);
+  });
+
+  it('should return false for a loop body already marked skipped by its iterator', () => {
+    const iterator = createMockIteratorStep('iterator', ['body'], ['body']);
+    const body = createMockCodeStep('body', ['iterator']);
+    const allSteps: WorkflowAction[] = [iterator, body];
+
+    const result = shouldExecuteStep({
+      step: body,
+      steps: allSteps,
+      stepInfos: {
+        iterator: { status: StepStatus.SKIPPED },
+        body: { status: StepStatus.SKIPPED },
       },
       workflowRunStatus: WorkflowRunStatus.RUNNING,
     });

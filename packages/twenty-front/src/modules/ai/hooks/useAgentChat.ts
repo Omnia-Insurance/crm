@@ -1,81 +1,176 @@
-import { CombinedGraphQLErrors } from '@apollo/client/errors';
+import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMemberState';
+import { currentWorkspaceMembersState } from '@/auth/states/currentWorkspaceMembersState';
+import { getToastOptionsFromError } from '@/error-handler/utils/getToastOptionsFromError';
 import { useApolloClient } from '@apollo/client/react';
 import { t } from '@lingui/core/macro';
 import { useStore } from 'jotai';
 import { useCallback } from 'react';
 import { type ExtendedUIMessage } from 'twenty-shared/ai';
-import { isDefined, isValidUuid } from 'twenty-shared/utils';
+import {
+  isDefined,
+  isNonEmptyArray,
+  tipTapDocumentToMarkdown,
+} from 'twenty-shared/utils';
+import { useToast } from 'twenty-ui/components/feedback';
 import { v4 } from 'uuid';
 
-import { AGENT_CHAT_INSTANCE_ID } from '@/ai/constants/AgentChatInstanceId';
+import { AGENT_CHAT_NEW_THREAD_DEFAULT_RECIPIENTS } from '@/ai/constants/AgentChatNewThreadDefaultRecipients';
 import { AGENT_CHAT_REFETCH_MESSAGES_EVENT_NAME } from '@/ai/constants/AgentChatRefetchMessagesEventName';
 import { AGENT_CHAT_RESTORE_EDITOR_CONTENT_EVENT_NAME } from '@/ai/constants/AgentChatRestoreEditorContentEventName';
 import { AGENT_CHAT_SEND_MESSAGE_EVENT_NAME } from '@/ai/constants/AgentChatSendMessageEventName';
 import { AGENT_CHAT_STOP_EVENT_NAME } from '@/ai/constants/AgentChatStopEventName';
-import { SEND_CHAT_MESSAGE } from '@/ai/graphql/mutations/sendChatMessage';
-import { STOP_AGENT_CHAT_STREAM } from '@/ai/graphql/mutations/stopAgentChatStream';
 import { useAgentChatModelId } from '@/ai/hooks/useAgentChatModelId';
-import { useGetBrowsingContext } from '@/ai/hooks/useBrowsingContext';
-import { useOptimisticallyUnarchiveOnSend } from '@/ai/hooks/useOptimisticallyUnarchiveOnSend';
-import { useWorkspaceAiModelAvailability } from '@/ai/hooks/useWorkspaceAiModelAvailability';
-import {
-  AGENT_CHAT_NEW_THREAD_DRAFT_KEY,
-  agentChatDraftsByThreadIdState,
-} from '@/ai/states/agentChatDraftsByThreadIdState';
-import { agentChatErrorComponentFamilyState } from '@/ai/states/agentChatErrorComponentFamilyState';
-import { agentChatInputState } from '@/ai/states/agentChatInputState';
+import { useAttachChatThreadToRecord } from '@/ai/hooks/useAttachChatThreadToRecord';
+import { useCanSendAgentChatMessage } from '@/ai/hooks/useCanSendAgentChatMessage';
+import { useGetBrowsingContext } from '@/ai/hooks/useGetBrowsingContext';
+import { useOptimisticallyRestoreOnSend } from '@/ai/hooks/useOptimisticallyRestoreOnSend';
+import { useProjectAiChatThreadToUrl } from '@/ai/hooks/useProjectAiChatThreadToUrl';
+import { useRefreshAgentChatThreadPermissions } from '@/ai/hooks/useRefreshAgentChatThreadPermissions';
+import { useWarnAboutParticipantMentionsNotAdded } from '@/ai/hooks/useWarnAboutParticipantMentionsNotAdded';
+import { agentChatDraftsByThreadIdState } from '@/ai/states/agentChatDraftsByThreadIdState';
 import { agentChatLastSentBrowsingContextFamilyState } from '@/ai/states/agentChatLastSentBrowsingContextFamilyState';
-import { agentChatMessagesComponentFamilyState } from '@/ai/states/agentChatMessagesComponentFamilyState';
 import { agentChatSelectedFilesState } from '@/ai/states/agentChatSelectedFilesState';
+import { agentChatSentMessageHandOffState } from '@/ai/states/agentChatSentMessageHandOffState';
 import { agentChatUploadedFilesState } from '@/ai/states/agentChatUploadedFilesState';
+import { agentChatUnconfirmedFirstMessageFamilyState } from '@/ai/states/agentChatUnconfirmedFirstMessageFamilyState';
 import { currentAiChatThreadState } from '@/ai/states/currentAiChatThreadState';
+import { agentChatThreadIsDirectMessageFamilySelector } from '@/ai/states/selectors/agentChatThreadIsDirectMessageFamilySelector';
+import { agentChatErrorFamilyState } from '@/ai/states/agentChatErrorFamilyState';
+import { agentChatIsAwaitingFirstChunkFamilyState } from '@/ai/states/agentChatIsAwaitingFirstChunkFamilyState';
+import { agentChatIsSendingMessageFamilyState } from '@/ai/states/agentChatIsSendingMessageFamilyState';
+import { agentChatMessagesFamilyState } from '@/ai/states/agentChatMessagesFamilyState';
+import { agentChatNewThreadChannelIdState } from '@/ai/states/agentChatNewThreadChannelIdState';
+import { agentChatNewThreadRecipientsFamilyState } from '@/ai/states/agentChatNewThreadRecipientsFamilyState';
+import { newAiChatThreadIdState } from '@/ai/states/newAiChatThreadIdState';
+import { getConversationTargetsFromSerializedDocument } from '@/ai/utils/getConversationTargetsFromSerializedDocument';
+import { getAgentChatInitialRecipients } from '@/ai/utils/getAgentChatInitialRecipients';
+import { getParticipantMentionsFromSerializedDocument } from '@/ai/utils/getParticipantMentionsFromSerializedDocument';
+import { isAgentChatAssistantMentionedInSerializedDocument } from '@/ai/utils/isAgentChatAssistantMentionedInSerializedDocument';
+import { isAiChatCreditsExhaustedError } from '@/ai/utils/isAiChatCreditsExhaustedError';
+import { toAiChatError } from '@/ai/utils/toAiChatError';
+import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { useListenToBrowserEvent } from '@/browser-event/hooks/useListenToBrowserEvent';
 import { dispatchBrowserEvent } from '@/browser-event/utils/dispatchBrowserEvent';
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
-import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
+import { aiModelsState } from '@/client-config/states/aiModelsState';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
+import { useIsFeatureEnabled } from '@/workspace/hooks/useIsFeatureEnabled';
+import {
+  markWorkspaceCreditsAvailable,
+  markWorkspaceCreditsExhausted,
+} from '@/workspace/utils/updateWorkspaceResourceCreditCap';
+import { isDeeplyEqual } from '~/utils/isDeeplyEqual';
+import {
+  SendChatMessageDocument,
+  StopAgentChatStreamDocument,
+  FeatureFlagKey,
+} from '~/generated-metadata/graphql';
+import { logError } from '~/utils/logError';
 
-export const useAgentChat = (
-  ensureThreadIdForSend: () => Promise<string | null>,
-) => {
+export const useAgentChat = () => {
   const { modelIdForRequest } = useAgentChatModelId();
-  const { enabledModels } = useWorkspaceAiModelAvailability();
+  const aiModels = useAtomStateValue(aiModelsState);
+  const canSendAgentChatMessage = useCanSendAgentChatMessage();
+  const isAiChatInboxEnabled = useIsFeatureEnabled(
+    FeatureFlagKey.IS_AI_CHAT_INBOX_ENABLED,
+  );
   const { getBrowsingContext } = useGetBrowsingContext();
-  const { applyOptimisticUnarchive } = useOptimisticallyUnarchiveOnSend();
+  const { applyOptimisticRestore } = useOptimisticallyRestoreOnSend();
+  const { attachChatThreadToRecord } = useAttachChatThreadToRecord();
+  const { warnAboutParticipantMentionsNotAdded } =
+    useWarnAboutParticipantMentionsNotAdded();
   const apolloClient = useApolloClient();
-  const { enqueueErrorSnackBar } = useSnackBar();
+  const { enqueueToast } = useToast();
   const setCurrentAiChatThread = useSetAtomState(currentAiChatThreadState);
+  const { projectAiChatThreadToUrl } = useProjectAiChatThreadToUrl({
+    shouldPreserveClosedInbox: true,
+  });
+  const { refreshAgentChatThreadPermissions } =
+    useRefreshAgentChatThreadPermissions();
   const store = useStore();
 
   const setAgentChatUploadedFiles = useSetAtomState(
     agentChatUploadedFilesState,
   );
 
-  const [, setAgentChatInput] = useAtomState(agentChatInputState);
   const setAgentChatDraftsByThreadId = useSetAtomState(
     agentChatDraftsByThreadIdState,
   );
 
   const handleSendMessage = useCallback(async () => {
-    const draftKey =
-      store.get(currentAiChatThreadState.atom) ??
-      AGENT_CHAT_NEW_THREAD_DRAFT_KEY;
-    const contentToSend =
-      draftKey === AGENT_CHAT_NEW_THREAD_DRAFT_KEY
-        ? (
-            store.get(agentChatDraftsByThreadIdState.atom)[
-              AGENT_CHAT_NEW_THREAD_DRAFT_KEY
-            ] ?? store.get(agentChatInputState.atom)
-          ).trim()
-        : store.get(agentChatInputState.atom).trim();
+    const newAiChatThreadId = store.get(newAiChatThreadIdState.atom);
+    const threadId =
+      store.get(currentAiChatThreadState.atom) ?? newAiChatThreadId;
+    const isNewChat = threadId === newAiChatThreadId;
+    const isDirectMessage = store.get(
+      agentChatThreadIsDirectMessageFamilySelector.selectorFamily(threadId),
+    );
+    const isSendingMessageAtom =
+      agentChatIsSendingMessageFamilyState.atomFamily({ threadId });
+
+    if (isNewChat && store.get(isSendingMessageAtom)) {
+      return;
+    }
+
+    const newInboxChatRecipients =
+      isNewChat && isAiChatInboxEnabled
+        ? store.get(
+            agentChatNewThreadRecipientsFamilyState.atomFamily(threadId),
+          )
+        : undefined;
+    const serializedContentToSend =
+      store.get(agentChatDraftsByThreadIdState.atom)[threadId] ?? '';
+    const contentToSend = tipTapDocumentToMarkdown(
+      serializedContentToSend,
+    ).trim();
 
     if (contentToSend === '') {
       return;
     }
 
-    if (enabledModels.length === 0) {
-      enqueueErrorSnackBar({
-        message: t`No AI models are enabled in this workspace.`,
+    const currentWorkspaceMemberId = store.get(
+      currentWorkspaceMemberState.atom,
+    )?.id;
+    const participantMentions = isDirectMessage
+      ? []
+      : getParticipantMentionsFromSerializedDocument(
+          serializedContentToSend,
+        ).filter(
+          ({ workspaceMemberId }) =>
+            workspaceMemberId !== currentWorkspaceMemberId,
+        );
+    const isAssistantMentioned =
+      isAgentChatAssistantMentionedInSerializedDocument(
+        serializedContentToSend,
+      );
+    const channelId = isNewChat
+      ? store.get(agentChatNewThreadChannelIdState.atom)
+      : undefined;
+    const initialRecipients = getAgentChatInitialRecipients({
+      recipientWorkspaceMemberIds:
+        newInboxChatRecipients?.recipientWorkspaceMemberIds ?? [],
+      workspaceMembers: store.get(currentWorkspaceMembersState.atom),
+    });
+    const hasRecipients =
+      newInboxChatRecipients?.isAssistantParticipant ||
+      isAssistantMentioned ||
+      isNonEmptyArray(initialRecipients) ||
+      isNonEmptyArray(participantMentions) ||
+      isDefined(channelId);
+
+    if (isDefined(newInboxChatRecipients) && !hasRecipients) {
+      enqueueToast({
+        status: 'error',
+        children: t`Add a recipient or a channel before sending.`,
+      });
+
+      return;
+    }
+
+    if (!canSendAgentChatMessage) {
+      enqueueToast({
+        status: 'error',
+        children: t`No AI provider is configured on this instance.`,
       });
 
       return;
@@ -83,27 +178,30 @@ export const useAgentChat = (
 
     const agentChatSelectedFiles = store.get(agentChatSelectedFilesState.atom);
 
-    if (agentChatSelectedFiles.length > 0) {
+    if (!isDirectMessage && agentChatSelectedFiles.length > 0) {
+      enqueueToast({
+        status: 'error',
+        children: t`Wait for the attachments to finish uploading.`,
+      });
+
       return;
     }
 
-    const agentChatUploadedFiles = store.get(agentChatUploadedFilesState.atom);
+    const agentChatUploadedFiles = isDirectMessage
+      ? []
+      : store.get(agentChatUploadedFilesState.atom);
 
-    const threadId = await ensureThreadIdForSend();
+    // Selects the new chat when the composer wrote to it before the chat list loaded
+    setCurrentAiChatThread(threadId);
 
-    if (!isDefined(threadId)) {
-      return;
-    }
-
-    if (draftKey === AGENT_CHAT_NEW_THREAD_DRAFT_KEY) {
-      setCurrentAiChatThread(threadId);
-    }
-
-    setAgentChatInput('');
     setAgentChatDraftsByThreadId((prev) => ({
       ...prev,
-      [draftKey]: '',
+      [threadId]: '',
     }));
+
+    dispatchBrowserEvent(AGENT_CHAT_RESTORE_EDITOR_CONTENT_EVENT_NAME, {
+      content: '',
+    });
 
     const browsingContext = getBrowsingContext();
     const lastSentBrowsingContextAtom =
@@ -117,12 +215,22 @@ export const useAgentChat = (
     const browsingContextToSend = isBrowsingContextChanged
       ? browsingContext
       : null;
-    const messageId = v4();
+    const fileIds = agentChatUploadedFiles.map(({ fileId }) => fileId);
+    const unconfirmedFirstMessageAtom =
+      agentChatUnconfirmedFirstMessageFamilyState.atomFamily(threadId);
+    const unconfirmedFirstMessage = isNewChat
+      ? store.get(unconfirmedFirstMessageAtom)
+      : null;
+    const messageId =
+      unconfirmedFirstMessage?.text === contentToSend &&
+      isDeeplyEqual(unconfirmedFirstMessage.fileIds, fileIds)
+        ? unconfirmedFirstMessage.messageId
+        : v4();
     const optimisticMessageCreatedAt = new Date().toISOString();
-    const rollbackOptimisticUnarchive = applyOptimisticUnarchive(
+    const rollbackOptimisticRestore = applyOptimisticRestore({
       threadId,
-      optimisticMessageCreatedAt,
-    );
+      optimisticUpdatedAt: optimisticMessageCreatedAt,
+    });
 
     const optimisticUserMessage: ExtendedUIMessage = {
       id: messageId,
@@ -133,114 +241,186 @@ export const useAgentChat = (
       ],
       metadata: {
         createdAt: optimisticMessageCreatedAt,
+        senderWorkspaceMemberId: store.get(currentWorkspaceMemberState.atom)
+          ?.id,
       },
       status: 'sent',
     };
 
-    const messagesAtom = agentChatMessagesComponentFamilyState.atomFamily({
-      instanceId: AGENT_CHAT_INSTANCE_ID,
-      familyKey: { threadId },
-    });
-    const errorAtom = agentChatErrorComponentFamilyState.atomFamily({
-      instanceId: AGENT_CHAT_INSTANCE_ID,
-      familyKey: { threadId },
-    });
+    const messagesAtom = agentChatMessagesFamilyState.atomFamily({ threadId });
+    const errorAtom = agentChatErrorFamilyState.atomFamily({ threadId });
+    const isAwaitingFirstChunkAtom =
+      agentChatIsAwaitingFirstChunkFamilyState.atomFamily({ threadId });
+    const removeOptimisticUserMessage = () => {
+      store.set(messagesAtom, (messages) =>
+        messages.filter((message) => message.id !== messageId),
+      );
+      store.set(isAwaitingFirstChunkAtom, false);
+    };
 
-    const currentMessages = store.get(messagesAtom);
-
-    store.set(messagesAtom, [...currentMessages, optimisticUserMessage]);
+    store.set(agentChatSentMessageHandOffState.atom, (sentMessageHandOff) =>
+      isDefined(sentMessageHandOff)
+        ? { ...sentMessageHandOff, messageId }
+        : null,
+    );
+    store.set(messagesAtom, (messages) => [...messages, optimisticUserMessage]);
     store.set(errorAtom, null);
+    store.set(isAwaitingFirstChunkAtom, true);
 
     const fileAttachments = agentChatUploadedFiles.map((file) => ({
       id: file.fileId,
       filename: file.filename,
     }));
-    const uploadedFilesSnapshot = agentChatUploadedFiles;
 
-    setAgentChatUploadedFiles([]);
+    if (!isDirectMessage) {
+      setAgentChatUploadedFiles([]);
+    }
+
+    store.set(isSendingMessageAtom, true);
 
     try {
-      const { data } = await apolloClient.mutate<{
-        sendChatMessage: {
-          messageId: string;
-          queued: boolean;
-          streamId?: string;
-        };
-      }>({
-        mutation: SEND_CHAT_MESSAGE,
+      const { data } = await apolloClient.mutate({
+        mutation: SendChatMessageDocument,
         variables: {
           threadId,
           text: contentToSend,
           messageId,
-          browsingContext: browsingContextToSend,
-          modelId: modelIdForRequest ?? undefined,
+          browsingContext: isDirectMessage ? null : browsingContextToSend,
+          modelId: isDirectMessage ? undefined : modelIdForRequest,
           fileAttachments:
             fileAttachments.length > 0 ? fileAttachments : undefined,
+          mentionedWorkspaceMemberIds:
+            participantMentions.length > 0
+              ? participantMentions.map(
+                  ({ workspaceMemberId }) => workspaceMemberId,
+                )
+              : undefined,
+          channelId,
+          shouldAssistantReply: isNonEmptyArray(aiModels),
+          isAssistantParticipant:
+            newInboxChatRecipients?.isAssistantParticipant,
+          isAssistantMentioned,
+          recipientWorkspaceMemberIds: isDefined(newInboxChatRecipients)
+            ? initialRecipients.map(
+                ({ workspaceMemberId }) => workspaceMemberId,
+              )
+            : undefined,
         },
       });
 
-      if (isBrowsingContextChanged) {
-        store.set(lastSentBrowsingContextAtom, browsingContext);
+      const isAssistantReplying =
+        data?.sendChatMessage.queued === true ||
+        isDefined(data?.sendChatMessage.streamId);
+
+      if (isAssistantReplying) {
+        // The stream may already have set a newer credits-exhausted error; don't clear it.
+        if (!isAiChatCreditsExhaustedError(store.get(errorAtom))) {
+          store.set(currentWorkspaceState.atom, markWorkspaceCreditsAvailable);
+        }
+
+        // Only a turn reads the context, so a later turn still needs it otherwise
+        if (isBrowsingContextChanged) {
+          store.set(lastSentBrowsingContextAtom, browsingContext);
+        }
+      } else {
+        store.set(isAwaitingFirstChunkAtom, false);
       }
 
-      if (data?.sendChatMessage?.queued) {
-        const latestMessages = store.get(messagesAtom);
+      // Filed after the send: a failed send restores the draft, so the retry files it.
+      if (!isDirectMessage) {
+        for (const conversationTarget of getConversationTargetsFromSerializedDocument(
+          serializedContentToSend,
+        )) {
+          void attachChatThreadToRecord({ threadId, ...conversationTarget });
+        }
+      }
+      void warnAboutParticipantMentionsNotAdded({
+        threadId,
+        participantMentions,
+        initialRecipients,
+        addedWorkspaceMemberIds: [
+          ...(data?.sendChatMessage.mentionedParticipantWorkspaceMemberIds ??
+            []),
+          ...(data?.sendChatMessage.recipientParticipantWorkspaceMemberIds ??
+            []),
+        ],
+      }).catch(logError);
 
-        store.set(
-          messagesAtom,
-          latestMessages.filter((message) => message.id !== messageId),
-        );
+      if (data?.sendChatMessage.queued === true) {
+        removeOptimisticUserMessage();
+      }
+
+      // The send created the thread. Its permissions load before it stops
+      // being the new chat, so its composer never shows as loading.
+      if (isNewChat) {
+        await refreshAgentChatThreadPermissions([threadId]);
+        store.set(newAiChatThreadIdState.atom, v4());
+        store.set(agentChatNewThreadChannelIdState.atom, null);
+        store.set(unconfirmedFirstMessageAtom, null);
+
+        if (isDefined(newInboxChatRecipients)) {
+          store.set(
+            agentChatNewThreadRecipientsFamilyState.atomFamily(threadId),
+            AGENT_CHAT_NEW_THREAD_DEFAULT_RECIPIENTS,
+          );
+        }
+
+        if (store.get(currentAiChatThreadState.atom) === threadId) {
+          projectAiChatThreadToUrl(threadId);
+        }
       }
 
       dispatchBrowserEvent(AGENT_CHAT_REFETCH_MESSAGES_EVENT_NAME);
     } catch (error) {
-      const restoredDraftKey =
-        draftKey === AGENT_CHAT_NEW_THREAD_DRAFT_KEY ? threadId : draftKey;
+      rollbackOptimisticRestore();
 
-      rollbackOptimisticUnarchive?.();
+      if (isNewChat) {
+        store.set(unconfirmedFirstMessageAtom, {
+          messageId,
+          text: contentToSend,
+          fileIds,
+        });
+      }
 
-      setAgentChatInput(contentToSend);
       setAgentChatDraftsByThreadId((prev) => ({
         ...prev,
-        [restoredDraftKey]: contentToSend,
-        ...(draftKey === AGENT_CHAT_NEW_THREAD_DRAFT_KEY
-          ? { [AGENT_CHAT_NEW_THREAD_DRAFT_KEY]: '' }
-          : {}),
+        [threadId]: serializedContentToSend,
       }));
-      setAgentChatUploadedFiles(uploadedFilesSnapshot);
+      setAgentChatUploadedFiles((currentUploadedFiles) => [
+        ...agentChatUploadedFiles,
+        ...currentUploadedFiles,
+      ]);
 
-      const latestMessages = store.get(messagesAtom);
+      removeOptimisticUserMessage();
+      store.set(errorAtom, toAiChatError(error));
 
-      store.set(
-        messagesAtom,
-        latestMessages.filter((message) => message.id !== messageId),
-      );
-
-      store.set(
-        errorAtom,
-        CombinedGraphQLErrors.is(error) || error instanceof Error
-          ? error
-          : new Error('An unexpected error occurred'),
-      );
+      if (isAiChatCreditsExhaustedError(error)) {
+        store.set(currentWorkspaceState.atom, markWorkspaceCreditsExhausted);
+      }
 
       dispatchBrowserEvent(AGENT_CHAT_RESTORE_EDITOR_CONTENT_EVENT_NAME, {
-        content: contentToSend,
+        content: serializedContentToSend,
       });
+    } finally {
+      store.set(isSendingMessageAtom, false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     store,
-    ensureThreadIdForSend,
-    setAgentChatInput,
     getBrowsingContext,
     setAgentChatUploadedFiles,
     setAgentChatDraftsByThreadId,
     modelIdForRequest,
-    enabledModels,
-    enqueueErrorSnackBar,
+    aiModels,
+    canSendAgentChatMessage,
+    isAiChatInboxEnabled,
+    enqueueToast,
     setCurrentAiChatThread,
+    projectAiChatThreadToUrl,
+    refreshAgentChatThreadPermissions,
     apolloClient,
-    applyOptimisticUnarchive,
+    applyOptimisticRestore,
+    attachChatThreadToRecord,
+    warnAboutParticipantMentionsNotAdded,
   ]);
 
   useListenToBrowserEvent({
@@ -251,21 +431,24 @@ export const useAgentChat = (
   const handleStop = useCallback(async () => {
     const threadId = store.get(currentAiChatThreadState.atom);
 
-    if (!isDefined(threadId) || !isValidUuid(threadId)) {
+    if (!isDefined(threadId)) {
       return;
     }
 
+    store.set(
+      agentChatIsAwaitingFirstChunkFamilyState.atomFamily({ threadId }),
+      false,
+    );
+
     try {
       await apolloClient.mutate({
-        mutation: STOP_AGENT_CHAT_STREAM,
+        mutation: StopAgentChatStreamDocument,
         variables: { threadId },
       });
     } catch (error) {
-      enqueueErrorSnackBar({
-        apolloError: CombinedGraphQLErrors.is(error) ? error : undefined,
-      });
+      enqueueToast(getToastOptionsFromError({ error }));
     }
-  }, [store, apolloClient, enqueueErrorSnackBar]);
+  }, [store, apolloClient, enqueueToast]);
 
   useListenToBrowserEvent({
     eventName: AGENT_CHAT_STOP_EVENT_NAME,

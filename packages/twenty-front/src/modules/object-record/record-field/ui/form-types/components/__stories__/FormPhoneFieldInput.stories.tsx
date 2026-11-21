@@ -116,13 +116,14 @@ export const SelectingVariables: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
 
-    const callingCodeDefaultValue = await canvas.findByText('No calling code');
+    const callingCodeDefaultValue = await canvas.findByText(
+      'Select a calling code',
+    );
 
     expect(callingCodeDefaultValue).toBeVisible();
 
-    const phoneNumberDefaultValue =
-      await canvas.findByPlaceholderText('Enter phone number');
-    expect(phoneNumberDefaultValue).toHaveDisplayValue('');
+    const phoneNumberDefaultValue = await canvas.findByRole('textbox');
+    expect(phoneNumberDefaultValue).toHaveTextContent('');
 
     const addVariableButtons = await canvas.findAllByText('Add variable');
     const phoneNumberVariablePicker = addVariableButtons[1];
@@ -151,7 +152,7 @@ export const Disabled: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    const callingCodeInput = await canvas.findByText('No calling code');
+    const callingCodeInput = await canvas.findByText('Select a calling code');
     expect(callingCodeInput).toBeVisible();
 
     await userEvent.click(callingCodeInput);
@@ -159,11 +160,31 @@ export const Disabled: Story = {
     const searchInputInModal = canvas.queryByPlaceholderText('Search');
     expect(searchInputInModal).not.toBeInTheDocument();
 
-    const phoneNumberInput =
-      await canvas.findByPlaceholderText('Enter phone number');
-    expect(phoneNumberInput).toBeDisabled();
+    const phoneNumberInput = await canvas.findByRole('textbox');
+    expect(phoneNumberInput).toHaveAttribute('contenteditable', 'false');
 
     const variablePickers = canvas.queryAllByText('VariablePicker');
     expect(variablePickers).toHaveLength(0);
+  },
+};
+
+export const PreservesPhoneFormatting: Story = {
+  args: {
+    label: 'Phone',
+    defaultValue: defaultPhoneValue,
+    onChange: fn(),
+  },
+  render: (args) => <FormPhoneFieldInputWithState {...args} />,
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const phoneInput = await canvas.findByRole('textbox');
+    await expect(phoneInput).toHaveTextContent('0612345678');
+    await userEvent.clear(phoneInput);
+    await userEvent.type(phoneInput, '06 12 34 56 78');
+    await expect(phoneInput).toHaveTextContent('06 12 34 56 78');
+    await expect(args.onChange).toHaveBeenLastCalledWith({
+      ...defaultPhoneValue,
+      primaryPhoneNumber: '06 12 34 56 78',
+    });
   },
 };

@@ -28,6 +28,7 @@ export const fromViewFieldManifestToUniversalFlatViewField = ({
     position: viewFieldManifest.position,
     aggregateOperation: viewFieldManifest.aggregateOperation ?? null,
     universalOverrides: null,
+    // OMNIA-CUSTOM: only user-added relation sub-field columns set this
     subFieldName: null,
     createdAt: now,
     updatedAt: now,

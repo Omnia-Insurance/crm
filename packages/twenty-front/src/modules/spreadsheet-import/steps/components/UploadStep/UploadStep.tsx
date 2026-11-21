@@ -1,8 +1,7 @@
+import { SpreadsheetImportStepBody } from '@/spreadsheet-import/components/SpreadsheetImportStepBody';
 import { t } from '@lingui/core/macro';
 import { useCallback, useState } from 'react';
 import { type WorkBook } from 'xlsx-ugnis';
-
-import { ModalContent } from 'twenty-ui/surfaces';
 
 import { useComputeColumnSuggestionsAndAutoMatch } from '@/spreadsheet-import/hooks/useComputeColumnSuggestionsAndAutoMatch';
 import { useSpreadsheetImportInternal } from '@/spreadsheet-import/hooks/useSpreadsheetImportInternal';
@@ -58,7 +57,7 @@ export const UploadStep = ({
         try {
           const mappedWorkbook = await uploadStepHook(mapWorkbook(workbook));
 
-          // OMNIA-CUSTOM: Notify caller of selected sheet name (single-sheet case)
+          // OMNIA-CUSTOM: single-sheet files never reach SelectSheetStep
           onSheetSelected?.(workbook.SheetNames[0]);
 
           if (selectHeader) {
@@ -67,7 +66,6 @@ export const UploadStep = ({
               data: mappedWorkbook,
             });
           } else {
-            // Automatically select first row as header
             const trimmedData = mappedWorkbook.slice(1);
 
             const { importedRows: data, headerRow: headerValues } =
@@ -108,6 +106,7 @@ export const UploadStep = ({
       currentStepState,
       uploadStepHook,
       computeColumnSuggestionsAndAutoMatch,
+      onSheetSelected,
     ],
   );
 
@@ -121,8 +120,8 @@ export const UploadStep = ({
   );
 
   return (
-    <ModalContent contentPadding={6}>
+    <SpreadsheetImportStepBody padding="medium">
       <DropZone onContinue={handleOnContinue} isLoading={isLoading} />
-    </ModalContent>
+    </SpreadsheetImportStepBody>
   );
 };

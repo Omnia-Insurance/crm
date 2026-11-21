@@ -117,7 +117,6 @@ describe('isFieldValueEmpty', () => {
   });
 
   it('should return correct value for links field', () => {
-    // Empty cases
     expect(
       isFieldValueEmpty({
         fieldDefinition: linksFieldDefinition,
@@ -136,7 +135,6 @@ describe('isFieldValueEmpty', () => {
       }),
     ).toBe(true);
 
-    // Valid primary link only
     expect(
       isFieldValueEmpty({
         fieldDefinition: linksFieldDefinition,
@@ -148,7 +146,6 @@ describe('isFieldValueEmpty', () => {
       }),
     ).toBe(false);
 
-    // Valid secondary link only
     expect(
       isFieldValueEmpty({
         fieldDefinition: linksFieldDefinition,
@@ -162,7 +159,6 @@ describe('isFieldValueEmpty', () => {
       }),
     ).toBe(false);
 
-    // Invalid primary link but valid secondary link
     expect(
       isFieldValueEmpty({
         fieldDefinition: linksFieldDefinition,
@@ -176,7 +172,6 @@ describe('isFieldValueEmpty', () => {
       }),
     ).toBe(false);
 
-    // Valid primary link but invalid secondary link
     expect(
       isFieldValueEmpty({
         fieldDefinition: linksFieldDefinition,
@@ -188,7 +183,6 @@ describe('isFieldValueEmpty', () => {
       }),
     ).toBe(false);
 
-    // All invalid links
     expect(
       isFieldValueEmpty({
         fieldDefinition: linksFieldDefinition,
@@ -200,7 +194,6 @@ describe('isFieldValueEmpty', () => {
       }),
     ).toBe(true);
 
-    // Multiple secondary links with mix of valid and invalid
     expect(
       isFieldValueEmpty({
         fieldDefinition: linksFieldDefinition,
@@ -227,16 +220,26 @@ describe('isFieldValueEmpty', () => {
     expect(
       isFieldValueEmpty({
         fieldDefinition: richTextFieldDefinition,
-        fieldValue: { blocknote: null, markdown: null },
+        fieldValue: { tiptap: null, markdown: null },
       }),
     ).toBe(true);
 
     expect(
       isFieldValueEmpty({
         fieldDefinition: richTextFieldDefinition,
-        fieldValue: { blocknote: '', markdown: null },
+        fieldValue: { tiptap: '', markdown: null },
       }),
     ).toBe(true);
+
+    expect(
+      isFieldValueEmpty({
+        fieldDefinition: richTextFieldDefinition,
+        fieldValue: {
+          tiptap: '{"type":"doc","content":[{"type":"paragraph"}]}',
+          markdown: null,
+        },
+      }),
+    ).toBe(false);
 
     expect(
       isFieldValueEmpty({
@@ -248,10 +251,7 @@ describe('isFieldValueEmpty', () => {
     expect(
       isFieldValueEmpty({
         fieldDefinition: richTextFieldDefinition,
-        fieldValue: {
-          blocknote: '[{"type":"paragraph"}]',
-          markdown: 'some text',
-        },
+        fieldValue: { tiptap: null, markdown: 'some text' },
       }),
     ).toBe(false);
   });

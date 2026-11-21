@@ -38,13 +38,6 @@ export const getSessionStorageOptions = (
   };
 
   switch (cacheStorageType) {
-    /* case CacheStorageType.Memory: {
-      Logger.warn(
-        'Memory session storage is not recommended for production. Prefer Redis.',
-      );
-
-      return sessionStorage;
-    }*/
     case CacheStorageType.Redis: {
       const connectionString = twentyConfigService.get('REDIS_URL');
 
@@ -61,15 +54,6 @@ export const getSessionStorageOptions = (
 
       redisClient.on('error', (err) => {
         sessionStorageLogger.error('Redis session-store client error', err);
-      });
-
-      // Without this listener, an unhandled 'error' event from the redis
-      // socket (ECONNRESET, SocketClosedUnexpectedly, etc.) crashes the
-      // Node process via Node's default unhandled-error behavior. The
-      // client auto-reconnects on its own, so log and continue.
-      redisClient.on('error', (err) => {
-        // eslint-disable-next-line no-console
-        console.error('[session-storage] Redis client error:', err);
       });
 
       redisClient.connect().catch((err) => {

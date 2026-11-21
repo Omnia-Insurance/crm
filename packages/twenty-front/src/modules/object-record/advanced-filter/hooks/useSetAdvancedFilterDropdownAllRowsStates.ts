@@ -7,7 +7,6 @@ import { subFieldNameUsedInDropdownComponentState } from '@/object-record/object
 import { currentRecordFilterGroupsComponentState } from '@/object-record/record-filter-group/states/currentRecordFilterGroupsComponentState';
 import { currentRecordFiltersComponentState } from '@/object-record/record-filter/states/currentRecordFiltersComponentState';
 import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
-import { type CompositeFieldSubFieldName } from '@/settings/data-model/types/CompositeFieldSubFieldName';
 import { useAtomComponentSelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorValue';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useStore } from 'jotai';
@@ -59,12 +58,11 @@ export const useSetAdvancedFilterDropdownStates = () => {
         subFieldNameUsedInDropdownComponentState.atomFamily({
           instanceId,
         }),
-        recordFilter.subFieldName as
-          | CompositeFieldSubFieldName
-          | null
-          | undefined,
+        recordFilter.subFieldName,
       );
 
+      // OMNIA-CUSTOM: value pickers read the traversal target from here; it is
+      // otherwise only set once a row's field menu opens
       store.set(
         relationTargetFieldMetadataIdUsedInDropdownComponentState.atomFamily({
           instanceId,

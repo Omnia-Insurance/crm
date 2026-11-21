@@ -1,7 +1,12 @@
+import {
+  TEST_AI_MODEL_ID,
+  TEST_AI_OTHER_MODEL_ID,
+} from 'test/integration/constants/test-ai-model-ids.constants';
 import { DEFAULT_TOOL_INPUT_SCHEMA } from 'twenty-shared/logic-function';
 import { type AgentResponseSchema } from 'twenty-shared/ai';
 import { createOneAgent } from 'test/integration/metadata/suites/agent/utils/create-one-agent.util';
 import { deleteOneAgent } from 'test/integration/metadata/suites/agent/utils/delete-one-agent.util';
+import { findAgents } from 'test/integration/metadata/suites/agent/utils/find-agents.util';
 import { updateOneAgent } from 'test/integration/metadata/suites/agent/utils/update-one-agent.util';
 
 describe('Agent update should succeed', () => {
@@ -15,9 +20,8 @@ describe('Agent update should succeed', () => {
         description: 'Original description',
         icon: 'IconRobot',
         prompt: 'Original prompt',
-        modelId: 'openai/gpt-4.1',
+        modelId: TEST_AI_MODEL_ID,
         responseFormat: { type: 'text' },
-        evaluationInputs: ['input 1'],
       },
     });
 
@@ -100,13 +104,13 @@ describe('Agent update should succeed', () => {
       expectToFail: false,
       input: {
         id: testAgentId,
-        modelId: 'openai/gpt-5.2',
+        modelId: TEST_AI_OTHER_MODEL_ID,
       },
     });
 
     expect(data.updateOneAgent).toMatchObject({
       id: testAgentId,
-      modelId: 'openai/gpt-5.2',
+      modelId: TEST_AI_OTHER_MODEL_ID,
     });
   });
 
@@ -202,21 +206,6 @@ describe('Agent update should succeed', () => {
     });
   });
 
-  it('should update agent evaluationInputs', async () => {
-    const { data } = await updateOneAgent({
-      expectToFail: false,
-      input: {
-        id: testAgentId,
-        evaluationInputs: ['new input 1', 'new input 2', 'new input 3'],
-      },
-    });
-
-    expect(data.updateOneAgent).toMatchObject({
-      id: testAgentId,
-      evaluationInputs: ['new input 1', 'new input 2', 'new input 3'],
-    });
-  });
-
   it('should update multiple agent properties at once', async () => {
     const { data } = await updateOneAgent({
       expectToFail: false,
@@ -226,12 +215,11 @@ describe('Agent update should succeed', () => {
         description: 'Updated multiple fields',
         icon: 'IconBrain',
         prompt: 'New comprehensive prompt',
-        modelId: 'openai/gpt-5.2',
+        modelId: TEST_AI_OTHER_MODEL_ID,
         responseFormat: {
           type: 'json',
           schema: DEFAULT_TOOL_INPUT_SCHEMA as AgentResponseSchema,
         },
-        evaluationInputs: ['eval 1', 'eval 2'],
       },
     });
 
@@ -241,12 +229,11 @@ describe('Agent update should succeed', () => {
       description: 'Updated multiple fields',
       icon: 'IconBrain',
       prompt: 'New comprehensive prompt',
-      modelId: 'openai/gpt-5.2',
+      modelId: TEST_AI_OTHER_MODEL_ID,
       responseFormat: {
         type: 'json',
         schema: { type: 'object' },
       },
-      evaluationInputs: ['eval 1', 'eval 2'],
     });
   });
 
@@ -290,18 +277,106 @@ describe('Agent update should succeed', () => {
     });
   });
 
-  it('should clear evaluationInputs by setting to empty array', async () => {
-    const { data } = await updateOneAgent({
+  it('should set and then clear agent triggers', async () => {
+    const triggers = [
+      {
+        id: '6f1b5a3e-3c3f-4f4a-9a43-0a7f5d6c2b11',
+        type: 'DATABASE_EVENT' as const,
+        isActive: true,
+        instructions: 'Qualify the new company',
+        settings: { eventName: 'company.created' },
+      },
+      {
+        id: '0d2b1a8c-77a4-4e2e-8f0c-3a8e9f6b4c22',
+        type: 'CRON' as const,
+        isActive: false,
+        instructions: null,
+        settings: { pattern: '0 9 * * 1' },
+      },
+    ];
+
+    const { data: updateData } = await updateOneAgent({
       expectToFail: false,
       input: {
         id: testAgentId,
-        evaluationInputs: [],
+        triggers,
       },
     });
 
-    expect(data.updateOneAgent).toMatchObject({
+    expect(updateData.updateOneAgent).toMatchObject({
       id: testAgentId,
-      evaluationInputs: [],
+      triggers,
     });
+
+    const { data: clearData } = await updateOneAgent({
+      expectToFail: false,
+      input: {
+        id: testAgentId,
+        triggers: [],
+      },
+    });
+
+    expect(clearData.updateOneAgent).toMatchObject({
+      id: testAgentId,
+      triggers: [],
+    });
+  });
+
+  it('should store edits and the archive of another application agent as workspace overrides', async () => {
+    const { data } = await findAgents({
+      expectToFail: false,
+      input: undefined,
+      gqlFields: 'id name label',
+    });
+
+    const helperAgent = data.findManyAgents.find(
+      (agent) => agent.name === 'helper',
+    );
+
+    expect(helperAgent).toBeDefined();
+
+    try {
+      const { data: editData } = await updateOneAgent({
+        expectToFail: false,
+        input: {
+          id: helperAgent!.id,
+          label: 'Workspace helper',
+          isActive: false,
+        },
+        gqlFields: 'id label isActive',
+      });
+
+      expect(editData.updateOneAgent).toMatchObject({
+        label: 'Workspace helper',
+        isActive: false,
+      });
+
+      const [agentRow] = await global.testDataSource.query(
+        `SELECT label, "isActive", overrides FROM core."agent" WHERE id = $1`,
+        [helperAgent!.id],
+      );
+
+      expect(agentRow.label).toBe(helperAgent!.label);
+      expect(agentRow.isActive).toBe(true);
+      expect(Object.values(agentRow.overrides)).toEqual([
+        { label: 'Workspace helper', isActive: false },
+      ]);
+    } finally {
+      // Every spec shares the helper agent, so a failed assertion must not leave it archived
+      const { data: revertData } = await updateOneAgent({
+        expectToFail: false,
+        input: {
+          id: helperAgent!.id,
+          label: helperAgent!.label,
+          isActive: true,
+        },
+        gqlFields: 'id label isActive',
+      });
+
+      expect(revertData.updateOneAgent).toMatchObject({
+        label: helperAgent!.label,
+        isActive: true,
+      });
+    }
   });
 });

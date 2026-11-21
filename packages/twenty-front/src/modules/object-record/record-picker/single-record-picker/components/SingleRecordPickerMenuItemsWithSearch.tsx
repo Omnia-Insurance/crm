@@ -1,39 +1,23 @@
+import { ListItemButton } from 'twenty-ui/components/navigation';
+import { type SingleRecordPickerMenuItemsWithSearchProps } from '@/object-record/record-picker/single-record-picker/types/SingleRecordPickerMenuItemsWithSearchProps';
+import { ToastOnQueryErrorEffect } from '@/apollo/components/ToastOnQueryErrorEffect';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
 import { SingleRecordPickerLoadingEffect } from '@/object-record/record-picker/single-record-picker/components/SingleRecordPickerLoadingEffect';
-import {
-  SingleRecordPickerMenuItems,
-  type SingleRecordPickerMenuItemsProps,
-} from '@/object-record/record-picker/single-record-picker/components/SingleRecordPickerMenuItems';
+import { SingleRecordPickerMenuItems } from '@/object-record/record-picker/single-record-picker/components/SingleRecordPickerMenuItems';
 import { useSingleRecordPickerRecords } from '@/object-record/record-picker/single-record-picker/hooks/useSingleRecordPickerRecords';
 import { useSingleRecordPickerSearch } from '@/object-record/record-picker/single-record-picker/hooks/useSingleRecordPickerSearch';
 import { SingleRecordPickerComponentInstanceContext } from '@/object-record/record-picker/single-record-picker/states/contexts/SingleRecordPickerComponentInstanceContext';
 import { singleRecordPickerSearchFilterComponentState } from '@/object-record/record-picker/single-record-picker/states/singleRecordPickerSearchFilterComponentState';
-import { type RecordPickerLayoutDirection } from '@/object-record/record-picker/types/RecordPickerLayoutDirection';
 import { canCreateRecordsForObjectMetadataItem } from '@/object-record/utils/canCreateRecordsForObjectMetadataItem';
-import { CreateNewButton } from '@/ui/input/relation-picker/components/CreateNewButton';
 import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
 import { DropdownMenuSearchInput } from '@/ui/layout/dropdown/components/DropdownMenuSearchInput';
 import { DropdownMenuSeparator } from '@/ui/layout/dropdown/components/DropdownMenuSeparator';
 import { useAvailableComponentInstanceIdOrThrow } from '@/ui/utilities/state/component-state/hooks/useAvailableComponentInstanceIdOrThrow';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { isDefined } from 'twenty-shared/utils';
-import { t } from '@lingui/core/macro';
 import { IconPlus } from 'twenty-ui/icon';
-import { type ObjectRecordFilterInput } from '~/generated/graphql';
-
-export type SingleRecordPickerMenuItemsWithSearchProps = {
-  excludedRecordIds?: string[];
-  onCreate?: ((searchInput?: string) => void) | (() => void);
-  objectNameSingulars: string[];
-  recordPickerInstanceId?: string;
-  layoutDirection?: RecordPickerLayoutDirection;
-  focusId: string;
-  additionalFilter?: ObjectRecordFilterInput;
-} & Pick<
-  SingleRecordPickerMenuItemsProps,
-  'EmptyIcon' | 'emptyLabel' | 'onCancel' | 'onMorphItemSelected'
->;
+import { useLingui } from '@lingui/react/macro';
 
 export const SingleRecordPickerMenuItemsWithSearch = ({
   EmptyIcon,
@@ -47,6 +31,7 @@ export const SingleRecordPickerMenuItemsWithSearch = ({
   focusId,
   additionalFilter,
 }: SingleRecordPickerMenuItemsWithSearchProps) => {
+  const { t } = useLingui();
   const { handleSearchFilterChange } = useSingleRecordPickerSearch();
 
   const recordPickerInstanceId = useAvailableComponentInstanceIdOrThrow(
@@ -58,9 +43,16 @@ export const SingleRecordPickerMenuItemsWithSearch = ({
     recordPickerInstanceId,
   );
 
-  const { pickableMorphItems, loading } = useSingleRecordPickerRecords({
+  const {
+    pickableMorphItems,
+    loading,
+    selectedRecordsError,
+    filteredSelectedRecordsError,
+    recordsToSelectError,
+  } = useSingleRecordPickerRecords({
     objectNameSingulars,
     excludedRecordIds,
+    // OMNIA-CUSTOM: forwarded to the search (Carrier -> Product bridge)
     additionalFilter,
   });
 
@@ -92,17 +84,20 @@ export const SingleRecordPickerMenuItemsWithSearch = ({
 
   return (
     <>
+      <ToastOnQueryErrorEffect error={selectedRecordsError} />
+      <ToastOnQueryErrorEffect error={filteredSelectedRecordsError} />
+      <ToastOnQueryErrorEffect error={recordsToSelectError} />
+
       <SingleRecordPickerLoadingEffect loading={loading} />
       {layoutDirection === 'search-bar-on-bottom' && (
         <>
           {isDefined(onCreate) && canCreateRecords && (
             <>
               <DropdownMenuItemsContainer scrollable={false}>
-                <CreateNewButton
+                <ListItemButton
                   onClick={handleCreateNew}
-                  LeftIcon={IconPlus}
-                  text={t`Add New`}
-                />
+                  startIcon={<IconPlus />}
+                >{t`Add New`}</ListItemButton>
               </DropdownMenuItemsContainer>
               <DropdownMenuSeparator />
             </>
@@ -147,11 +142,10 @@ export const SingleRecordPickerMenuItemsWithSearch = ({
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItemsContainer scrollable={false}>
-                <CreateNewButton
+                <ListItemButton
                   onClick={handleCreateNew}
-                  LeftIcon={IconPlus}
-                  text={t`Add New`}
-                />
+                  startIcon={<IconPlus />}
+                >{t`Add New`}</ListItemButton>
               </DropdownMenuItemsContainer>
             </>
           )}

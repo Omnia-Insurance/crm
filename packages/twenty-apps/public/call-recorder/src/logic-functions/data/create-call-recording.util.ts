@@ -5,14 +5,14 @@ import { type CallRecordingRequestStatus } from 'src/logic-functions/constants/c
 import { type CallRecordingStatus } from 'src/logic-functions/constants/call-recording-status';
 
 export type ScheduledCallRecordingFields = {
-  title: string | null;
+  title: string;
   status: CallRecordingStatus.SCHEDULED;
   recordingRequestStatus: CallRecordingRequestStatus.REQUESTED;
   calendarEventId: string;
 };
 
 export const createCallRecording = async (
-  client: CoreApiClient,
+  client: Pick<CoreApiClient, 'mutation'>,
   {
     id,
     data,

@@ -1,9 +1,8 @@
-// The halftone studio's settings vocabulary (ported from the old
-// lib/halftone state model; interfaces → types per the redone convention).
+import type { HalftoneMaterialTexture } from './material-texture';
 
 export type HalftoneTabId = 'design' | 'animations' | 'export';
 export type HalftoneSourceMode = 'shape' | 'image';
-export type HalftoneMaterialSurface = 'solid' | 'glass';
+export type HalftoneMaterialSurface = 'solid' | 'glass' | 'metal';
 export type HalftoneToneTarget = 'light' | 'dark';
 export type HalftoneRotateAxis =
   | 'x'
@@ -33,6 +32,9 @@ export type HalftoneMaterialSettings = {
   thickness: number;
   refraction: number;
   environmentPower: number;
+  environmentRotation: number;
+  texture: HalftoneMaterialTexture;
+  textureTiling: number;
 };
 
 export type HalftoneEffectSettings = {

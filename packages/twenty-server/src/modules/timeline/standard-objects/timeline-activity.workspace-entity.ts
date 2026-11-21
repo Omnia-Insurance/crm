@@ -1,3 +1,5 @@
+import { type TimelineActivityTypeSnapshot } from 'twenty-shared/timeline';
+
 import { BaseWorkspaceEntity } from 'src/engine/twenty-orm/base.workspace-entity';
 import { type CustomWorkspaceEntity } from 'src/engine/twenty-orm/custom.workspace-entity';
 import { type EntityRelation } from 'src/engine/workspace-manager/workspace-migration/types/entity-relation.interface';
@@ -11,12 +13,12 @@ import { type PersonWorkspaceEntity } from 'src/modules/person/standard-objects/
 import { type TaskWorkspaceEntity } from 'src/modules/task/standard-objects/task.workspace-entity';
 import { type WorkflowRunWorkspaceEntity } from 'src/modules/workflow/common/standard-objects/workflow-run.workspace-entity';
 import { type WorkflowVersionWorkspaceEntity } from 'src/modules/workflow/common/standard-objects/workflow-version.workspace-entity';
-import { type WorkflowWorkspaceEntity } from 'src/modules/workflow/common/standard-objects/workflow.workspace-entity';
 import { type WorkspaceMemberWorkspaceEntity } from 'src/modules/workspace-member/standard-objects/workspace-member.workspace-entity';
 
 export class TimelineActivityWorkspaceEntity extends BaseWorkspaceEntity {
   happensAt: Date;
-  name: string | null;
+  timelineActivityTypeId: string | null;
+  timelineActivityTypeSnapshot: TimelineActivityTypeSnapshot | null;
   properties: JSON | null;
   linkedRecordCachedName: string | null;
   linkedRecordId: string | null;
@@ -33,8 +35,6 @@ export class TimelineActivityWorkspaceEntity extends BaseWorkspaceEntity {
   targetNoteId: string | null;
   targetTask: EntityRelation<TaskWorkspaceEntity> | null;
   targetTaskId: string | null;
-  targetWorkflow: EntityRelation<WorkflowWorkspaceEntity> | null;
-  targetWorkflowId: string | null;
   targetWorkflowVersion: EntityRelation<WorkflowVersionWorkspaceEntity> | null;
   targetWorkflowVersionId: string | null;
   targetWorkflowRun: EntityRelation<WorkflowRunWorkspaceEntity> | null;

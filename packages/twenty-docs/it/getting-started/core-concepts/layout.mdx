@@ -1,0 +1,85 @@
+---
+title: Layout
+description: Come navigare, esplorare e visualizzare i record in Twenty.
+---
+
+import { PageBanner } from "/snippets/page-banner.mdx"
+
+import { VimeoEmbed } from '/snippets/vimeo-embed.mdx';
+import { CardTitle } from "/snippets/card-title.mdx"
+
+## Il layout principale
+
+Il centro dello schermo è dove vivono i tuoi record — persone, aziende, opportunità, attività, note, dashboard, flussi di lavoro ed eventuali oggetti personalizzati. Qui visualizzi, modifichi ed elimini i record e crei nuove viste.
+
+<img src="/images/user-guide/home/main-layout.png" style={{width:'100%'}} />
+
+<span id="navigation-bar" />
+
+## Barra laterale
+
+La barra laterale sinistra ti offre:
+
+* **Selettore dello spazio di lavoro** — passa da uno spazio di lavoro all'altro o creane uno nuovo (menu a discesa in alto)
+* **Ricerca** — premi `/` per attivarla immediatamente, esegue ricerche su tutti gli oggetti
+* **Impostazioni** — accessibili dall'angolo in alto a sinistra
+* **Preferiti** — viste fissate, specifiche per ogni utente
+* **Scorciatoie agli oggetti** — accesso rapido a Persone, Aziende, Opportunità, ecc.
+* **Flussi di lavoro** — crea automazioni
+
+Trascina gli elementi per riordinarli, crea cartelle per raggruppare oggetti correlati, nascondi ciò che non usi.
+
+Usa il pulsante di compressione nella parte superiore della barra laterale oppure scegli **Comprimi barra laterale** dal menu dei comandi (`Cmd+K` su Mac o `Ctrl+K` su Windows). Quando è compressa, usa **Espandi barra laterale** per visualizzarla di nuovo.
+
+<img src="/images/user-guide/home/navigation-bar.png" style={{width:'100%'}} />
+
+## Menu Comandi
+
+Premi `Cmd+K` (Mac) o `Ctrl+K` (Windows), oppure fai clic sui tre puntini in alto a destra. Da qui puoi:
+
+* Crea nuovi record
+* Importa ed esporta dati tramite CSV
+* Crea nuove viste
+* Accedi ai record eliminati (Twenty supporta eliminazioni temporanee e definitive)
+* Consulta le scorciatoie da tastiera per navigare nel tuo spazio di lavoro
+
+<img src="/images/user-guide/home/command-menu.png" style={{width:'100%'}} />
+
+## Cerca
+
+Accessibile tramite il Menu Comandi, dalla parte superiore della barra laterale o premendo `/`. La ricerca funziona su tutti gli oggetti.
+
+<img src="/images/user-guide/home/search-bar.png" style={{width:'100%'}} />
+
+## Pannello laterale
+
+Fai clic su un record per aprire il pannello laterale a destra: una panoramica rapida delle informazioni chiave del record senza lasciare la pagina corrente. Fai clic su **Open** per andare alla pagina completa del record.
+
+<img src="/images/user-guide/home/side-panel.png" style={{width:'100%'}} />
+
+## Viste
+
+Ogni oggetto supporta più viste — illimitate per oggetto. Usa il menu a discesa in alto a sinistra per passare da una vista all'altra.
+
+* **Tabella** — righe e colonne in stile foglio di calcolo, con raggruppamenti, modifica in linea e personalizzazione delle colonne
+* **Kanban** — schede drag-and-drop organizzate in base a un campo di tipo selezione, ideale per le pipeline
+* **Calendario** — record posizionati su una linea temporale in base a un campo data, per pianificazioni basate sul tempo
+
+Ogni vista salva i propri filtri, l'ordinamento e la visibilità dei campi. Condividi le viste con il tuo spazio di lavoro o mantienile private. Aggiungi le viste ai preferiti per un accesso rapido dalla barra laterale.
+
+<img src="/images/user-guide/home/view-menu.png" style={{width:'100%'}} />
+
+## Pagine dei record
+
+Quando apri un record, la pagina dei dettagli è composta da **schede** e **widget** configurabili. Aggiungi, rimuovi, riordina e ridimensiona i widget in una griglia — campi, record correlati, email, timeline, attività, note, file, grafici, iframe e altro ancora. Ogni tipo di oggetto ha il proprio layout.
+
+<CardGroup cols={2} className="documentation-card-group">
+<Card href="/it/user-guide/layout/overview" img="/images/user-guide/halftone/layout-window-v1.svg">
+  <CardTitle>Guida completa al layout</CardTitle>
+  Barra laterale, viste, pagine dei record — guida di riferimento dettagliata e istruzioni pratiche.
+</Card>
+</CardGroup>
+
+<VimeoEmbed videoId="1185511790" title="Layout" />
+
+<PageBanner illustration="getting-started-layout" />

@@ -13,8 +13,8 @@ export type ViewField = {
   size: number;
   aggregateOperation?: AggregateOperations | null;
   viewFieldGroupId?: string | null;
+  // OMNIA-CUSTOM: target field name of a relation sub-field column (C6)
   subFieldName?: string | null;
-  isOverridden: boolean;
   definition?:
     | ColumnDefinition<FieldMetadata>
     | RecordBoardFieldDefinition<FieldMetadata>;

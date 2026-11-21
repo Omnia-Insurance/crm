@@ -95,10 +95,6 @@ type RowLevelPermissionPredicateOperand =
   | 'IS_TODAY'
   | 'VECTOR_SEARCH';
 
-type RowLevelPermissionPredicateScope = 'ALL' | 'READ' | 'WRITE';
-
-type RowLevelPermissionPredicateGroupLogicalOperator = 'AND' | 'OR';
-
 type ObjectPermissionRecord = {
   objectMetadataId: string;
   canReadObjectRecords?: boolean | null;
@@ -110,9 +106,9 @@ type ObjectPermissionRecord = {
 type RowLevelPermissionPredicateRecord = {
   id?: string;
   fieldMetadataId: string;
+  relationFieldMetadataId?: string | null;
   objectMetadataId: string;
   operand: RowLevelPermissionPredicateOperand;
-  scope: RowLevelPermissionPredicateScope;
   value?: unknown;
   subFieldName?: string | null;
   workspaceMemberFieldMetadataId?: string | null;
@@ -129,10 +125,30 @@ type RowLevelPermissionPredicateInput = Omit<
 type RowLevelPermissionPredicateGroupRecord = {
   id: string;
   objectMetadataId: string;
-  parentRowLevelPermissionPredicateGroupId?: string | null;
-  logicalOperator: RowLevelPermissionPredicateGroupLogicalOperator;
-  scope: RowLevelPermissionPredicateScope;
-  positionInRowLevelPermissionPredicateGroup?: number | null;
+};
+
+type RowLevelPermissionRuleGrants = {
+  canCreateRecords: boolean;
+  canReadRecords: boolean;
+  canUpdateRecords: boolean;
+  canSoftDeleteRecords: boolean;
+  canDestroyRecords: boolean;
+};
+
+type RowLevelPermissionRuleRecord = {
+  id: string;
+  objectMetadataId: string;
+  canCreateRecords?: boolean | null;
+  canReadRecords?: boolean | null;
+  canUpdateRecords?: boolean | null;
+  canSoftDeleteRecords?: boolean | null;
+  canDestroyRecords?: boolean | null;
+};
+
+type AgentPolicyRowLevelPermissionFieldIds = {
+  policyAgentFieldMetadataId: string;
+  agentProfileWorkspaceMemberFieldMetadataId: string;
+  workspaceMemberIdFieldMetadataId: string;
 };
 
 type RoleRecord = {
@@ -144,6 +160,7 @@ type RoleRecord = {
   rowLevelPermissionPredicateGroups?:
     | RowLevelPermissionPredicateGroupRecord[]
     | null;
+  rowLevelPermissionRules?: RowLevelPermissionRuleRecord[] | null;
 };
 
 type BrokeragePostInstallResult = {
@@ -199,9 +216,29 @@ const POLICY_STATUS_FIELD_NAME = 'status';
 const POLICY_STATUS_DEFAULT_VALUE = "'SUBMITTED'";
 const AGENT_ROLE_LABEL = 'Agent';
 const AGENT_RELATION_FIELD_NAME = 'agent';
+const AGENT_PROFILE_OBJECT_NAME = 'agentProfile';
+const AGENT_PROFILE_WORKSPACE_MEMBER_FIELD_NAME = 'workspaceMember';
 const WORKSPACE_MEMBER_OBJECT_NAME = 'workspaceMember';
 const WORKSPACE_MEMBER_ID_FIELD_NAME = 'id';
 const WORKSPACE_MEMBER_DYNAMIC_VALUE = null;
+
+// Contract C1 "read all, write own": an object-level grant bypasses the rule,
+// so Policy keeps only read at object level and the rule grants create and
+// update. Agents never held soft delete or destroy on Policy.
+const AGENT_POLICY_OBJECT_PERMISSION = {
+  canReadObjectRecords: true,
+  canUpdateObjectRecords: false,
+  canSoftDeleteObjectRecords: false,
+  canDestroyObjectRecords: false,
+} satisfies Omit<ObjectPermissionRecord, 'objectMetadataId'>;
+
+const AGENT_POLICY_RULE_GRANTS: RowLevelPermissionRuleGrants = {
+  canCreateRecords: true,
+  canReadRecords: false,
+  canUpdateRecords: true,
+  canSoftDeleteRecords: false,
+  canDestroyRecords: false,
+};
 
 const VIEW_MODIFICATION_PERMISSION_ERROR_MESSAGE =
   'You do not have permission to modify this view';
@@ -252,9 +289,9 @@ const FIND_VIEW_SORT_SETUP_QUERY = `
       rowLevelPermissionPredicates {
         id
         fieldMetadataId
+        relationFieldMetadataId
         objectMetadataId
         operand
-        scope
         value
         subFieldName
         workspaceMemberFieldMetadataId
@@ -265,10 +302,15 @@ const FIND_VIEW_SORT_SETUP_QUERY = `
       rowLevelPermissionPredicateGroups {
         id
         objectMetadataId
-        parentRowLevelPermissionPredicateGroupId
-        logicalOperator
-        scope
-        positionInRowLevelPermissionPredicateGroup
+      }
+      rowLevelPermissionRules {
+        id
+        objectMetadataId
+        canCreateRecords
+        canReadRecords
+        canUpdateRecords
+        canSoftDeleteRecords
+        canDestroyRecords
       }
     }
   }
@@ -442,25 +484,15 @@ const isRowLevelPermissionPredicateOperand = (
     'VECTOR_SEARCH',
   ].includes(value);
 
-const isRowLevelPermissionPredicateScope = (
-  value: unknown,
-): value is RowLevelPermissionPredicateScope =>
-  value === 'ALL' || value === 'READ' || value === 'WRITE';
-
-const isRowLevelPermissionPredicateGroupLogicalOperator = (
-  value: unknown,
-): value is RowLevelPermissionPredicateGroupLogicalOperator =>
-  value === 'AND' || value === 'OR';
-
 const isRowLevelPermissionPredicateRecord = (
   value: unknown,
 ): value is RowLevelPermissionPredicateRecord =>
   isRecord(value) &&
   isNullableString(value.id) &&
   typeof value.fieldMetadataId === 'string' &&
+  isNullableString(value.relationFieldMetadataId) &&
   typeof value.objectMetadataId === 'string' &&
   isRowLevelPermissionPredicateOperand(value.operand) &&
-  isRowLevelPermissionPredicateScope(value.scope) &&
   isNullableString(value.subFieldName) &&
   isNullableString(value.workspaceMemberFieldMetadataId) &&
   isNullableString(value.workspaceMemberSubFieldName) &&
@@ -472,11 +504,19 @@ const isRowLevelPermissionPredicateGroupRecord = (
 ): value is RowLevelPermissionPredicateGroupRecord =>
   isRecord(value) &&
   typeof value.id === 'string' &&
+  typeof value.objectMetadataId === 'string';
+
+const isRowLevelPermissionRuleRecord = (
+  value: unknown,
+): value is RowLevelPermissionRuleRecord =>
+  isRecord(value) &&
+  typeof value.id === 'string' &&
   typeof value.objectMetadataId === 'string' &&
-  isNullableString(value.parentRowLevelPermissionPredicateGroupId) &&
-  isRowLevelPermissionPredicateGroupLogicalOperator(value.logicalOperator) &&
-  isRowLevelPermissionPredicateScope(value.scope) &&
-  isNullableNumber(value.positionInRowLevelPermissionPredicateGroup);
+  isNullableBoolean(value.canCreateRecords) &&
+  isNullableBoolean(value.canReadRecords) &&
+  isNullableBoolean(value.canUpdateRecords) &&
+  isNullableBoolean(value.canSoftDeleteRecords) &&
+  isNullableBoolean(value.canDestroyRecords);
 
 const isRoleRecord = (value: unknown): value is RoleRecord =>
   isRecord(value) &&
@@ -498,7 +538,11 @@ const isRoleRecord = (value: unknown): value is RoleRecord =>
     (Array.isArray(value.rowLevelPermissionPredicateGroups) &&
       value.rowLevelPermissionPredicateGroups.every(
         isRowLevelPermissionPredicateGroupRecord,
-      )));
+      ))) &&
+  (value.rowLevelPermissionRules === undefined ||
+    value.rowLevelPermissionRules === null ||
+    (Array.isArray(value.rowLevelPermissionRules) &&
+      value.rowLevelPermissionRules.every(isRowLevelPermissionRuleRecord)));
 
 const isFindViewSortSetupData = (
   value: unknown,
@@ -719,30 +763,28 @@ const upsertObjectPermissions = async ({
   });
 };
 
-const upsertRowLevelPermissionPredicates = async ({
+// The upsert replaces the pair's predicates and groups; one ungrouped
+// predicate and no groups leaves exactly one rule (contract C1)
+const upsertSingleRowLevelPermissionRule = async ({
   roleId,
   objectMetadataId,
-  predicates,
-  predicateGroups,
+  predicate,
+  ruleGrants,
 }: {
   roleId: string;
   objectMetadataId: string;
-  predicates: RowLevelPermissionPredicateRecord[];
-  predicateGroups: RowLevelPermissionPredicateGroupRecord[];
+  predicate: RowLevelPermissionPredicateInput;
+  ruleGrants: RowLevelPermissionRuleGrants;
 }) => {
-  const predicateInputs = predicates.map(
-    ({ objectMetadataId: _objectMetadataId, ...predicate }) =>
-      predicate satisfies RowLevelPermissionPredicateInput,
-  );
-
   await metadataGraphqlRequest({
     query: UPSERT_ROW_LEVEL_PERMISSION_PREDICATES_MUTATION,
     variables: {
       input: {
         roleId,
         objectMetadataId,
-        predicates: predicateInputs,
-        predicateGroups,
+        predicates: [predicate],
+        predicateGroups: [],
+        ...ruleGrants,
       },
     },
   });
@@ -1169,10 +1211,15 @@ const normalizeObjectPermission = (
 const arePolicyObjectPermissionsConfigured = (
   objectPermission: ObjectPermissionRecord | undefined,
 ) =>
-  objectPermission?.canReadObjectRecords === true &&
-  objectPermission.canUpdateObjectRecords === true &&
-  objectPermission.canSoftDeleteObjectRecords !== true &&
-  objectPermission.canDestroyObjectRecords !== true;
+  objectPermission !== undefined &&
+  objectPermission.canReadObjectRecords ===
+    AGENT_POLICY_OBJECT_PERMISSION.canReadObjectRecords &&
+  objectPermission.canUpdateObjectRecords ===
+    AGENT_POLICY_OBJECT_PERMISSION.canUpdateObjectRecords &&
+  objectPermission.canSoftDeleteObjectRecords ===
+    AGENT_POLICY_OBJECT_PERMISSION.canSoftDeleteObjectRecords &&
+  objectPermission.canDestroyObjectRecords ===
+    AGENT_POLICY_OBJECT_PERMISSION.canDestroyObjectRecords;
 
 const ensureAgentPolicyObjectPermission = async ({
   agentRole,
@@ -1204,8 +1251,7 @@ const ensureAgentPolicyObjectPermission = async ({
 
   objectPermissionsByObjectMetadataId.set(policyObjectMetadata.id, {
     objectMetadataId: policyObjectMetadata.id,
-    canReadObjectRecords: true,
-    canUpdateObjectRecords: true,
+    ...AGENT_POLICY_OBJECT_PERMISSION,
   });
 
   await upsertObjectPermissions({
@@ -1216,125 +1262,110 @@ const ensureAgentPolicyObjectPermission = async ({
   result.updated += 1;
 };
 
-const isAgentPolicyWritePredicate = ({
+// Contract C2: v2.58 only matches "agent is me" through the relation hop
+// policy.agent -> agentProfile.workspaceMember IS workspaceMember.id
+const isAgentPolicyHopPredicate = ({
   predicate,
-  policyObjectMetadataId,
-  policyAgentFieldMetadataId,
-  workspaceMemberIdFieldMetadataId,
+  agentPolicyFieldIds,
 }: {
   predicate: RowLevelPermissionPredicateRecord;
-  policyObjectMetadataId: string;
-  policyAgentFieldMetadataId: string;
-  workspaceMemberIdFieldMetadataId: string;
+  agentPolicyFieldIds: AgentPolicyRowLevelPermissionFieldIds;
 }) =>
-  predicate.objectMetadataId === policyObjectMetadataId &&
-  predicate.fieldMetadataId === policyAgentFieldMetadataId &&
-  predicate.scope === 'WRITE' &&
+  predicate.relationFieldMetadataId ===
+    agentPolicyFieldIds.policyAgentFieldMetadataId &&
+  predicate.fieldMetadataId ===
+    agentPolicyFieldIds.agentProfileWorkspaceMemberFieldMetadataId &&
   predicate.operand === 'IS' &&
   predicate.workspaceMemberFieldMetadataId ===
-    workspaceMemberIdFieldMetadataId &&
-  (predicate.workspaceMemberSubFieldName === null ||
-    predicate.workspaceMemberSubFieldName === undefined);
-
-const isAgentPolicyWritePredicateConfigured = ({
-  predicate,
-  policyObjectMetadataId,
-  policyAgentFieldMetadataId,
-  workspaceMemberIdFieldMetadataId,
-}: {
-  predicate: RowLevelPermissionPredicateRecord | undefined;
-  policyObjectMetadataId: string;
-  policyAgentFieldMetadataId: string;
-  workspaceMemberIdFieldMetadataId: string;
-}) =>
-  predicate !== undefined &&
-  isAgentPolicyWritePredicate({
-    predicate,
-    policyObjectMetadataId,
-    policyAgentFieldMetadataId,
-    workspaceMemberIdFieldMetadataId,
-  }) &&
-  predicate.value === WORKSPACE_MEMBER_DYNAMIC_VALUE &&
+    agentPolicyFieldIds.workspaceMemberIdFieldMetadataId &&
+  (predicate.value === WORKSPACE_MEMBER_DYNAMIC_VALUE ||
+    predicate.value === undefined) &&
   (predicate.subFieldName === null || predicate.subFieldName === undefined) &&
+  (predicate.workspaceMemberSubFieldName === null ||
+    predicate.workspaceMemberSubFieldName === undefined) &&
   (predicate.rowLevelPermissionPredicateGroupId === null ||
     predicate.rowLevelPermissionPredicateGroupId === undefined) &&
   (predicate.positionInRowLevelPermissionPredicateGroup === null ||
     predicate.positionInRowLevelPermissionPredicateGroup === undefined);
 
-const ensureAgentPolicyRowLevelPredicate = async ({
+const areAgentPolicyRuleGrantsConfigured = (
+  rule: RowLevelPermissionRuleRecord | undefined,
+) =>
+  rule !== undefined &&
+  rule.canCreateRecords === AGENT_POLICY_RULE_GRANTS.canCreateRecords &&
+  rule.canReadRecords === AGENT_POLICY_RULE_GRANTS.canReadRecords &&
+  rule.canUpdateRecords === AGENT_POLICY_RULE_GRANTS.canUpdateRecords &&
+  rule.canSoftDeleteRecords === AGENT_POLICY_RULE_GRANTS.canSoftDeleteRecords &&
+  rule.canDestroyRecords === AGENT_POLICY_RULE_GRANTS.canDestroyRecords;
+
+const ensureAgentPolicyRowLevelPermissionRule = async ({
   agentRole,
   policyObjectMetadata,
-  policyAgentFieldMetadata,
-  workspaceMemberIdFieldMetadata,
+  agentPolicyFieldIds,
   result,
 }: {
   agentRole: RoleRecord;
   policyObjectMetadata: ObjectMetadataRecord;
-  policyAgentFieldMetadata: ObjectFieldRecord;
-  workspaceMemberIdFieldMetadata: ObjectFieldRecord;
+  agentPolicyFieldIds: AgentPolicyRowLevelPermissionFieldIds;
   result: SetupResult;
 }) => {
-  const existingPolicyPredicates = (
+  const isOnPolicy = ({ objectMetadataId }: { objectMetadataId: string }) =>
+    objectMetadataId === policyObjectMetadata.id;
+  const policyPredicates = (
     agentRole.rowLevelPermissionPredicates ?? []
-  ).filter(
-    (predicate) => predicate.objectMetadataId === policyObjectMetadata.id,
-  );
-  const existingPolicyPredicateGroups = (
+  ).filter(isOnPolicy);
+  const policyPredicateGroups = (
     agentRole.rowLevelPermissionPredicateGroups ?? []
-  ).filter((group) => group.objectMetadataId === policyObjectMetadata.id);
-  const matchingPredicates = existingPolicyPredicates.filter((predicate) =>
-    isAgentPolicyWritePredicate({
-      predicate,
-      policyObjectMetadataId: policyObjectMetadata.id,
-      policyAgentFieldMetadataId: policyAgentFieldMetadata.id,
-      workspaceMemberIdFieldMetadataId: workspaceMemberIdFieldMetadata.id,
-    }),
+  ).filter(isOnPolicy);
+  const policyRules = (agentRole.rowLevelPermissionRules ?? []).filter(
+    isOnPolicy,
   );
-  const primaryPredicate = matchingPredicates[0];
+
+  // The upsert gives every rule of the pair the same grants, so it must not
+  // run over predicates or groups that Brokerage did not write
+  if (
+    policyPredicateGroups.length > 0 ||
+    !policyPredicates.every((predicate) =>
+      isAgentPolicyHopPredicate({ predicate, agentPolicyFieldIds }),
+    )
+  ) {
+    result.skipped.push(
+      'policy: Agent row-level permissions hold predicates or groups Brokerage did not write; reduce them to the single agent rule by hand',
+    );
+
+    return;
+  }
+
+  const [primaryPredicate] = policyPredicates;
 
   if (
-    matchingPredicates.length === 1 &&
-    isAgentPolicyWritePredicateConfigured({
-      predicate: primaryPredicate,
-      policyObjectMetadataId: policyObjectMetadata.id,
-      policyAgentFieldMetadataId: policyAgentFieldMetadata.id,
-      workspaceMemberIdFieldMetadataId: workspaceMemberIdFieldMetadata.id,
-    })
+    policyPredicates.length === 1 &&
+    policyRules.length === 1 &&
+    areAgentPolicyRuleGrantsConfigured(policyRules[0])
   ) {
     result.unchanged += 1;
 
     return;
   }
 
-  const duplicatePredicateIds = new Set(
-    matchingPredicates.slice(1).map((predicate) => predicate.id),
-  );
-  const predicatesToPreserve = existingPolicyPredicates.filter(
-    (predicate) =>
-      predicate.id !== primaryPredicate?.id &&
-      !duplicatePredicateIds.has(predicate.id),
-  );
-
-  await upsertRowLevelPermissionPredicates({
+  await upsertSingleRowLevelPermissionRule({
     roleId: agentRole.id,
     objectMetadataId: policyObjectMetadata.id,
-    predicates: [
-      ...predicatesToPreserve,
-      {
-        id: primaryPredicate?.id ?? undefined,
-        fieldMetadataId: policyAgentFieldMetadata.id,
-        objectMetadataId: policyObjectMetadata.id,
-        operand: 'IS',
-        scope: 'WRITE',
-        value: WORKSPACE_MEMBER_DYNAMIC_VALUE,
-        subFieldName: null,
-        workspaceMemberFieldMetadataId: workspaceMemberIdFieldMetadata.id,
-        workspaceMemberSubFieldName: null,
-        rowLevelPermissionPredicateGroupId: null,
-        positionInRowLevelPermissionPredicateGroup: null,
-      },
-    ],
-    predicateGroups: existingPolicyPredicateGroups,
+    predicate: {
+      id: primaryPredicate?.id,
+      fieldMetadataId:
+        agentPolicyFieldIds.agentProfileWorkspaceMemberFieldMetadataId,
+      relationFieldMetadataId: agentPolicyFieldIds.policyAgentFieldMetadataId,
+      operand: 'IS',
+      value: WORKSPACE_MEMBER_DYNAMIC_VALUE,
+      subFieldName: null,
+      workspaceMemberFieldMetadataId:
+        agentPolicyFieldIds.workspaceMemberIdFieldMetadataId,
+      workspaceMemberSubFieldName: null,
+      rowLevelPermissionPredicateGroupId: null,
+      positionInRowLevelPermissionPredicateGroup: null,
+    },
+    ruleGrants: AGENT_POLICY_RULE_GRANTS,
   });
 
   result.updated += 1;
@@ -1357,6 +1388,10 @@ const ensureAgentPolicyOwnershipRls = async ({
     objects,
     objectNameSingular: 'policy',
   });
+  const agentProfileObjectMetadata = findObjectMetadata({
+    objects,
+    objectNameSingular: AGENT_PROFILE_OBJECT_NAME,
+  });
   const workspaceMemberObjectMetadata = findObjectMetadata({
     objects,
     objectNameSingular: WORKSPACE_MEMBER_OBJECT_NAME,
@@ -1374,6 +1409,12 @@ const ensureAgentPolicyOwnershipRls = async ({
     return result;
   }
 
+  if (agentProfileObjectMetadata === undefined) {
+    result.skipped.push('agentProfile: object metadata was not found');
+
+    return result;
+  }
+
   if (workspaceMemberObjectMetadata === undefined) {
     result.skipped.push('workspaceMember: object metadata was not found');
 
@@ -1383,6 +1424,10 @@ const ensureAgentPolicyOwnershipRls = async ({
   const policyAgentFieldMetadata = findObjectField({
     objectMetadata: policyObjectMetadata,
     fieldName: AGENT_RELATION_FIELD_NAME,
+  });
+  const agentProfileWorkspaceMemberFieldMetadata = findObjectField({
+    objectMetadata: agentProfileObjectMetadata,
+    fieldName: AGENT_PROFILE_WORKSPACE_MEMBER_FIELD_NAME,
   });
   const workspaceMemberIdFieldMetadata = findObjectField({
     objectMetadata: workspaceMemberObjectMetadata,
@@ -1395,23 +1440,37 @@ const ensureAgentPolicyOwnershipRls = async ({
     return result;
   }
 
+  if (agentProfileWorkspaceMemberFieldMetadata === undefined) {
+    result.skipped.push(
+      'agentProfile.workspaceMember: field metadata was not found',
+    );
+
+    return result;
+  }
+
   if (workspaceMemberIdFieldMetadata === undefined) {
     result.skipped.push('workspaceMember.id: field metadata was not found');
 
     return result;
   }
 
+  // Object-level writes go first: if the rule write then fails, agents can
+  // edit no policy rather than every policy
   await ensureAgentPolicyObjectPermission({
     agentRole,
     policyObjectMetadata,
     result,
   });
 
-  await ensureAgentPolicyRowLevelPredicate({
+  await ensureAgentPolicyRowLevelPermissionRule({
     agentRole,
     policyObjectMetadata,
-    policyAgentFieldMetadata,
-    workspaceMemberIdFieldMetadata,
+    agentPolicyFieldIds: {
+      policyAgentFieldMetadataId: policyAgentFieldMetadata.id,
+      agentProfileWorkspaceMemberFieldMetadataId:
+        agentProfileWorkspaceMemberFieldMetadata.id,
+      workspaceMemberIdFieldMetadataId: workspaceMemberIdFieldMetadata.id,
+    },
     result,
   });
 

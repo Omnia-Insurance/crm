@@ -25,7 +25,7 @@ export const useWorkspaceSubdomainField = ({
   isSubdomainEnabled = true,
 }: { isSubdomainEnabled?: boolean } = {}) => {
   const apolloClient = useApolloClient();
-  const subdomainSchema = useMemo(() => getSubdomainValidationSchema(), []);
+  const subdomainSchema = getSubdomainValidationSchema();
 
   const defaults = useMemo(
     () =>
@@ -166,27 +166,15 @@ export const useWorkspaceSubdomainField = ({
     debouncedAvailabilityCheck(value, { adoptSuggestion: false });
   };
 
-  const suggestion: string | undefined = suggestions[0];
-
-  const applySuggestion = () => {
-    if (!isDefined(suggestion)) {
-      return;
-    }
-
-    applySuggestionValue(suggestion);
-  };
-
   return {
     workspaceName,
     subdomain,
     status,
     errorMessage,
-    suggestion,
     suggestions,
     isAvailable: status === 'available',
     handleWorkspaceNameChange,
     handleSubdomainChange,
-    applySuggestion,
     applySuggestionValue,
   };
 };

@@ -1,0 +1,34 @@
+---
+title: Andamiaje
+description: Genere entidades de la aplicación con twenty app add.
+---
+
+import { PageBanner } from "/snippets/page-banner.mdx"
+
+## Resumen
+
+Utiliza la CLI independiente para generar un objeto, campo, regla de validación, función lógica o componente de front:
+
+```bash
+twenty app add
+twenty app add object --name invoice --name-plural invoices --no-input
+twenty app add field --name amount --type NUMBER --object <object-uuid> --no-input
+twenty app add validation-rule --name invoice-has-amount --object <object-uuid> --no-input
+twenty app add logic-function --name send-invoice --no-input
+twenty app add front-component --name invoice-panel --no-input
+```
+
+Sin indicadores, las terminales interactivas solicitan los valores faltantes. Para scripts y agentes, proporcione los campos obligatorios y use `--no-input` o `--json`.
+
+La generación de objetos también puede crear una vista, un elemento de navegación y un diseño de página de registro:
+
+```bash
+twenty app add object --name invoice --name-plural invoices \
+  --create-view --create-navigation-menu-item --create-page-layout --no-input
+```
+
+Para otros tipos de entidad, escriba el archivo `define*` correspondiente usando `twenty-sdk/define` y un UUID v4 válido. Ejecute `twenty app typecheck` y `twenty app plan` antes de sincronizar.
+
+`--path` selecciona el directorio de la aplicación, no una carpeta de salida personalizada. Ejecute `twenty app add --help` para ver las opciones compatibles.
+
+<PageBanner illustration="dev-contribute" />

@@ -1,7 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 
+import { isDefined } from 'twenty-shared/utils';
+
 import { IngestionPipelineEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-pipeline.entity';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { getIngestionErrorLogLabel } from 'src/engine/metadata-modules/ingestion-pipeline/utils/get-ingestion-error-log-label.util';
+import { type WorkspaceRepository } from 'src/engine/twenty-orm/repository/workspace-repository';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
 
 type ConvosoCallPayload = Record<string, unknown> & {
   // Pull API fields
@@ -79,14 +83,14 @@ export class ConvosoCallPreprocessor {
   private listMapFetchedAt = 0;
   private readonly leadLookupCache = new Map<string, CachedConvosoLeadLookup>();
 
-  constructor(
-    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
-  ) {}
+  // Repositories skip permission checks: ingestion is system work, and the
+  // jobs run preprocessors in a system auth context
+  constructor(private readonly workspaceOrmManager: WorkspaceOrmManager) {}
 
   async preProcess(
     payload: ConvosoCallPayload,
     pipeline: IngestionPipelineEntity,
-    workspaceId: string,
+    _workspaceId: string,
   ): Promise<Record<string, unknown> | null> {
     // Filter incomplete payloads — Convoso fires early with minimal data
     // Pull API uses `id`, push webhook uses `uniqueid`
@@ -163,14 +167,12 @@ export class ConvosoCallPreprocessor {
     const leadSourceId = await this.findOrCreateLeadSource(
       sourceName,
       payload.list_id,
-      workspaceId,
     );
 
     // Resolve person by phone, create if not found
     const personId = await this.findOrCreatePersonForCall(
       payload,
       leadSourceId,
-      workspaceId,
     );
 
     // Compute billing by matching queue/source name against Lead Source names
@@ -184,7 +186,6 @@ export class ConvosoCallPreprocessor {
       direction,
       duration,
       isSystemHandledInbound,
-      workspaceId,
     );
 
     const callDateTimeZone = this.resolveConvosoCallTimeZone(pipeline);
@@ -209,7 +210,6 @@ export class ConvosoCallPreprocessor {
   private async findOrCreatePersonForCall(
     payload: ConvosoCallPayload,
     leadSourceId: string | null,
-    workspaceId: string,
   ): Promise<string | null> {
     const normalizedPhone = this.normalizePhone(payload.phone_number);
 
@@ -217,11 +217,8 @@ export class ConvosoCallPreprocessor {
       return null;
     }
 
-    const personRepo = await this.globalWorkspaceOrmManager.getRepository(
-      workspaceId,
-      'person',
-      { shouldBypassPermissionChecks: true },
-    );
+    const personRepo =
+      this.workspaceOrmManager.getRepositoryWithoutPermissionChecks('person');
 
     const existing = await personRepo.findOne({
       where: {
@@ -232,8 +229,8 @@ export class ConvosoCallPreprocessor {
     });
 
     if (existing) {
-      const existingRecord = existing as Record<string, unknown>;
-      const existingId = existingRecord.id as string;
+      const existingRecord: Record<string, unknown> = existing;
+      const existingId = existing.id;
 
       const directUpdates = this.buildLeadSourceUpdate(
         existingRecord,
@@ -288,17 +285,19 @@ export class ConvosoCallPreprocessor {
         leadSourceId,
       );
 
-      const created = await personRepo.save(personData);
-      const createdId = (created as Record<string, unknown>).id as string;
+      const [created] = await personRepo.save(personData);
 
-      this.logger.log(
-        `Created Person ${createdId} from call phone ${normalizedPhone}`,
-      );
+      // Without an id the call would silently lose its lead link
+      if (!isDefined(created)) {
+        throw new Error('Person save returned no record');
+      }
 
-      return createdId;
+      this.logger.log(`Created Person ${created.id} from call phone`);
+
+      return created.id;
     } catch (error) {
       this.logger.error(
-        `Failed to create Person for phone ${normalizedPhone}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Failed to create Person for call: ${getIngestionErrorLogLabel(error)}`,
       );
 
       return null;
@@ -568,7 +567,7 @@ export class ConvosoCallPreprocessor {
 
     if (selectedCandidates.length > 1) {
       this.logger.warn(
-        `Convoso phone lookup returned multiple leads for ${normalizedPhone}, skipping enrichment`,
+        `Convoso phone lookup returned ${selectedCandidates.length} leads, skipping enrichment`,
       );
     }
 
@@ -760,12 +759,24 @@ export class ConvosoCallPreprocessor {
 
     const address: Record<string, string> = {};
 
-    if (addressStreet1) address.addressStreet1 = addressStreet1;
-    if (addressStreet2) address.addressStreet2 = addressStreet2;
-    if (addressCity) address.addressCity = addressCity;
-    if (addressState) address.addressState = addressState;
-    if (addressPostcode) address.addressPostcode = addressPostcode;
-    if (addressCountry) address.addressCountry = addressCountry;
+    if (addressStreet1) {
+      address.addressStreet1 = addressStreet1;
+    }
+    if (addressStreet2) {
+      address.addressStreet2 = addressStreet2;
+    }
+    if (addressCity) {
+      address.addressCity = addressCity;
+    }
+    if (addressState) {
+      address.addressState = addressState;
+    }
+    if (addressPostcode) {
+      address.addressPostcode = addressPostcode;
+    }
+    if (addressCountry) {
+      address.addressCountry = addressCountry;
+    }
 
     return address;
   }
@@ -800,17 +811,12 @@ export class ConvosoCallPreprocessor {
   }
 
   private async applyPersonUpdates(
-    personRepo: {
-      update?: (
-        id: string,
-        updates: Record<string, unknown>,
-      ) => Promise<unknown>;
-    },
+    personRepo: WorkspaceRepository,
     personId: string,
     updates: Record<string, unknown>,
     successMessage: string,
   ): Promise<void> {
-    if (Object.keys(updates).length === 0 || !personRepo.update) {
+    if (Object.keys(updates).length === 0) {
       return;
     }
 
@@ -819,7 +825,7 @@ export class ConvosoCallPreprocessor {
       this.logger.log(successMessage);
     } catch (error) {
       this.logger.warn(
-        `Failed to update Person ${personId}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Failed to update Person ${personId}: ${getIngestionErrorLogLabel(error)}`,
       );
     }
   }
@@ -827,24 +833,22 @@ export class ConvosoCallPreprocessor {
   private async findOrCreateLeadSource(
     sourceName: string | null,
     listId: string | undefined,
-    workspaceId: string,
   ): Promise<string | null> {
     if (!sourceName) {
       return null;
     }
 
-    const leadSourceRepo = await this.globalWorkspaceOrmManager.getRepository(
-      workspaceId,
-      'leadSource',
-      { shouldBypassPermissionChecks: true },
-    );
+    const leadSourceRepo =
+      this.workspaceOrmManager.getRepositoryWithoutPermissionChecks(
+        'leadSource',
+      );
 
     const existing = await leadSourceRepo.findOne({
       where: { name: sourceName },
     });
 
     if (existing) {
-      return (existing as Record<string, unknown>).id as string;
+      return existing.id;
     }
 
     try {
@@ -854,11 +858,15 @@ export class ConvosoCallPreprocessor {
         data.convosoListId = listId;
       }
 
-      const created = await leadSourceRepo.save(data);
+      const [created] = await leadSourceRepo.save(data);
+
+      if (!isDefined(created)) {
+        throw new Error('Lead Source save returned no record');
+      }
 
       this.logger.log(`Created new Lead Source: "${sourceName}"`);
 
-      return (created as Record<string, unknown>).id as string;
+      return created.id;
     } catch (error) {
       this.logger.error(
         `Failed to create Lead Source "${sourceName}": ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -876,7 +884,6 @@ export class ConvosoCallPreprocessor {
     direction: string,
     duration: number,
     isSystemHandledInbound: boolean,
-    workspaceId: string,
   ): Promise<{
     billable: boolean;
     costAmountMicros: number;
@@ -898,16 +905,13 @@ export class ConvosoCallPreprocessor {
       return noBill;
     }
 
-    const leadSourceRepo = await this.globalWorkspaceOrmManager.getRepository(
-      workspaceId,
-      'leadSource',
-      { shouldBypassPermissionChecks: true },
-    );
+    const leadSourceRepo =
+      this.workspaceOrmManager.getRepositoryWithoutPermissionChecks(
+        'leadSource',
+      );
 
     // Fetch all lead sources and find one whose name matches the queue/source label
-    const allSources = (await leadSourceRepo.find()) as Array<
-      Record<string, unknown>
-    >;
+    const allSources: Record<string, unknown>[] = await leadSourceRepo.find();
 
     const labelLower = billingLabel.toLowerCase();
     const labelWords = labelLower.split(/\s+/);
@@ -917,7 +921,9 @@ export class ConvosoCallPreprocessor {
     for (const source of allSources) {
       const sourceName = ((source.name as string) || '').toLowerCase();
 
-      if (!sourceName) continue;
+      if (!sourceName) {
+        continue;
+      }
 
       // Exact match — highest priority
       if (sourceName === labelLower) {
@@ -1081,7 +1087,9 @@ export class ConvosoCallPreprocessor {
     dateStr: string | undefined,
     timeZone: string,
   ): string | null {
-    if (!dateStr) return null;
+    if (!dateStr) {
+      return null;
+    }
 
     const match = dateStr.match(
       /^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/,
@@ -1151,7 +1159,9 @@ export class ConvosoCallPreprocessor {
   }
 
   private normalizePhone(phone: string | undefined): string | null {
-    if (!phone) return null;
+    if (!phone) {
+      return null;
+    }
 
     const digits = phone.toString().replace(/\D/g, '');
 

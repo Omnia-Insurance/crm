@@ -2,7 +2,14 @@ import {
   DEFAULT_API_KEY_NAME,
   DEFAULT_API_URL_NAME,
   DEFAULT_APP_ACCESS_TOKEN_NAME,
-} from 'twenty-shared/application';
+  DEFAULT_APP_APPLICATION_ACCESS_TOKEN_NAME,
+  DEFAULT_FUNCTIONS_URL_NAME,
+  resolveApiUrlFromEnvironment,
+} from 'twenty-shared/application-runtime';
+
+import { type TwentyClientRunAs } from '../shared/twenty-client-run-as.type';
+
+export type { TwentyClientRunAs };
 
 const isDefined = <T>(value: T): value is NonNullable<T> =>
   value !== null && value !== undefined;
@@ -12,6 +19,7 @@ export type RestApiClientOptions = {
   token?: string;
   fetch?: typeof globalThis.fetch;
   defaultHeaders?: HeadersInit;
+  runAs?: TwentyClientRunAs;
 };
 
 export type RestApiRequestOptions = {
@@ -53,6 +61,12 @@ const getProcessEnvironment = (): ProcessEnvironment => {
   return processObject?.env ?? {};
 };
 
+const isAppRoutePath = (path: string): boolean => /^\/?s\//.test(path);
+
+// Isolated functions domains serve app routes at the root, without the server's /s/ prefix.
+const stripAppRoutePrefix = (path: string): string =>
+  path.replace(/^(\/?)s\//, '$1');
+
 const buildRequestUrl = (
   baseUrl: string,
   path: string,
@@ -89,6 +103,7 @@ export class RestApiClient {
   private defaultHeaders: HeadersInit | undefined;
   private fetchImplementation: typeof globalThis.fetch | null;
   private authorizationToken: string | null;
+  private runAs: TwentyClientRunAs | undefined;
   private refreshAccessTokenPromise: Promise<string | null> | null = null;
 
   constructor(options?: RestApiClientOptions) {
@@ -97,6 +112,7 @@ export class RestApiClient {
     this.defaultHeaders = options?.defaultHeaders;
     this.fetchImplementation = options?.fetch ?? globalThis.fetch ?? null;
     this.authorizationToken = options?.token ?? null;
+    this.runAs = options?.runAs;
   }
 
   request<TResponse = unknown>(
@@ -109,6 +125,15 @@ export class RestApiClient {
 
   get<TResponse = unknown>(path: string, options?: RestApiRequestOptions) {
     return this.execute<TResponse>('GET', path, undefined, options);
+  }
+
+  resolveUrl(
+    path: string,
+    requestOptions?: Pick<RestApiRequestOptions, 'query'>,
+  ): string {
+    const target = this.resolveTarget(path);
+
+    return buildRequestUrl(target.baseUrl, target.path, requestOptions?.query);
   }
 
   post<TResponse = unknown>(
@@ -141,7 +166,7 @@ export class RestApiClient {
 
   private resolveBaseUrl(): string {
     const baseUrl =
-      this.baseUrl ?? getProcessEnvironment()[DEFAULT_API_URL_NAME];
+      this.baseUrl ?? resolveApiUrlFromEnvironment(getProcessEnvironment());
 
     if (!isDefined(baseUrl) || baseUrl.trim().length === 0) {
       throw new RestApiClientError(
@@ -152,13 +177,41 @@ export class RestApiClient {
     return baseUrl.replace(/\/+$/, '');
   }
 
+  private resolveFunctionsBaseUrl(): string | undefined {
+    const functionsBaseUrl =
+      getProcessEnvironment()[DEFAULT_FUNCTIONS_URL_NAME];
+
+    if (!isDefined(functionsBaseUrl) || functionsBaseUrl.trim().length === 0) {
+      return undefined;
+    }
+
+    return functionsBaseUrl.trim().replace(/\/+$/, '');
+  }
+
+  private resolveTarget(path: string): { baseUrl: string; path: string } {
+    if (isDefined(this.baseUrl) || !isAppRoutePath(path)) {
+      return { baseUrl: this.resolveBaseUrl(), path };
+    }
+
+    // TWENTY_FUNCTIONS_URL is a complete base URL (isolated domains serve at the root, self-host bakes /s in).
+    return {
+      baseUrl: this.resolveFunctionsBaseUrl() ?? `${this.resolveBaseUrl()}/s`,
+      path: stripAppRoutePrefix(path),
+    };
+  }
+
   private resolveToken(): string {
+    const tokenEnvironmentKey =
+      this.runAs === 'application'
+        ? DEFAULT_APP_APPLICATION_ACCESS_TOKEN_NAME
+        : DEFAULT_APP_ACCESS_TOKEN_NAME;
+
     if (!isDefined(this.authorizationToken)) {
       const processEnvironment = getProcessEnvironment();
 
       this.authorizationToken =
         this.token ??
-        processEnvironment[DEFAULT_APP_ACCESS_TOKEN_NAME] ??
+        processEnvironment[tokenEnvironmentKey] ??
         processEnvironment[DEFAULT_API_KEY_NAME] ??
         null;
     }
@@ -168,7 +221,7 @@ export class RestApiClient {
       this.authorizationToken.length === 0
     ) {
       throw new RestApiClientError(
-        `Missing application access token. Set the \`${DEFAULT_APP_ACCESS_TOKEN_NAME}\` environment variable or pass \`token\` to \`RestApiClient\`.`,
+        `Missing application access token. Set the \`${tokenEnvironmentKey}\` environment variable or pass \`token\` to \`RestApiClient\`.`,
       );
     }
 
@@ -304,9 +357,10 @@ export class RestApiClient {
     body: unknown,
     requestOptions?: RestApiRequestOptions,
   ): Promise<TResponse> {
+    const target = this.resolveTarget(path);
     const url = buildRequestUrl(
-      this.resolveBaseUrl(),
-      path,
+      target.baseUrl,
+      target.path,
       requestOptions?.query,
     );
     const token = this.resolveToken();

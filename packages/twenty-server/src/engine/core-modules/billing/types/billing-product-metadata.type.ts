@@ -17,5 +17,11 @@ export class BillingProductMetadata {
   @Field(() => BillingProductKey)
   productKey: BillingProductKey;
 
-  [key: string]: string;
+  // Superseded packaging: still billable for the subscriptions on it, never sold again.
+  @Field(() => String, { nullable: true })
+  isLegacy?: string;
+
+  workspaceCreditsPerSeat?: string;
+
+  [key: string]: string | undefined;
 }

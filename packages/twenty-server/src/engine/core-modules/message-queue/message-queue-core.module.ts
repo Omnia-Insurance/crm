@@ -20,9 +20,12 @@ import {
   ConfigurableModuleClass,
   type OPTIONS_TYPE,
 } from 'src/engine/core-modules/message-queue/message-queue.module-definition';
+import { ApplicationJobEnqueueThrottlerService } from 'src/engine/core-modules/message-queue/services/application-job-enqueue-throttler.service';
 import { MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
+import { MessageQueueWorkerDrainService } from 'src/engine/core-modules/message-queue/services/message-queue-worker-drain.service';
 import { getQueueToken } from 'src/engine/core-modules/message-queue/utils/get-queue-token.util';
 import { MetricsModule } from 'src/engine/core-modules/metrics/metrics.module';
+import { ThrottlerModule } from 'src/engine/core-modules/throttler/throttler.module';
 
 @Global()
 @Module({})
@@ -43,13 +46,22 @@ export class MessageQueueCoreModule extends ConfigurableModuleClass {
 
     return {
       ...dynamicModule,
+      imports: [
+        ...(dynamicModule.imports ?? []),
+        MetricsModule,
+        ThrottlerModule,
+      ],
       providers: [
         ...(dynamicModule.providers ?? []),
+        ApplicationJobEnqueueThrottlerService,
+        MessageQueueWorkerDrainService,
         driverProvider,
         ...queueProviders,
       ],
       exports: [
         ...(dynamicModule.exports ?? []),
+        ApplicationJobEnqueueThrottlerService,
+        MessageQueueWorkerDrainService,
         ...Object.values(MessageQueue).map((queueName) =>
           getQueueToken(queueName),
         ),
@@ -62,8 +74,7 @@ export class MessageQueueCoreModule extends ConfigurableModuleClass {
 
     const driverProvider: Provider = {
       provide: QUEUE_DRIVER,
-      // oxlint-disable-next-line typescript/no-explicit-any
-      useFactory: async (...args: any[]) => {
+      useFactory: async (...args: unknown[]) => {
         if (options.useFactory) {
           const config = await options.useFactory(...args);
 
@@ -78,14 +89,22 @@ export class MessageQueueCoreModule extends ConfigurableModuleClass {
 
     return {
       ...dynamicModule,
-      imports: [...(dynamicModule.imports ?? []), MetricsModule],
+      imports: [
+        ...(dynamicModule.imports ?? []),
+        MetricsModule,
+        ThrottlerModule,
+      ],
       providers: [
         ...(dynamicModule.providers ?? []),
+        ApplicationJobEnqueueThrottlerService,
+        MessageQueueWorkerDrainService,
         driverProvider,
         ...queueProviders,
       ],
       exports: [
         ...(dynamicModule.exports ?? []),
+        ApplicationJobEnqueueThrottlerService,
+        MessageQueueWorkerDrainService,
         ...Object.values(MessageQueue).map((queueName) =>
           getQueueToken(queueName),
         ),
@@ -96,7 +115,12 @@ export class MessageQueueCoreModule extends ConfigurableModuleClass {
   static async createDriver(config: typeof OPTIONS_TYPE) {
     switch (config.type) {
       case MessageQueueDriverType.BullMQ: {
-        return new BullMQDriver(config.options, config.metricsService);
+        return new BullMQDriver(
+          config.options,
+          config.metricsService,
+          config.twentyConfigService,
+          config.eventEmitter,
+        );
       }
       case MessageQueueDriverType.Sync: {
         return new SyncDriver();

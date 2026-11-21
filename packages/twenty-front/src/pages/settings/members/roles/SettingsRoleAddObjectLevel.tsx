@@ -1,19 +1,22 @@
+import { getCoreAgentBreadcrumbLinks } from '@/object-core/agents/utils/getCoreAgentBreadcrumbLinks';
+import { getCoreAgentLink } from '@/object-core/agents/utils/getCoreAgentLink';
 import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
-import { SettingsRolesQueryEffect } from '@/settings/roles/components/SettingsRolesQueryEffect';
+import { SettingsRoleRouteGuard } from '@/settings/roles/components/SettingsRoleRouteGuard';
 import { SettingsRolePermissionsObjectLevelObjectPicker } from '@/settings/roles/role-permissions/object-level-permissions/components/SettingsRolePermissionsObjectLevelObjectPicker';
 import { settingsDraftRoleFamilyState } from '@/settings/roles/states/settingsDraftRoleFamilyState';
 import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
 import { SettingsWizardStepBar } from '@/settings/components/layout/SettingsWizardStepBar';
 import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
-import { t } from '@lingui/core/macro';
 import { Navigate, useParams, useSearchParams } from 'react-router-dom';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath, isDefined } from 'twenty-shared/utils';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
 import { useQuery } from '@apollo/client/react';
 import { FindOneAgentDocument } from '~/generated-metadata/graphql';
+import { useLingui } from '@lingui/react/macro';
 
 export const SettingsRoleAddObjectLevel = () => {
+  const { t } = useLingui();
   const { roleId } = useParams();
   const [searchParams] = useSearchParams();
   const fromAgentId = searchParams.get('fromAgent');
@@ -36,25 +39,10 @@ export const SettingsRoleAddObjectLevel = () => {
 
   const breadcrumbLinks =
     fromAgentId && isDefined(agent)
-      ? [
-          {
-            children: t`Workspace`,
-            href: getSettingsPath(SettingsPath.General),
-          },
-          {
-            children: t`AI`,
-            href: getSettingsPath(SettingsPath.AI),
-          },
-          {
-            children: agent.label,
-            href: getSettingsPath(SettingsPath.AiAgentDetail, {
-              agentId: agent.id,
-            }),
-          },
-          {
-            children: t`Add object permission`,
-          },
-        ]
+      ? getCoreAgentBreadcrumbLinks([
+          { children: agent.label, href: getCoreAgentLink(agent.id) },
+          { children: t`Add object permission` },
+        ])
       : [
           {
             children: t`Workspace`,
@@ -81,8 +69,7 @@ export const SettingsRoleAddObjectLevel = () => {
       : (settingsDraftRole.label ?? '');
 
   return (
-    <>
-      <SettingsRolesQueryEffect />
+    <SettingsRoleRouteGuard roleId={roleId}>
       <SettingsPageLayout
         title={headerTitle}
         titleColor={themeCssVariables.font.color.tertiary}
@@ -93,6 +80,6 @@ export const SettingsRoleAddObjectLevel = () => {
           <SettingsRolePermissionsObjectLevelObjectPicker roleId={roleId} />
         </SettingsPageContainer>
       </SettingsPageLayout>
-    </>
+    </SettingsRoleRouteGuard>
   );
 };

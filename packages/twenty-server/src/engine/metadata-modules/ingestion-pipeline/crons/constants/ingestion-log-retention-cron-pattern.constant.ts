@@ -1,0 +1,1 @@
+export const INGESTION_LOG_RETENTION_CRON_PATTERN = '30 7 * * *';

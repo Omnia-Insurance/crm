@@ -1,5 +1,7 @@
 import { Field, InputType } from '@nestjs/graphql';
 
+import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
+
 @InputType()
 export class SendEmailAttachmentInput {
   @Field(() => String)
@@ -10,9 +12,21 @@ export class SendEmailAttachmentInput {
 }
 
 @InputType()
+export class SendEmailTargetRecordInput {
+  @Field(() => String)
+  objectNameSingular: string;
+
+  @Field(() => UUIDScalarType)
+  recordId: string;
+}
+
+@InputType()
 export class SendEmailInput {
   @Field(() => String)
   connectedAccountId: string;
+
+  @Field(() => String, { nullable: true })
+  fromHandle?: string;
 
   @Field(() => String)
   to: string;
@@ -37,4 +51,7 @@ export class SendEmailInput {
 
   @Field(() => [SendEmailAttachmentInput], { nullable: true })
   files?: SendEmailAttachmentInput[];
+
+  @Field(() => SendEmailTargetRecordInput, { nullable: true })
+  targetRecord?: SendEmailTargetRecordInput;
 }

@@ -1,21 +1,15 @@
 import { styled } from '@linaria/react';
-import { useContext } from 'react';
-
 import { type BackgroundMockCompany } from '@/sign-in-background-mock/constants/BackgroundMockCompanies';
 import { BACKGROUND_MOCK_COLUMN_WIDTHS } from '@/sign-in-background-mock/constants/BackgroundMockColumnWidths';
 import { BACKGROUND_MOCK_TABLE_DIMENSIONS } from '@/sign-in-background-mock/constants/BackgroundMockTableDimensions';
 import { getAbsoluteImageUrl } from '~/utils/image/getAbsoluteImageUrl';
-import {
-  Avatar,
-  Chip,
-  ChipAccent,
-  ChipSize,
-  ChipVariant,
-} from 'twenty-ui/data-display';
+import { Avatar, Chip } from 'twenty-ui/primitives/data-display';
+import { Checkbox } from 'twenty-ui/primitives/input';
 import { IconLink } from 'twenty-ui/icon';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
-import { Checkbox } from 'twenty-ui/input';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
+
 import { getLogoUrlFromDomainName } from 'twenty-shared/utils';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledRow = styled.div`
   display: flex;
@@ -86,27 +80,23 @@ const PersonChip = ({ fullName }: { fullName: string | null }) => {
 
   return (
     <Chip
-      label={fullName}
-      size={ChipSize.Small}
-      variant={ChipVariant.Transparent}
-      accent={ChipAccent.TextPrimary}
-      clickable={false}
-      leftComponent={
-        <Avatar
-          type="rounded"
-          placeholder={fullName}
-          placeholderColorSeed={fullName}
-          size="md"
-        />
+      size="sm"
+      variant="plain"
+      color="primary"
+      startElement={
+        <Avatar shape="circle" name={fullName} colorSeed={fullName} size="md" />
       }
-    />
+    >
+      {fullName}
+    </Chip>
   );
 };
 
 export const BackgroundMockTableRow = ({
   company,
 }: BackgroundMockTableRowProps) => {
-  const { theme } = useContext(ThemeContext);
+  const { t } = useLingui();
+  const theme = useTheme();
 
   const logoUrl = getLogoUrlFromDomainName(company.domainName);
 
@@ -118,37 +108,38 @@ export const BackgroundMockTableRow = ({
       </StyledCheckboxColumn>
       <StyledCell width={BACKGROUND_MOCK_COLUMN_WIDTHS.Name}>
         <Chip
-          label={company.name}
-          size={ChipSize.Small}
-          variant={ChipVariant.Transparent}
-          accent={ChipAccent.TextPrimary}
-          clickable={false}
-          leftComponent={
+          size="sm"
+          variant="plain"
+          color="primary"
+          startElement={
             <Avatar
-              type="squared"
-              avatarUrl={getAbsoluteImageUrl(logoUrl)}
-              placeholder={company.name}
-              placeholderColorSeed={company.id}
+              shape="square"
+              src={getAbsoluteImageUrl(logoUrl)}
+              name={company.name}
+              colorSeed={company.id}
               size="md"
             />
           }
-        />
+        >
+          {company.name}
+        </Chip>
       </StyledCell>
       <StyledCell width={BACKGROUND_MOCK_COLUMN_WIDTHS.Domain}>
         <Chip
-          label={company.domainName}
-          size={ChipSize.Small}
-          variant={ChipVariant.Transparent}
-          accent={ChipAccent.TextSecondary}
-          clickable={false}
-          leftComponent={
+          size="sm"
+          variant="plain"
+          color="secondary"
+          weight="medium"
+          startElement={
             <IconLink
               size={theme.icon.size.sm}
               stroke={theme.icon.stroke.sm}
               color={theme.font.color.tertiary}
             />
           }
-        />
+        >
+          {company.domainName}
+        </Chip>
       </StyledCell>
       <StyledCell width={BACKGROUND_MOCK_COLUMN_WIDTHS['Created by']}>
         <PersonChip fullName={company.createdBy} />
@@ -157,7 +148,7 @@ export const BackgroundMockTableRow = ({
         <PersonChip fullName={company.accountOwner} />
       </StyledCell>
       <StyledCell width={BACKGROUND_MOCK_COLUMN_WIDTHS['Creation date']}>
-        <StyledMutedText>{company.creationDate}</StyledMutedText>
+        <StyledMutedText>{t`about 13 hours ago`}</StyledMutedText>
       </StyledCell>
       <StyledCell width={BACKGROUND_MOCK_COLUMN_WIDTHS.Employees}>
         <StyledTruncated>{formatNumber(company.employees)}</StyledTruncated>

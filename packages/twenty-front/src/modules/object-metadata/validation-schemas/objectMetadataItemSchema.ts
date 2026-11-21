@@ -24,6 +24,7 @@ export const objectMetadataItemSchema = z.object({
   isActive: z.boolean(),
   isRemote: z.boolean(),
   isSystem: z.boolean(),
+  isAuditLogged: z.boolean(),
   isUIEditable: z.boolean(),
   isUICreatable: z.boolean(),
   isSearchable: z.boolean(),

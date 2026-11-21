@@ -1,62 +1,79 @@
-import { useCallback, useEffect, useRef } from 'react';
+import {
+  Dropdown,
+  useDropdownPage,
+  useDropdownPlacementOrThrow,
+} from 'twenty-ui/components/navigation';
+import { useEffect, useRef } from 'react';
+import { styled } from '@linaria/react';
 import { useStore } from 'jotai';
 
-import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
-import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
+import { getObjectPermissionsForObject } from '@/object-metadata/utils/getObjectPermissionsForObject';
+import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
 import { canCreateRecordsForObjectMetadataItem } from '@/object-record/utils/canCreateRecordsForObjectMetadataItem';
+import { MultipleRecordPickerCreateTargetSelect } from '@/object-record/record-picker/multiple-record-picker/components/MultipleRecordPickerCreateTargetSelect';
 import { MultipleRecordPickerItemsDisplay } from '@/object-record/record-picker/multiple-record-picker/components/MultipleRecordPickerItemsDisplay';
-import { MultipleRecordPickerOnClickOutsideEffect } from '@/object-record/record-picker/multiple-record-picker/components/MultipleRecordPickerOnClickOutsideEffect';
 import { MultipleRecordPickerSearchInput } from '@/object-record/record-picker/multiple-record-picker/components/MultipleRecordPickerSearchInput';
+import { useMultipleRecordPickerPerformSearch } from '@/object-record/record-picker/multiple-record-picker/hooks/useMultipleRecordPickerPerformSearch';
 import { MultipleRecordPickerComponentInstanceContext } from '@/object-record/record-picker/multiple-record-picker/states/contexts/MultipleRecordPickerComponentInstanceContext';
+// OMNIA-CUSTOM: picker-wide additional filter
 import { multipleRecordPickerAdditionalFilterComponentState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerAdditionalFilterComponentState';
+import { multipleRecordPickerIsLoadingComponentState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerIsLoadingComponentState';
+import { multipleRecordPickerPaginationState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerPaginationState';
 import { multipleRecordPickerPickableMorphItemsComponentState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerPickableMorphItemsComponentState';
 import { multipleRecordPickerSearchFilterComponentState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerSearchFilterComponentState';
-import { getMultipleRecordPickerSelectableListId } from '@/object-record/record-picker/multiple-record-picker/utils/getMultipleRecordPickerSelectableListId';
-import { type RecordPickerLayoutDirection } from '@/object-record/record-picker/types/RecordPickerLayoutDirection';
+import { multipleRecordPickerSearchableObjectMetadataItemsComponentState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerSearchableObjectMetadataItemsComponentState';
+import { upsertMorphItem } from '@/object-record/record-picker/multiple-record-picker/utils/upsertMorphItem';
 import { type RecordPickerPickableMorphItem } from '@/object-record/record-picker/types/RecordPickerPickableMorphItem';
-import { CreateNewButton } from '@/ui/input/relation-picker/components/CreateNewButton';
-import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
-import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
-import { useSelectableList } from '@/ui/layout/selectable-list/hooks/useSelectableList';
-import { useHotkeysOnFocusedElement } from '@/ui/utilities/hotkey/hooks/useHotkeysOnFocusedElement';
 import { useAtomComponentStateCallbackState } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateCallbackState';
-import { Key } from 'ts-key-enum';
-import { isDefined } from 'twenty-shared/utils';
-import { t } from '@lingui/core/macro';
+import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
+import { type RecordPickerLayoutDirection } from '@/object-record/record-picker/types/RecordPickerLayoutDirection';
+import { getMultipleRecordPickerLayoutDirection } from '@/object-record/record-picker/multiple-record-picker/utils/getMultipleRecordPickerLayoutDirection';
+import { type RecordGqlOperationFilter } from 'twenty-shared/types';
+import { isDefined, isNonEmptyArray } from 'twenty-shared/utils';
 import { IconPlus } from 'twenty-ui/icon';
-import { type ObjectRecordFilterInput } from '~/generated/graphql';
+import { logError } from '~/utils/logError';
+import { useLingui } from '@lingui/react/macro';
 
 type MultipleRecordPickerProps = {
   onChange?: (morphItem: RecordPickerPickableMorphItem) => void;
-  onSubmit?: () => void;
-  onCreate?: ((searchInput?: string) => void) | (() => void);
+  onCreate?: (options: {
+    searchInput?: string;
+    objectMetadataItemId: string;
+  }) => Promise<RecordPickerPickableMorphItem | undefined>;
+  isCreatePending?: boolean;
   layoutDirection?: RecordPickerLayoutDirection;
   componentInstanceId: string;
-  onClickOutside: () => void;
-  focusId: string;
-  objectMetadataItemIdForCreate?: string;
-  dropdownWidth?: number;
-  additionalFilter?: ObjectRecordFilterInput;
+  // OMNIA-CUSTOM: narrows every search of this picker (Lead -> Policies allowlist)
+  additionalFilter?: RecordGqlOperationFilter;
 };
+
+const StyledRecordsPage = styled.div<{
+  layoutDirection: RecordPickerLayoutDirection;
+}>`
+  display: flex;
+  flex-direction: ${({ layoutDirection }) =>
+    layoutDirection === 'search-bar-on-bottom' ? 'column-reverse' : 'column'};
+  min-height: 0;
+`;
 
 export const MultipleRecordPicker = ({
   onChange,
-  onSubmit,
   onCreate,
-  onClickOutside,
-  layoutDirection = 'search-bar-on-bottom',
+  layoutDirection,
   componentInstanceId,
-  focusId,
-  objectMetadataItemIdForCreate,
-  dropdownWidth,
+  isCreatePending = false,
   additionalFilter,
 }: MultipleRecordPickerProps) => {
-  const selectableListComponentInstanceId =
-    getMultipleRecordPickerSelectableListId(componentInstanceId);
-
-  const { resetSelectedItem } = useSelectableList(
-    selectableListComponentInstanceId,
-  );
+  const { t } = useLingui();
+  const { page, isActive, goBack } = useDropdownPage();
+  const { side, align } = useDropdownPlacementOrThrow();
+  const resolvedLayoutDirection = getMultipleRecordPickerLayoutDirection({
+    layoutDirection,
+    side,
+    align,
+  });
+  // oxlint-disable-next-line twenty/no-state-useref
+  const createInFlightRef = useRef(false);
 
   const multipleRecordPickerSearchFilterState =
     useAtomComponentStateCallbackState(
@@ -70,116 +87,169 @@ export const MultipleRecordPicker = ({
       componentInstanceId,
     );
 
+  const multipleRecordPickerSearchableObjectMetadataItems =
+    useAtomComponentStateValue(
+      multipleRecordPickerSearchableObjectMetadataItemsComponentState,
+      componentInstanceId,
+    );
+
+  const multipleRecordPickerIsLoadingState = useAtomComponentStateCallbackState(
+    multipleRecordPickerIsLoadingComponentState,
+    componentInstanceId,
+  );
+
+  const { objectPermissionsByObjectMetadataId } = useObjectPermissions();
+  const { performSearch } = useMultipleRecordPickerPerformSearch();
+
+  const store = useStore();
+
   const multipleRecordPickerAdditionalFilterState =
     useAtomComponentStateCallbackState(
       multipleRecordPickerAdditionalFilterComponentState,
       componentInstanceId,
     );
 
-  const store = useStore();
-
+  // OMNIA-CUSTOM: typing, load-more and create search with the stored filter,
+  // so it must follow the prop while an async allowlist loads
   useEffect(() => {
     store.set(multipleRecordPickerAdditionalFilterState, additionalFilter);
   }, [additionalFilter, multipleRecordPickerAdditionalFilterState, store]);
 
-  const resetState = useCallback(() => {
-    store.set(multipleRecordPickerPickableMorphItemsState, []);
-    store.set(multipleRecordPickerSearchFilterState, '');
-    store.set(multipleRecordPickerAdditionalFilterState, undefined);
-  }, [
-    multipleRecordPickerAdditionalFilterState,
-    multipleRecordPickerPickableMorphItemsState,
-    multipleRecordPickerSearchFilterState,
-    store,
-  ]);
+  const handleBackToRecords = () => {
+    if (!isActive || page !== 'create-target') {
+      return;
+    }
 
-  const handleSubmit = () => {
-    onSubmit?.();
-    resetSelectedItem();
-    resetState();
-  };
+    goBack();
 
-  const handleClickOutside = () => {
-    onClickOutside();
-    resetState();
-  };
-
-  useHotkeysOnFocusedElement({
-    keys: [Key.Escape],
-    callback: () => {
-      handleSubmit();
-    },
-    focusId,
-    dependencies: [handleSubmit],
-  });
-
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const handleCreateNewButtonClick = useCallback(() => {
-    const recordPickerSearchFilter = store.get(
-      multipleRecordPickerSearchFilterState,
+    const searchFilter = store.get(multipleRecordPickerSearchFilterState);
+    const { searchFilter: searchedFilter } = store.get(
+      multipleRecordPickerPaginationState.atomFamily({
+        instanceId: componentInstanceId,
+      }),
     );
-    onCreate?.(recordPickerSearchFilter);
-  }, [multipleRecordPickerSearchFilterState, onCreate, store]);
 
-  const objectPermissionsForCreate = useObjectPermissionsForObject(
-    objectMetadataItemIdForCreate ?? '',
-  );
+    if (searchedFilter === searchFilter) {
+      return;
+    }
 
-  const { objectMetadataItems } = useObjectMetadataItems();
-
-  const objectMetadataItemForCreate = objectMetadataItems.find(
-    (objectMetadataItem) =>
-      objectMetadataItem.id === objectMetadataItemIdForCreate,
-  );
-
-  const canCreateRecordForCreate =
-    isDefined(objectMetadataItemForCreate) &&
-    canCreateRecordsForObjectMetadataItem({
-      objectPermissions: objectPermissionsForCreate,
-      objectMetadataItem: objectMetadataItemForCreate,
+    void performSearch({
+      multipleRecordPickerInstanceId: componentInstanceId,
+      forceSearchFilter: searchFilter,
     });
+  };
 
-  const createNewButtonSection =
-    isDefined(onCreate) && canCreateRecordForCreate ? (
-      <DropdownMenuItemsContainer scrollable={false}>
-        <CreateNewButton
-          onClick={handleCreateNewButtonClick}
-          LeftIcon={IconPlus}
-          text={t`Add New`}
-        />
-      </DropdownMenuItemsContainer>
-    ) : null;
+  const creatableObjectMetadataItems = isDefined(onCreate)
+    ? multipleRecordPickerSearchableObjectMetadataItems.filter(
+        (objectMetadataItem) =>
+          canCreateRecordsForObjectMetadataItem({
+            objectPermissions: getObjectPermissionsForObject(
+              objectPermissionsByObjectMetadataId,
+              objectMetadataItem.id,
+            ),
+            objectMetadataItem,
+          }),
+      )
+    : [];
+
+  const handleCreate = async (objectMetadataItemId: string) => {
+    if (isCreatePending || createInFlightRef.current || !isDefined(onCreate)) {
+      return;
+    }
+
+    createInFlightRef.current = true;
+    const searchInput = store.get(multipleRecordPickerSearchFilterState);
+
+    try {
+      const createdMorphItem = await onCreate({
+        searchInput,
+        objectMetadataItemId,
+      });
+
+      if (!isDefined(createdMorphItem)) {
+        return;
+      }
+
+      const currentMorphItems = store.get(
+        multipleRecordPickerPickableMorphItemsState,
+      );
+      const newMorphItems = upsertMorphItem(
+        currentMorphItems,
+        createdMorphItem,
+      );
+
+      store.set(multipleRecordPickerPickableMorphItemsState, newMorphItems);
+      if (page === 'create-target') {
+        goBack();
+      }
+
+      await performSearch({
+        multipleRecordPickerInstanceId: componentInstanceId,
+        forceSearchFilter: searchInput,
+        forceSearchableObjectMetadataItems:
+          multipleRecordPickerSearchableObjectMetadataItems,
+        forcePickableMorphItems: newMorphItems,
+      });
+
+      store.set(
+        multipleRecordPickerPickableMorphItemsState,
+        upsertMorphItem(
+          store.get(multipleRecordPickerPickableMorphItemsState),
+          createdMorphItem,
+        ),
+      );
+    } catch (error) {
+      store.set(multipleRecordPickerIsLoadingState, false);
+      logError(error);
+    } finally {
+      createInFlightRef.current = false;
+    }
+  };
+
+  const hasSingleCreatableObjectMetadataItem =
+    creatableObjectMetadataItems.length === 1;
+
+  const createNewButtonSection = isNonEmptyArray(
+    creatableObjectMetadataItems,
+  ) ? (
+    <Dropdown.Section>
+      <Dropdown.ActionItem
+        onClick={
+          hasSingleCreatableObjectMetadataItem
+            ? () => void handleCreate(creatableObjectMetadataItems[0].id)
+            : undefined
+        }
+        closeOnClick={false}
+        disabled={isCreatePending}
+        startIcon={<IconPlus />}
+        page={
+          hasSingleCreatableObjectMetadataItem ? undefined : 'create-target'
+        }
+      >{t`Add New`}</Dropdown.ActionItem>
+    </Dropdown.Section>
+  ) : null;
 
   return (
     <MultipleRecordPickerComponentInstanceContext.Provider
       value={{ instanceId: componentInstanceId }}
     >
-      <MultipleRecordPickerOnClickOutsideEffect
-        containerRef={containerRef}
-        onClickOutside={handleClickOutside}
-      />
-      <DropdownContent ref={containerRef} widthInPixels={dropdownWidth}>
-        {layoutDirection === 'search-bar-on-bottom' && (
-          <>
-            {createNewButtonSection}
-            <MultipleRecordPickerItemsDisplay
-              onChange={onChange}
-              focusId={focusId}
-            />
-          </>
-        )}
-        <MultipleRecordPickerSearchInput />
-        {layoutDirection === 'search-bar-on-top' && (
-          <>
-            <MultipleRecordPickerItemsDisplay
-              onChange={onChange}
-              focusId={focusId}
-            />
-            {createNewButtonSection}
-          </>
-        )}
-      </DropdownContent>
+      <Dropdown.Page id="create-target">
+        <MultipleRecordPickerCreateTargetSelect
+          objectMetadataItems={creatableObjectMetadataItems}
+          disabled={isCreatePending}
+          onBack={handleBackToRecords}
+          onSelect={(objectMetadataItemId) => {
+            void handleCreate(objectMetadataItemId);
+          }}
+        />
+      </Dropdown.Page>
+      <Dropdown.Page id="root">
+        <StyledRecordsPage layoutDirection={resolvedLayoutDirection}>
+          <MultipleRecordPickerSearchInput />
+          <MultipleRecordPickerItemsDisplay onChange={onChange} />
+          {createNewButtonSection}
+        </StyledRecordsPage>
+      </Dropdown.Page>
     </MultipleRecordPickerComponentInstanceContext.Provider>
   );
 };

@@ -1,23 +1,35 @@
+import { css } from '@linaria/core';
 import { styled } from '@linaria/react';
-import { Card } from 'twenty-ui/surfaces';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { Card } from 'twenty-ui/primitives/surfaces';
 
 const StyledListContainer = styled.div`
   width: 100%;
 
-  > * {
-    & > :not(:last-child) {
-      border-bottom: 1px solid ${themeCssVariables.border.color.light};
-    }
-    overflow: auto;
-    width: calc(100% - 2px);
+  &[data-scrollable] {
+    flex: 1;
+    height: 100%;
+    min-height: 0;
   }
 `;
 
-export const ActivityList = ({ children }: React.PropsWithChildren) => {
+const scrollableCardClassName = css`
+  height: 100%;
+  overflow-y: auto;
+`;
+
+type ActivityListProps = React.PropsWithChildren<{
+  isScrollable?: boolean;
+}>;
+
+export const ActivityList = ({
+  children,
+  isScrollable = false,
+}: ActivityListProps) => {
   return (
-    <StyledListContainer>
-      <Card>{children}</Card>
+    <StyledListContainer data-scrollable={isScrollable || undefined}>
+      <Card.Root className={isScrollable ? scrollableCardClassName : undefined}>
+        {children}
+      </Card.Root>
     </StyledListContainer>
   );
 };

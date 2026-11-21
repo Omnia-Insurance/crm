@@ -1,37 +1,28 @@
+import { type PermissionsPrincipalsWithRolesContext } from 'src/engine/permissions/principal/types/permissions-principals-with-roles-context.type';
 import { AsyncLocalStorage } from 'async_hooks';
 
-import {
-  type ObjectsPermissionsByRoleId,
-  type FeatureFlagKey,
-} from 'twenty-shared/types';
-import { type EntityMetadata } from 'typeorm';
+import { type FeatureFlagKey } from 'twenty-shared/types';
 
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import { type BillingEntitlements } from 'src/engine/core-modules/billing/types/billing-entitlements.type';
+import { type RecordReadRestrictions } from 'src/engine/permissions/types/record-read-restrictions.type';
 import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
-import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
+import { type OrmFlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/orm-flat-field-metadata.type';
 import { type FlatIndexMetadata } from 'src/engine/metadata-modules/flat-index-metadata/types/flat-index-metadata.type';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
-import { type UserWorkspaceRoleMap } from 'src/engine/metadata-modules/role-target/types/user-workspace-role-map';
-import { type FlatRowLevelPermissionPredicateGroupMaps } from 'src/engine/metadata-modules/row-level-permission-predicate/types/flat-row-level-permission-predicate-group-maps.type';
-import { type FlatRowLevelPermissionPredicateMaps } from 'src/engine/metadata-modules/row-level-permission-predicate/types/flat-row-level-permission-predicate-maps.type';
-import { type EventEmissionPolicy } from 'src/engine/twenty-orm/types/event-emission-policy.type';
-import { type WorkspaceRlsComputationCache } from 'src/engine/twenty-orm/types/workspace-rls-computation-cache.type';
+import { type FlatValidationRuleMaps } from 'src/engine/metadata-modules/flat-validation-rule/types/flat-validation-rule-maps.type';
 
 export type ORMWorkspaceContext = {
   authContext: WorkspaceAuthContext;
   flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata>;
-  flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
+  flatFieldMetadataMaps: FlatEntityMaps<OrmFlatFieldMetadata>;
   flatIndexMaps: FlatEntityMaps<FlatIndexMetadata>;
   objectIdByNameSingular: Record<string, string>;
   featureFlagsMap: Record<FeatureFlagKey, boolean>;
-  permissionsPerRoleId: ObjectsPermissionsByRoleId;
-  entityMetadatas: EntityMetadata[];
-  userWorkspaceRoleMap: UserWorkspaceRoleMap;
-  apiKeyRoleMap: Record<string, string>;
-  flatRowLevelPermissionPredicateMaps: FlatRowLevelPermissionPredicateMaps;
-  flatRowLevelPermissionPredicateGroupMaps: FlatRowLevelPermissionPredicateGroupMaps;
-  rlsComputationCache?: WorkspaceRlsComputationCache;
-  eventEmissionPolicy?: EventEmissionPolicy;
+  billingEntitlements: BillingEntitlements;
+  permissionsPrincipals: PermissionsPrincipalsWithRolesContext | undefined;
+  recordReadRestrictions: RecordReadRestrictions;
+  flatValidationRuleMaps?: FlatValidationRuleMaps;
 };
 
 export const workspaceContextStorage =

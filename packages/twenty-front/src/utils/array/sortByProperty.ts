@@ -1,5 +1,8 @@
+import { type ArraySortDirection } from 'twenty-shared/types';
+import { doNotTranslate } from 'twenty-shared/i18n';
+
 export const sortByProperty =
-  <T, K extends keyof T>(propertyName: K, sortBy: 'asc' | 'desc' = 'asc') =>
+  <T, K extends keyof T>(propertyName: K, sortBy: ArraySortDirection = 'asc') =>
   (objectA: T, objectB: T) => {
     const a = sortBy === 'asc' ? objectA : objectB;
     const b = sortBy === 'asc' ? objectB : objectA;
@@ -10,9 +13,10 @@ export const sortByProperty =
       );
     } else if (typeof a[propertyName] === 'number') {
       return (a[propertyName] as number) - (b[propertyName] as number);
-    } else {
-      throw new Error(
-        'Property type not supported in sortByProperty, only string and number are supported',
-      );
     }
+    throw new Error(
+      doNotTranslate(
+        'Property type not supported in sortByProperty, only string and number are supported',
+      ),
+    );
   };

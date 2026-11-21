@@ -1,14 +1,22 @@
 import { NextResponse } from 'next/server';
+import { isDefined } from 'twenty-shared/utils';
 
 import {
   getLicenseeFromStripeCustomer,
   getStripeClient,
   signEnterpriseKey,
 } from '@/platform/enterprise';
+import { forwardToTwentyConnect } from '@/platform/enterprise/forward-to-twenty-connect';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
+  const forwardedResponse = await forwardToTwentyConnect(request);
+
+  if (isDefined(forwardedResponse)) {
+    return forwardedResponse;
+  }
+
   if (
     !process.env.STRIPE_SECRET_KEY ||
     !process.env.ENTERPRISE_JWT_PRIVATE_KEY
@@ -17,7 +25,7 @@ export async function GET(request: Request) {
       '[enterprise-activate] 503 — STRIPE_SECRET_KEY and/or ENTERPRISE_JWT_PRIVATE_KEY are not configured',
     );
     return NextResponse.json(
-      { error: 'Enterprise activation is not configured.' },
+      { error: 'Organization activation is not configured.' },
       { status: 503 },
     );
   }

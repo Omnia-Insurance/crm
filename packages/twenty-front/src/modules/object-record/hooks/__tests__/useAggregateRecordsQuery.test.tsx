@@ -1,3 +1,4 @@
+import { ObjectOpenRecordIn } from 'twenty-shared/types';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
@@ -54,8 +55,10 @@ const mockObjectMetadataItem: EnrichedObjectMetadataItem = {
   isLabelSyncedWithName: true,
   isRemote: false,
   isSystem: false,
+  isAuditLogged: true,
   isUIEditable: true,
   isUICreatable: true,
+  openRecordIn: ObjectOpenRecordIn.USER_CHOICE,
 };
 
 const Wrapper = getJestMetadataAndApolloMocksWrapper({

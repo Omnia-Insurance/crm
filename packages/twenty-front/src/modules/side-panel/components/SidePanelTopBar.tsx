@@ -1,15 +1,18 @@
 import { SidePanelBackButton } from '@/side-panel/components/SidePanelBackButton';
+import { SidePanelCloseButton } from '@/side-panel/components/SidePanelCloseButton';
 import { SidePanelPageInfo } from '@/side-panel/components/SidePanelPageInfo';
+import { SidePanelTopBarEscapeHotkeyEffect } from '@/side-panel/components/SidePanelTopBarEscapeHotkeyEffect';
 import { SidePanelTopBarInputFocusEffect } from '@/side-panel/components/SidePanelTopBarInputFocusEffect';
+import { SidePanelExpandButton } from '@/side-panel/components/SidePanelExpandButton';
 import { SidePanelTopBarRightCornerIcon } from '@/side-panel/components/SidePanelTopBarRightCornerIcon';
 import { COMMAND_MENU_SIDE_PANEL_PAGES } from '@/side-panel/constants/CommandMenuSidePanelPages';
+import { SIDE_PANEL_FOCUS_ID } from '@/side-panel/constants/SidePanelFocusId';
 import { SIDE_PANEL_TOP_BAR_HEIGHT } from '@/side-panel/constants/SidePanelTopBarHeight';
 import { SIDE_PANEL_TOP_BAR_HEIGHT_MOBILE } from '@/side-panel/constants/SidePanelTopBarHeightMobile';
-import { SIDE_PANEL_FOCUS_ID } from '@/side-panel/constants/SidePanelFocusId';
-import { useCommandMenuCloseWithValidation } from '@/command-menu/hooks/useCommandMenuCloseWithValidation';
+import { useHandleSidePanelBackspace } from '@/side-panel/hooks/useHandleSidePanelBackspace';
+import { useHandleSidePanelEscape } from '@/side-panel/hooks/useHandleSidePanelEscape';
 import { useSidePanelContextChips } from '@/side-panel/hooks/useSidePanelContextChips';
 import { sidePanelNavigationStackState } from '@/side-panel/states/sidePanelNavigationStackState';
-import { sidePanelPageState } from '@/side-panel/states/sidePanelPageState';
 import { sidePanelSearchState } from '@/side-panel/states/sidePanelSearchState';
 import { usePushFocusItemToFocusStack } from '@/ui/utilities/focus/hooks/usePushFocusItemToFocusStack';
 import { useRemoveFocusItemFromFocusStackById } from '@/ui/utilities/focus/hooks/useRemoveFocusItemFromFocusStackById';
@@ -19,11 +22,12 @@ import { useLingui } from '@lingui/react/macro';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
-import { useContext, useRef } from 'react';
-import { IconX } from 'twenty-ui/icon';
-import { IconButton } from 'twenty-ui/input';
+import { useRef } from 'react';
+import { Key } from 'ts-key-enum';
+import { SidePanelPages } from 'twenty-shared/types';
 import { useIsMobile } from 'twenty-ui/utilities';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { Input } from 'twenty-ui/primitives/input';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
 
 const StyledInputContainer = styled.div<{ isMobile: boolean }>`
   align-items: center;
@@ -48,24 +52,6 @@ const StyledInputContainer = styled.div<{ isMobile: boolean }>`
   position: relative;
 `;
 
-const StyledInput = styled.input`
-  background-color: transparent;
-  border: none;
-  border-radius: 0;
-  color: ${themeCssVariables.font.color.primary};
-  flex: 1;
-  font-size: ${themeCssVariables.font.size.md};
-  height: 24px;
-  margin: 0;
-  outline: none;
-  padding: 0;
-
-  &::placeholder {
-    color: ${themeCssVariables.font.color.light};
-    font-weight: ${themeCssVariables.font.weight.medium};
-  }
-`;
-
 const StyledContentContainer = styled.div`
   align-items: center;
   display: flex;
@@ -75,6 +61,34 @@ const StyledContentContainer = styled.div`
   overflow: hidden;
 `;
 
+const StyledHeaderTitleContainer = styled.div`
+  align-items: center;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+`;
+
+const StyledHeaderTitlePortal = styled.div`
+  align-items: center;
+  display: none;
+  min-width: 0;
+
+  &:not(:empty) {
+    display: flex;
+    flex: 1;
+  }
+
+  &:not(:empty) + [data-side-panel-page-info] {
+    display: none;
+  }
+`;
+
+const StyledHeaderActionsPortal = styled.div`
+  align-items: center;
+  display: flex;
+  gap: ${themeCssVariables.spacing[1]};
+`;
+
 const StyledRightControlsContainer = styled.div`
   align-items: center;
   display: flex;
@@ -82,7 +96,13 @@ const StyledRightControlsContainer = styled.div`
   gap: ${themeCssVariables.spacing[1]};
 `;
 
-export const SidePanelTopBar = () => {
+export const SidePanelTopBar = ({
+  setHeaderTitlePortal,
+  setHeaderActionsPortal,
+}: {
+  setHeaderTitlePortal?: (element: HTMLElement | null) => void;
+  setHeaderActionsPortal?: (element: HTMLElement | null) => void;
+}) => {
   const [sidePanelSearch, setSidePanelSearch] =
     useAtomState(sidePanelSearchState);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -95,21 +115,21 @@ export const SidePanelTopBar = () => {
 
   const isMobile = useIsMobile();
 
-  const { closeWithValidation } = useCommandMenuCloseWithValidation();
-
-  const sidePanelPage = useAtomStateValue(sidePanelPageState);
-
   const sidePanelNavigationStack = useAtomStateValue(
     sidePanelNavigationStackState,
   );
+  const sidePanelPage =
+    sidePanelNavigationStack.at(-1)?.page ?? SidePanelPages.CommandMenuDisplay;
 
-  const { theme } = useContext(ThemeContext);
+  const theme = useTheme();
 
   const { contextChips } = useSidePanelContextChips();
 
   const { pushFocusItemToFocusStack } = usePushFocusItemToFocusStack();
   const { removeFocusItemFromFocusStackById } =
     useRemoveFocusItemFromFocusStackById();
+  const handleSidePanelBackspace = useHandleSidePanelBackspace();
+  const handleSidePanelEscape = useHandleSidePanelEscape();
 
   const handleInputFocus = () => {
     pushFocusItemToFocusStack({
@@ -130,6 +150,34 @@ export const SidePanelTopBar = () => {
     });
   };
 
+  const handleInputKeyDownCapture = (
+    event: React.KeyboardEvent<HTMLInputElement>,
+  ) => {
+    if (event.nativeEvent.isComposing || event.keyCode === 229) {
+      return;
+    }
+
+    if (event.key === Key.Escape) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.nativeEvent.stopImmediatePropagation();
+
+      handleSidePanelEscape();
+      return;
+    }
+
+    if (
+      event.key === Key.Backspace &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      handleSidePanelBackspace()
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.nativeEvent.stopImmediatePropagation();
+    }
+  };
+
   const currentPage = sidePanelNavigationStack.at(-1)?.page;
   const previousPage = sidePanelNavigationStack.at(-2)?.page;
 
@@ -148,6 +196,10 @@ export const SidePanelTopBar = () => {
 
   return (
     <StyledInputContainer isMobile={isMobile}>
+      <SidePanelTopBarEscapeHotkeyEffect
+        inputRef={inputRef}
+        onEscape={handleSidePanelEscape}
+      />
       <StyledContentContainer>
         <AnimatePresence>
           {shouldShowBackButton && (
@@ -162,17 +214,33 @@ export const SidePanelTopBar = () => {
             </motion.div>
           )}
         </AnimatePresence>
-        {lastChip && !COMMAND_MENU_SIDE_PANEL_PAGES.includes(sidePanelPage) && (
-          <SidePanelPageInfo pageChip={lastChip} />
+        {!COMMAND_MENU_SIDE_PANEL_PAGES.includes(sidePanelPage) && (
+          <StyledHeaderTitleContainer>
+            <StyledHeaderTitlePortal ref={setHeaderTitlePortal} />
+            {lastChip && (
+              <div data-side-panel-page-info="">
+                <SidePanelPageInfo pageChip={lastChip} />
+              </div>
+            )}
+          </StyledHeaderTitleContainer>
         )}
         {COMMAND_MENU_SIDE_PANEL_PAGES.includes(sidePanelPage) && (
           <>
-            <StyledInput
+            <Input
+              variant="plain"
+              hasFocusRing={false}
+              size="sm"
+              aria-label={t`Search`}
               data-testid={SIDE_PANEL_FOCUS_ID}
               ref={inputRef}
               value={sidePanelSearch}
-              placeholder={t`Type anything...`}
+              placeholder={
+                sidePanelPage === SidePanelPages.SearchAiChats
+                  ? t`Search chat titles...`
+                  : t`Type anything...`
+              }
               onChange={handleSearchChange}
+              onKeyDownCapture={handleInputKeyDownCapture}
               onFocus={handleInputFocus}
               onBlur={handleInputBlur}
             />
@@ -181,16 +249,12 @@ export const SidePanelTopBar = () => {
         )}
       </StyledContentContainer>
       <StyledRightControlsContainer>
-        <SidePanelTopBarRightCornerIcon />
-        {!shouldHideCloseButton && (
-          <IconButton
-            Icon={IconX}
-            size="small"
-            variant="secondary"
-            onClick={closeWithValidation}
-            ariaLabel={t`Close side panel`}
-          />
+        <StyledHeaderActionsPortal ref={setHeaderActionsPortal} />
+        {sidePanelPage !== SidePanelPages.RoutedPage && (
+          <SidePanelTopBarRightCornerIcon />
         )}
+        <SidePanelExpandButton />
+        {shouldHideCloseButton ? null : <SidePanelCloseButton />}
       </StyledRightControlsContainer>
     </StyledInputContainer>
   );

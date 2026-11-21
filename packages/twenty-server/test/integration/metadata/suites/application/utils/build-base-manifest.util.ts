@@ -1,4 +1,5 @@
 import { type Manifest } from 'twenty-shared/application';
+import { TEST_APPLICATION_PACKAGE_JSON_CHECKSUM } from 'test/integration/metadata/suites/application/constants/test-application-package-json.constant';
 
 export const buildBaseManifest = ({
   appId,
@@ -15,7 +16,7 @@ export const buildBaseManifest = ({
     displayName: 'Test Application',
     description: 'Test application',
     applicationVariables: {},
-    packageJsonChecksum: null,
+    packageJsonChecksum: TEST_APPLICATION_PACKAGE_JSON_CHECKSUM,
     yarnLockChecksum: null,
   },
   roles: [
@@ -38,6 +39,9 @@ export const buildBaseManifest = ({
   navigationMenuItems: [],
   pageLayouts: [],
   pageLayoutTabs: [],
+  pageLayoutWidgets: [],
   commandMenuItems: [],
+  timelineActivityTypes: [],
+  settingsMenuItems: [],
   ...overrides,
 });

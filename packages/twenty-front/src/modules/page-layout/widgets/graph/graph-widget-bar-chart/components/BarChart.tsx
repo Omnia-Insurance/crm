@@ -16,9 +16,9 @@ import {
 } from '@/page-layout/widgets/graph/utils/graphFormatters';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { styled } from '@linaria/react';
-import { type MouseEvent, useContext } from 'react';
+import { type MouseEvent } from 'react';
 import { isDefined } from 'twenty-shared/utils';
-import { ThemeContext } from 'twenty-ui/theme-constants';
+import { useTheme } from 'twenty-ui/theme';
 import { BarChartLayout } from '~/generated-metadata/graphql';
 type BarChartProps = {
   data: BarChartDatum[];
@@ -32,6 +32,7 @@ type BarChartProps = {
   effectiveValueRange: { minimum: number; maximum: number };
   hasExplicitRangeBounds: boolean;
   formatOptions: GraphValueFormatOptions;
+  axisFormatOptions?: GraphValueFormatOptions;
   axisConfig?: {
     xAxisLabel?: string;
     yAxisLabel?: string;
@@ -69,6 +70,7 @@ export const BarChart = ({
   effectiveValueRange,
   hasExplicitRangeBounds,
   formatOptions,
+  axisFormatOptions,
   axisConfig,
   rightTickLabels,
   dataLabelsConfig,
@@ -79,7 +81,7 @@ export const BarChart = ({
   allowDataTransitions,
   hasNoData = false,
 }: BarChartProps) => {
-  const { theme } = useContext(ThemeContext);
+  const theme = useTheme();
 
   const graphWidgetHighlightedLegendId = useAtomComponentStateValue(
     graphWidgetHighlightedLegendIdComponentState,
@@ -107,7 +109,7 @@ export const BarChart = ({
     data,
     effectiveValueRange,
     hasExplicitRangeBounds,
-    formatOptions,
+    formatOptions: axisFormatOptions ?? formatOptions,
     groupMode,
     indexBy,
     keys,

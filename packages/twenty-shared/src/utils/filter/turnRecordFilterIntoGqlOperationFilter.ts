@@ -4,7 +4,8 @@ import { Temporal } from 'temporal-polyfill';
 import {
   FieldActorSource,
   FieldMetadataType,
-  ViewFilterOperand as RecordFilterOperand,
+  RecordFilterOperand,
+  RelationType,
   type ActorFilter,
   type AddressFilter,
   type ArrayFilter,
@@ -19,7 +20,6 @@ import {
   type RawJsonFilter,
   type RecordFilterValueDependencies,
   type RecordGqlOperationFilter,
-  type RelationType,
   type RelationFilter,
   type SelectFilter,
   type StringFilter,
@@ -46,23 +46,50 @@ import {
   getNextPeriodStart,
   getPeriodStart,
   isDefined,
+  isNonEmptyArray,
   isRecordFilterValueValid,
   resolveDateFilter,
   resolveDateTimeFilter,
   resolveRelativeDateFilterStringified,
   type RecordFilter,
 } from '@/utils';
+import { convertCurrencyAmountToCurrencyMicros } from '@/utils/currency/convertCurrencyAmountToCurrencyMicros';
 import { arrayOfStringsOrVariablesSchema } from '@/utils/filter/utils/validation-schemas/arrayOfStringsOrVariablesSchema';
+import {
+  actorSourceFilterValueSchema,
+  booleanFilterValueSchema,
+  instantFilterValueSchema,
+  numericFilterValueSchema,
+  plainDateOrInstantFilterValueSchema,
+} from '@/utils/filter/utils/validation-schemas/filterValueScalarSchemas';
 import { arrayOfUuidOrVariableSchema } from '@/utils/filter/utils/validation-schemas/arrayOfUuidsOrVariablesSchema';
 import { jsonRelationFilterValueSchema } from '@/utils/filter/utils/validation-schemas/jsonRelationFilterValueSchema';
-import {
-  computeMorphRelationGqlFieldJoinColumnName,
-  computeRelationGqlFieldJoinColumnName,
-} from '@/utils/fieldMetadata/compute-relation-gql-field-join-column-name';
+import { computeMorphRelationGqlFieldName } from '@/utils/fieldMetadata/compute-morph-relation-gql-field-name';
+import { computeRelationGqlFieldJoinColumnName } from '@/utils/fieldMetadata/compute-relation-gql-field-join-column-name';
+import { computeMorphRelationJoinColumnNames } from '@/utils/filter/computeMorphRelationJoinColumnNames';
+
+const PHONE_FILTER_NON_SIGNIFICANT_CHARS = /(?!^)\+|[^0-9+]/g;
+
+const CONTAINS_DIGIT = /[0-9]/;
+
+const lenientBooleanFilterValueSchema = booleanFilterValueSchema.catch(false);
+
+const parseNumericFilterValue = (value: string): number => {
+  const parsed = numericFilterValueSchema.safeParse(value);
+
+  return parsed.success ? parsed.data : parseFloat(value);
+};
+
+const parseActorSourceFilterValue = (value: string): string[] => {
+  const parsed = actorSourceFilterValueSchema.safeParse(value);
+
+  return parsed.success ? parsed.data : (JSON.parse(value) as string[]);
+};
 
 type FieldSharedMorphRelation = {
   type: RelationType;
   targetObjectMetadata: {
+    id: string;
     nameSingular: string;
     namePlural: string;
   };
@@ -73,16 +100,53 @@ export type FieldShared = {
   name: string;
   type: FieldMetadataType;
   label: string;
-  // OMNIA-CUSTOM: `relation` drives one-to-many detection and nested relation
-  // sub-field filters; keep alongside upstream's `morphRelations`.
-  relation?: { type: string } | null;
+  relation?: { sourceObjectMetadata: { id: string } } | null;
   morphRelations?: FieldSharedMorphRelation[] | null;
+  // OMNIA-CUSTOM: relation direction for one-to-many emptiness. Loosely typed
+  // so front field items (generated enum) and server flat fields both fit.
+  settings?: { relationType?: string | null; [key: string]: unknown } | null;
 };
 
 type TurnRecordFilterIntoRecordGqlOperationFilterParams = {
   filterValueDependencies: RecordFilterValueDependencies;
   recordFilter: Omit<RecordFilter, 'id'>;
   fieldMetadataItemById: Map<string, FieldShared>;
+};
+
+const getTraversalFieldName = ({
+  sourceFieldMetadataItem,
+  targetFieldMetadataItem,
+}: {
+  sourceFieldMetadataItem: FieldShared;
+  targetFieldMetadataItem: FieldShared;
+}): string => {
+  if (sourceFieldMetadataItem.type !== FieldMetadataType.MORPH_RELATION) {
+    return sourceFieldMetadataItem.name;
+  }
+
+  const traversedObjectMetadataId =
+    targetFieldMetadataItem.relation?.sourceObjectMetadata.id;
+
+  const matchingMorphRelation = sourceFieldMetadataItem.morphRelations?.find(
+    (morphRelation) =>
+      morphRelation.targetObjectMetadata.id === traversedObjectMetadataId,
+  );
+
+  if (!isDefined(matchingMorphRelation)) {
+    throw new CustomError(
+      `No morph relation on field ${sourceFieldMetadataItem.name} targets the traversed object ${traversedObjectMetadataId}`,
+      'UNRESOLVED_MORPH_RELATION_TRAVERSAL',
+    );
+  }
+
+  return computeMorphRelationGqlFieldName({
+    fieldName: sourceFieldMetadataItem.name,
+    relationType: matchingMorphRelation.type,
+    targetObjectMetadataNameSingular:
+      matchingMorphRelation.targetObjectMetadata.nameSingular,
+    targetObjectMetadataNamePlural:
+      matchingMorphRelation.targetObjectMetadata.namePlural,
+  });
 };
 
 export const turnRecordFilterIntoRecordGqlOperationFilter = ({
@@ -104,27 +168,9 @@ export const turnRecordFilterIntoRecordGqlOperationFilter = ({
     return;
   }
 
-  const isOneToManyRelationField =
-    sourceFieldMetadataItem.type === FieldMetadataType.RELATION &&
-    sourceFieldMetadataItem.relation?.type === 'ONE_TO_MANY';
-
   if (
-    isOneToManyRelationField &&
-    (recordFilter.operand === RecordFilterOperand.IS_EMPTY ||
-      recordFilter.operand === RecordFilterOperand.IS_NOT_EMPTY)
-  ) {
-    return {
-      [sourceFieldMetadataItem.name]: {
-        is:
-          recordFilter.operand === RecordFilterOperand.IS_NOT_EMPTY
-            ? 'NOT_NULL'
-            : 'NULL',
-      },
-    };
-  }
-
-  if (
-    sourceFieldMetadataItem.type === FieldMetadataType.RELATION &&
+    (sourceFieldMetadataItem.type === FieldMetadataType.RELATION ||
+      sourceFieldMetadataItem.type === FieldMetadataType.MORPH_RELATION) &&
     isDefined(recordFilter.relationTargetFieldMetadataId)
   ) {
     const targetFieldMetadataItem = fieldMetadataItemById.get(
@@ -134,6 +180,11 @@ export const turnRecordFilterIntoRecordGqlOperationFilter = ({
     if (!isDefined(targetFieldMetadataItem)) {
       return;
     }
+
+    const traversalFieldName = getTraversalFieldName({
+      sourceFieldMetadataItem,
+      targetFieldMetadataItem,
+    });
 
     const innerFilter = buildDirectFieldGqlOperationFilter({
       recordFilter: {
@@ -150,35 +201,26 @@ export const turnRecordFilterIntoRecordGqlOperationFilter = ({
     }
 
     return {
-      [sourceFieldMetadataItem.name]: innerFilter,
+      [traversalFieldName]: innerFilter,
     } as RecordGqlOperationFilter;
   }
 
-  if (isOneToManyRelationField && isNonEmptyString(recordFilter.subFieldName)) {
-    const virtualField: FieldShared = {
-      id: 'virtual-relation-sub-field',
-      name: recordFilter.subFieldName,
-      type: recordFilter.type as FieldMetadataType,
-      label: '',
-    };
-
-    const innerFilter = buildDirectFieldGqlOperationFilter({
-      recordFilter: {
-        ...recordFilter,
-        fieldMetadataId: virtualField.id,
-        subFieldName: undefined,
-      },
-      fieldMetadataItem: virtualField,
-      filterValueDependencies,
-    });
-
-    if (!isDefined(innerFilter)) {
-      return;
-    }
-
-    return {
-      [sourceFieldMetadataItem.name]: innerFilter,
+  // OMNIA-CUSTOM: a to-many relation has no join column to null-check, so
+  // "has any / has no" goes through the related records' id instead.
+  if (
+    sourceFieldMetadataItem.type === FieldMetadataType.RELATION &&
+    sourceFieldMetadataItem.settings?.relationType ===
+      RelationType.ONE_TO_MANY &&
+    (recordFilter.operand === RecordFilterOperand.IS_EMPTY ||
+      recordFilter.operand === RecordFilterOperand.IS_NOT_EMPTY)
+  ) {
+    const hasRelatedRecordsFilter = {
+      [sourceFieldMetadataItem.name]: { id: { is: 'NOT_NULL' } },
     } as RecordGqlOperationFilter;
+
+    return recordFilter.operand === RecordFilterOperand.IS_NOT_EMPTY
+      ? hasRelatedRecordsFilter
+      : { not: hasRelatedRecordsFilter };
   }
 
   return buildDirectFieldGqlOperationFilter({
@@ -194,37 +236,28 @@ type BuildDirectFieldGqlOperationFilterParams = {
   fieldMetadataItem: FieldShared;
 };
 
-const getRelationFilterJoinColumnName = ({
+const getRelationFilterJoinColumnNames = ({
   fieldMetadataItem,
-  filterValueDependencies,
 }: {
-  fieldMetadataItem: FieldShared;
-  filterValueDependencies: RecordFilterValueDependencies;
-}): string | undefined => {
-  if (fieldMetadataItem.type !== FieldMetadataType.MORPH_RELATION) {
-    return computeRelationGqlFieldJoinColumnName({
-      name: fieldMetadataItem.name,
-    });
-  }
+  fieldMetadataItem: Pick<FieldShared, 'type' | 'name' | 'morphRelations'>;
+}): string[] =>
+  fieldMetadataItem.type === FieldMetadataType.MORPH_RELATION &&
+  isNonEmptyArray(fieldMetadataItem.morphRelations)
+    ? computeMorphRelationJoinColumnNames({ fieldMetadataItem })
+    : [computeRelationGqlFieldJoinColumnName({ name: fieldMetadataItem.name })];
 
-  const matchingMorphRelation = fieldMetadataItem.morphRelations?.find(
-    (morphRelation) =>
-      morphRelation.targetObjectMetadata.nameSingular ===
-      filterValueDependencies.currentRecord?.objectMetadataNameSingular,
-  );
+const combineRelationJoinColumnFilters = ({
+  joinColumnFilters,
+  logicalOperator,
+}: {
+  joinColumnFilters: RecordGqlOperationFilter[];
+  logicalOperator: 'and' | 'or';
+}): RecordGqlOperationFilter => {
+  const [firstJoinColumnFilter] = joinColumnFilters;
 
-  if (!isDefined(matchingMorphRelation)) {
-    return;
-  }
-
-  return computeMorphRelationGqlFieldJoinColumnName({
-    fieldName: fieldMetadataItem.name,
-    relationType: matchingMorphRelation.type,
-    targetObjectMetadataNameSingular:
-      matchingMorphRelation.targetObjectMetadata.nameSingular,
-    targetObjectMetadataNamePlural:
-      matchingMorphRelation.targetObjectMetadata.namePlural,
-  });
+  return joinColumnFilters.length === 1 && isDefined(firstJoinColumnFilter)
+    ? firstJoinColumnFilter
+    : { [logicalOperator]: joinColumnFilters };
 };
 
 const buildDirectFieldGqlOperationFilter = ({
@@ -272,6 +305,25 @@ const buildDirectFieldGqlOperationFilter = ({
               } as StringFilter,
             },
           };
+        case RecordFilterOperand.IS:
+          return {
+            [fieldMetadataItem.name]: {
+              eq: recordFilter.value,
+            } as StringFilter,
+          };
+        case RecordFilterOperand.IS_NOT:
+          return {
+            or: [
+              {
+                [fieldMetadataItem.name]: {
+                  neq: recordFilter.value,
+                } as StringFilter,
+              },
+              {
+                [fieldMetadataItem.name]: { is: 'NULL' } as StringFilter,
+              },
+            ],
+          };
         default:
           throw new CustomError(
             `Unknown operand ${recordFilter.operand} for ${filterType} filter`,
@@ -296,16 +348,23 @@ const buildDirectFieldGqlOperationFilter = ({
         case RecordFilterOperand.CONTAINS:
           return {
             [fieldMetadataItem.name]: {
-              like: `%${recordFilter.value}%`,
+              ilike: `%${recordFilter.value}%`,
             } as RawJsonFilter,
           };
         case RecordFilterOperand.DOES_NOT_CONTAIN:
           return {
-            not: {
-              [fieldMetadataItem.name]: {
-                like: `%${recordFilter.value}%`,
-              } as RawJsonFilter,
-            },
+            or: [
+              {
+                not: {
+                  [fieldMetadataItem.name]: {
+                    ilike: `%${recordFilter.value}%`,
+                  } as RawJsonFilter,
+                },
+              },
+              {
+                [fieldMetadataItem.name]: { is: 'NULL' } as RawJsonFilter,
+              },
+            ],
           };
         default:
           throw new Error(
@@ -317,16 +376,23 @@ const buildDirectFieldGqlOperationFilter = ({
         case RecordFilterOperand.CONTAINS:
           return {
             [fieldMetadataItem.name]: {
-              like: `%${recordFilter.value}%`,
+              ilike: `%${recordFilter.value}%`,
             } as FilesFilter,
           };
         case RecordFilterOperand.DOES_NOT_CONTAIN:
           return {
-            not: {
-              [fieldMetadataItem.name]: {
-                like: `%${recordFilter.value}%`,
-              } as FilesFilter,
-            },
+            or: [
+              {
+                not: {
+                  [fieldMetadataItem.name]: {
+                    ilike: `%${recordFilter.value}%`,
+                  } as FilesFilter,
+                },
+              },
+              {
+                [fieldMetadataItem.name]: { is: 'NULL' } as FilesFilter,
+              },
+            ],
           };
         default:
           throw new Error(
@@ -537,19 +603,20 @@ const buildDirectFieldGqlOperationFilter = ({
         if (recordFilter.operand === RecordFilterOperand.IS) {
           const timeZone = filterValueDependencies.timeZone ?? 'UTC';
 
-          let parsedPlainDate = null;
+          const parsedDateTime = plainDateOrInstantFilterValueSchema.safeParse(
+            recordFilter.value,
+          );
 
-          try {
-            parsedPlainDate = recordFilter.value.includes('T')
-              ? Temporal.Instant.from(recordFilter.value)
-                  .toZonedDateTimeISO(timeZone)
-                  .toPlainDate()
-              : Temporal.PlainDate.from(recordFilter.value);
-          } catch {
+          if (!parsedDateTime.success) {
             throw new Error(
               `Cannot parse "${recordFilter.value}" for ${filterType} filter`,
             );
           }
+
+          const parsedPlainDate =
+            parsedDateTime.data instanceof Temporal.Instant
+              ? parsedDateTime.data.toZonedDateTimeISO(timeZone).toPlainDate()
+              : parsedDateTime.data;
 
           const zonedDateTime = parsedPlainDate.toZonedDateTime(timeZone);
           const start = zonedDateTime.toInstant();
@@ -571,7 +638,9 @@ const buildDirectFieldGqlOperationFilter = ({
           };
         }
 
-        const resolvedDateTime = Temporal.Instant.from(recordFilter.value);
+        const resolvedDateTime = instantFilterValueSchema.parse(
+          recordFilter.value,
+        );
 
         switch (recordFilter.operand) {
           case RecordFilterOperand.IS_AFTER: {
@@ -600,14 +669,18 @@ const buildDirectFieldGqlOperationFilter = ({
         case RecordFilterOperand.IS:
           return {
             [fieldMetadataItem.name]: {
-              eq: convertRatingToRatingValue(parseFloat(recordFilter.value)),
+              eq: convertRatingToRatingValue(
+                parseNumericFilterValue(recordFilter.value),
+              ),
             } as RatingFilter,
           };
         case RecordFilterOperand.IS_NOT:
           return {
             not: {
               [fieldMetadataItem.name]: {
-                eq: convertRatingToRatingValue(parseFloat(recordFilter.value)),
+                eq: convertRatingToRatingValue(
+                  parseNumericFilterValue(recordFilter.value),
+                ),
               } as RatingFilter,
             },
           };
@@ -615,7 +688,7 @@ const buildDirectFieldGqlOperationFilter = ({
           return {
             [fieldMetadataItem.name]: {
               in: convertGreaterThanOrEqualRatingToArrayOfRatingValues(
-                parseFloat(recordFilter.value),
+                parseNumericFilterValue(recordFilter.value),
               ),
             } as RatingFilter,
           };
@@ -623,7 +696,7 @@ const buildDirectFieldGqlOperationFilter = ({
           return {
             [fieldMetadataItem.name]: {
               in: convertLessThanOrEqualRatingToArrayOfRatingValues(
-                parseFloat(recordFilter.value),
+                parseNumericFilterValue(recordFilter.value),
               ),
             } as RatingFilter,
           };
@@ -637,28 +710,26 @@ const buildDirectFieldGqlOperationFilter = ({
         case RecordFilterOperand.GREATER_THAN_OR_EQUAL:
           return {
             [fieldMetadataItem.name]: {
-              gte: parseFloat(recordFilter.value),
+              gte: parseNumericFilterValue(recordFilter.value),
             } as FloatFilter,
           };
         case RecordFilterOperand.LESS_THAN_OR_EQUAL:
           return {
             [fieldMetadataItem.name]: {
-              lte: parseFloat(recordFilter.value),
+              lte: parseNumericFilterValue(recordFilter.value),
             } as FloatFilter,
           };
         case RecordFilterOperand.IS:
           return {
             [fieldMetadataItem.name]: {
-              eq: parseFloat(recordFilter.value),
+              eq: parseNumericFilterValue(recordFilter.value),
             } as FloatFilter,
           };
         case RecordFilterOperand.IS_NOT:
           return {
-            not: {
-              [fieldMetadataItem.name]: {
-                eq: parseFloat(recordFilter.value),
-              } as FloatFilter,
-            },
+            [fieldMetadataItem.name]: {
+              neq: parseNumericFilterValue(recordFilter.value),
+            } as FloatFilter,
           };
         default:
           throw new Error(
@@ -692,41 +763,44 @@ const buildDirectFieldGqlOperationFilter = ({
 
       if (recordIds.length === 0) return;
 
-      const relationFilterJoinColumnName = getRelationFilterJoinColumnName({
+      const relationFilterJoinColumnNames = getRelationFilterJoinColumnNames({
         fieldMetadataItem,
-        filterValueDependencies,
       });
 
-      if (!isDefined(relationFilterJoinColumnName)) {
+      if (relationFilterJoinColumnNames.length === 0) {
         return;
       }
 
       switch (recordFilter.operand) {
         case RecordFilterOperand.IS:
-          return {
-            [relationFilterJoinColumnName]: {
-              in: recordIds,
-            } as RelationFilter,
-          };
-        case RecordFilterOperand.IS_NOT: {
-          if (!isDefined(recordIds) || recordIds.length === 0) return;
-          return {
-            or: [
-              {
-                not: {
-                  [relationFilterJoinColumnName]: {
-                    in: recordIds,
-                  } as RelationFilter,
-                },
-              },
-              {
-                [relationFilterJoinColumnName]: {
-                  is: 'NULL',
-                } as RelationFilter,
-              },
-            ],
-          };
-        }
+          return combineRelationJoinColumnFilters({
+            joinColumnFilters: relationFilterJoinColumnNames.map(
+              (joinColumnName) => ({
+                [joinColumnName]: { in: recordIds } satisfies RelationFilter,
+              }),
+            ),
+            logicalOperator: 'or',
+          });
+        case RecordFilterOperand.IS_NOT:
+          return combineRelationJoinColumnFilters({
+            joinColumnFilters: relationFilterJoinColumnNames.map(
+              (joinColumnName) => ({
+                or: [
+                  {
+                    not: {
+                      [joinColumnName]: {
+                        in: recordIds,
+                      } satisfies RelationFilter,
+                    },
+                  },
+                  {
+                    [joinColumnName]: { is: 'NULL' } satisfies RelationFilter,
+                  },
+                ],
+              }),
+            ),
+            logicalOperator: 'and',
+          });
         default:
           throw new Error(
             `Unknown operand ${recordFilter.operand} for ${filterType} filter`,
@@ -777,30 +851,42 @@ const buildDirectFieldGqlOperationFilter = ({
           case RecordFilterOperand.GREATER_THAN_OR_EQUAL:
             return {
               [fieldMetadataItem.name]: {
-                amountMicros: { gte: parseFloat(recordFilter.value) * 1000000 },
+                amountMicros: {
+                  gte: convertCurrencyAmountToCurrencyMicros(
+                    parseNumericFilterValue(recordFilter.value),
+                  ),
+                },
               } as CurrencyFilter,
             };
           case RecordFilterOperand.LESS_THAN_OR_EQUAL:
             return {
               [fieldMetadataItem.name]: {
-                amountMicros: { lte: parseFloat(recordFilter.value) * 1000000 },
+                amountMicros: {
+                  lte: convertCurrencyAmountToCurrencyMicros(
+                    parseNumericFilterValue(recordFilter.value),
+                  ),
+                },
               } as CurrencyFilter,
             };
           case RecordFilterOperand.IS:
             return {
               [fieldMetadataItem.name]: {
-                amountMicros: { eq: parseFloat(recordFilter.value) * 1000000 },
+                amountMicros: {
+                  eq: convertCurrencyAmountToCurrencyMicros(
+                    parseNumericFilterValue(recordFilter.value),
+                  ),
+                },
               } as CurrencyFilter,
             };
           case RecordFilterOperand.IS_NOT:
             return {
-              not: {
-                [fieldMetadataItem.name]: {
-                  amountMicros: {
-                    eq: parseFloat(recordFilter.value) * 1000000,
-                  },
-                } as CurrencyFilter,
-              },
+              [fieldMetadataItem.name]: {
+                amountMicros: {
+                  neq: convertCurrencyAmountToCurrencyMicros(
+                    parseNumericFilterValue(recordFilter.value),
+                  ),
+                },
+              } as CurrencyFilter,
             };
           default:
             throw new Error(
@@ -1072,9 +1158,9 @@ const buildDirectFieldGqlOperationFilter = ({
             };
           } else {
             if (subFieldName === 'addressCountry') {
-              const parsedCountryCodes = JSON.parse(
+              const parsedCountryCodes = arrayOfStringsOrVariablesSchema.parse(
                 recordFilter.value,
-              ) as string[];
+              );
 
               if (
                 recordFilter.value === '[]' ||
@@ -1089,7 +1175,7 @@ const buildDirectFieldGqlOperationFilter = ({
                     not: {
                       [fieldMetadataItem.name]: {
                         addressCountry: {
-                          in: JSON.parse(recordFilter.value),
+                          in: parsedCountryCodes,
                         } as AddressFilter,
                       },
                     },
@@ -1280,7 +1366,9 @@ const buildDirectFieldGqlOperationFilter = ({
               return;
             }
 
-            const parsedSources = JSON.parse(recordFilter.value) as string[];
+            const parsedSources = parseActorSourceFilterValue(
+              recordFilter.value,
+            );
 
             return {
               [fieldMetadataItem.name]: {
@@ -1295,7 +1383,9 @@ const buildDirectFieldGqlOperationFilter = ({
               return;
             }
 
-            const parsedSources = JSON.parse(recordFilter.value) as string[];
+            const parsedSources = parseActorSourceFilterValue(
+              recordFilter.value,
+            );
 
             if (parsedSources.length === 0) return;
 
@@ -1452,9 +1542,11 @@ const buildDirectFieldGqlOperationFilter = ({
     }
     case 'PHONES': {
       if (!isSubFieldFilter) {
-        const filterValue = recordFilter.value.replace(/[^0-9]/g, '');
+        const filterValue = recordFilter.value
+          .trim()
+          .replace(PHONE_FILTER_NON_SIGNIFICANT_CHARS, '');
 
-        if (!isNonEmptyString(filterValue)) {
+        if (!CONTAINS_DIGIT.test(filterValue)) {
           return;
         }
 
@@ -1640,7 +1732,7 @@ const buildDirectFieldGqlOperationFilter = ({
     case 'BOOLEAN': {
       return {
         [fieldMetadataItem.name]: {
-          eq: recordFilter.value === 'true',
+          eq: lenientBooleanFilterValueSchema.parse(recordFilter.value),
         } as BooleanFilter,
       };
     }

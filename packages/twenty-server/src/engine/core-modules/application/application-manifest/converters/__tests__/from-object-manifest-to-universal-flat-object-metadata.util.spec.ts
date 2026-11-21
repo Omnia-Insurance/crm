@@ -1,4 +1,7 @@
-import { type ObjectManifest } from 'twenty-shared/application';
+import {
+  type ObjectManifest,
+  type ObjectPermissionAction,
+} from 'twenty-shared/application';
 
 import { fromObjectManifestToUniversalFlatObjectMetadata } from 'src/engine/core-modules/application/application-manifest/converters/from-object-manifest-to-universal-flat-object-metadata.util';
 
@@ -57,6 +60,83 @@ describe('fromObjectManifestToUniversalFlatObjectMetadata', () => {
 
       expect(result.isUICreatable).toBe(false);
       expect(result.isUIEditable).toBe(true);
+    });
+  });
+
+  describe('disabledObjectPermissionActions', () => {
+    it.each<[ObjectPermissionAction[]]>([[[]], [['canDestroyObjectRecords']]])(
+      'keeps an explicit value %j',
+      (disabledObjectPermissionActions) => {
+        const result = fromObjectManifestToUniversalFlatObjectMetadata({
+          objectManifest: buildObjectManifest({
+            disabledObjectPermissionActions,
+          }),
+          applicationUniversalIdentifier: APP_UID,
+          now: NOW,
+        });
+
+        expect(result.disabledObjectPermissionActions).toEqual(
+          disabledObjectPermissionActions,
+        );
+      },
+    );
+
+    it('disables create along with update', () => {
+      const result = fromObjectManifestToUniversalFlatObjectMetadata({
+        objectManifest: buildObjectManifest({
+          disabledObjectPermissionActions: ['canUpdateObjectRecords'],
+        }),
+        applicationUniversalIdentifier: APP_UID,
+        now: NOW,
+      });
+
+      expect(result.disabledObjectPermissionActions).toEqual([
+        'canUpdateObjectRecords',
+        'canCreateObjectRecords',
+      ]);
+    });
+
+    it('is null when omitted', () => {
+      const result = fromObjectManifestToUniversalFlatObjectMetadata({
+        objectManifest: buildObjectManifest({}),
+        applicationUniversalIdentifier: APP_UID,
+        now: NOW,
+      });
+
+      expect(result.disabledObjectPermissionActions).toBeNull();
+    });
+  });
+
+  describe('fidelity properties', () => {
+    it('should default color, label sync and image identifier', () => {
+      const result = fromObjectManifestToUniversalFlatObjectMetadata({
+        objectManifest: buildObjectManifest({}),
+        applicationUniversalIdentifier: APP_UID,
+        now: NOW,
+      });
+
+      expect(result.color).toBeNull();
+      expect(result.isLabelSyncedWithName).toBe(false);
+      expect(result.imageIdentifierFieldMetadataUniversalIdentifier).toBeNull();
+    });
+
+    it('should respect explicit color, label sync and image identifier', () => {
+      const result = fromObjectManifestToUniversalFlatObjectMetadata({
+        objectManifest: buildObjectManifest({
+          color: 'blue',
+          isLabelSyncedWithName: true,
+          imageIdentifierFieldMetadataUniversalIdentifier:
+            'image-field-universal-identifier',
+        }),
+        applicationUniversalIdentifier: APP_UID,
+        now: NOW,
+      });
+
+      expect(result.color).toBe('blue');
+      expect(result.isLabelSyncedWithName).toBe(true);
+      expect(result.imageIdentifierFieldMetadataUniversalIdentifier).toBe(
+        'image-field-universal-identifier',
+      );
     });
   });
 });

@@ -5,7 +5,7 @@ export class AddColorToObjectMetadata1773655278357 implements MigrationInterface
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
-      `ALTER TABLE "core"."objectMetadata" ADD COLUMN IF NOT EXISTS "color" text`,
+      `ALTER TABLE "core"."objectMetadata" ADD "color" text`,
     );
   }
 

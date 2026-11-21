@@ -1,32 +1,34 @@
-import { useSidePanelWorkflowNavigation } from '@/side-panel/pages/workflow/hooks/useSidePanelWorkflowNavigation';
-import { useSidePanelWorkflowIdOrThrow } from '@/side-panel/pages/workflow/hooks/useSidePanelWorkflowIdOrThrow';
+import { ListItemIconContainer } from '@/ui/navigation/list-item/components/ListItemIconContainer';
 import { useFilteredObjectMetadataItems } from '@/object-metadata/hooks/useFilteredObjectMetadataItems';
+import { useSidePanelWorkflowIdOrThrow } from '@/side-panel/pages/workflow/hooks/useSidePanelWorkflowIdOrThrow';
+import { useSidePanelWorkflowNavigation } from '@/side-panel/pages/workflow/hooks/useSidePanelWorkflowNavigation';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
 import { useFlowOrThrow } from '@/workflow/hooks/useFlowOrThrow';
 import {
   type WorkflowTrigger,
   type WorkflowTriggerType,
 } from '@/workflow/types/Workflow';
+import { getWorkflowStepDisplayName } from '@/workflow/utils/getWorkflowStepDisplayName';
 import { workflowSelectedNodeComponentState } from '@/workflow/workflow-diagram/states/workflowSelectedNodeComponentState';
 import { SidePanelStepListContainer } from '@/workflow/workflow-steps/components/SidePanelWorkflowSelectStepContainer';
 import { SidePanelWorkflowSelectStepTitle } from '@/workflow/workflow-steps/components/SidePanelWorkflowSelectStepTitle';
 import { DATABASE_TRIGGER_TYPES } from '@/workflow/workflow-trigger/constants/DatabaseTriggerTypes';
 import { OTHER_TRIGGER_TYPES } from '@/workflow/workflow-trigger/constants/OtherTriggerTypes';
-import { useUpdateWorkflowVersionTrigger } from '@/workflow/workflow-trigger/hooks/useUpdateWorkflowVersionTrigger';
+import { useUpdateTrigger } from '@/workflow/workflow-trigger/hooks/useUpdateTrigger';
 import { getTriggerDefaultDefinition } from '@/workflow/workflow-trigger/utils/getTriggerDefaultDefinition';
-import { t } from '@lingui/core/macro';
 import { isDefined } from 'twenty-shared/utils';
 import { TRIGGER_STEP_ID } from 'twenty-shared/workflow';
-import { useIcons } from 'twenty-ui/icon';
-import { useContext } from 'react';
-import { MenuItem } from 'twenty-ui/navigation';
-import { ThemeContext } from 'twenty-ui/theme-constants';
+import { ListItemButton } from 'twenty-ui/components/navigation';
+import { useIcons } from 'twenty-ui/icon/provider';
+import { useTheme } from 'twenty-ui/theme';
+import { useLingui } from '@lingui/react/macro';
 
 export const SidePanelWorkflowSelectTriggerTypeContent = () => {
-  const { theme } = useContext(ThemeContext);
+  const { t } = useLingui();
+  const theme = useTheme();
   const { getIcon } = useIcons();
   const workflowId = useSidePanelWorkflowIdOrThrow();
-  const { updateTrigger } = useUpdateWorkflowVersionTrigger();
+  const { updateTriggerNow } = useUpdateTrigger();
 
   const { activeNonSystemObjectMetadataItems } =
     useFilteredObjectMetadataItems();
@@ -61,16 +63,16 @@ export const SidePanelWorkflowSelectTriggerTypeContent = () => {
         };
       }
 
-      await updateTrigger(updatedTrigger);
+      await updateTriggerNow(updatedTrigger);
 
       setWorkflowSelectedNode(TRIGGER_STEP_ID);
 
-      openWorkflowEditStepInSidePanel(
+      openWorkflowEditStepInSidePanel({
         workflowId,
-        defaultLabel,
-        getIcon(icon),
-        TRIGGER_STEP_ID,
-      );
+        title: getWorkflowStepDisplayName({ name: defaultLabel, type }),
+        icon: getIcon(icon),
+        stepId: TRIGGER_STEP_ID,
+      });
     };
   };
 
@@ -82,13 +84,20 @@ export const SidePanelWorkflowSelectTriggerTypeContent = () => {
       {DATABASE_TRIGGER_TYPES.map((action) => {
         const Icon = getIcon(action.icon);
         return (
-          <MenuItem
-            withIconContainer={true}
+          <ListItemButton
             key={action.defaultLabel}
-            LeftIcon={() => <Icon color={theme.color.blue} size={16} />}
-            text={action.defaultLabel}
+            startIcon={
+              <ListItemIconContainer>
+                <Icon color={theme.color.blue} size={16} />
+              </ListItemIconContainer>
+            }
             onClick={handleTriggerTypeClick(action)}
-          />
+          >
+            {getWorkflowStepDisplayName({
+              name: action.defaultLabel,
+              type: action.type,
+            })}
+          </ListItemButton>
         );
       })}
 
@@ -98,13 +107,20 @@ export const SidePanelWorkflowSelectTriggerTypeContent = () => {
       {OTHER_TRIGGER_TYPES.map((action) => {
         const Icon = getIcon(action.icon);
         return (
-          <MenuItem
-            withIconContainer={true}
+          <ListItemButton
             key={action.defaultLabel}
-            LeftIcon={() => <Icon color={theme.color.purple} size={16} />}
-            text={action.defaultLabel}
+            startIcon={
+              <ListItemIconContainer>
+                <Icon color={theme.color.purple} size={16} />
+              </ListItemIconContainer>
+            }
             onClick={handleTriggerTypeClick(action)}
-          />
+          >
+            {getWorkflowStepDisplayName({
+              name: action.defaultLabel,
+              type: action.type,
+            })}
+          </ListItemButton>
         );
       })}
     </SidePanelStepListContainer>

@@ -49,9 +49,7 @@ describe('extractValueByPath', () => {
   it('should handle deeply nested paths with arrays', () => {
     const data = {
       data: {
-        entries: [
-          { attributes: { firstName: 'John', lastName: 'Doe' } },
-        ],
+        entries: [{ attributes: { firstName: 'John', lastName: 'Doe' } }],
       },
     };
 

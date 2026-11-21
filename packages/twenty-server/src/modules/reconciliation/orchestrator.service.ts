@@ -11,6 +11,7 @@ import {
   type ReconciliationRecord,
   type ReconciliationStatus,
 } from 'src/modules/reconciliation/types/reconciliation';
+import { buildReconciliationJobOptions } from 'src/modules/reconciliation/utils/build-reconciliation-job-options.util';
 
 @Injectable()
 export class ReconciliationOrchestratorService {
@@ -54,10 +55,15 @@ export class ReconciliationOrchestratorService {
       },
     );
 
-    await this.queue.add<ReconciliationJobData>('reconciliation-parse', {
-      workspaceId,
-      reconciliationId,
-    });
+    await this.queue.add<ReconciliationJobData>(
+      'reconciliation-parse',
+      { workspaceId, reconciliationId },
+      buildReconciliationJobOptions({
+        workspaceId,
+        reconciliationId,
+        phase: 'parse',
+      }),
+    );
 
     this.logger.log(
       `Enqueued parse job for reconciliation ${reconciliationId}`,
@@ -93,10 +99,15 @@ export class ReconciliationOrchestratorService {
       },
     );
 
-    await this.queue.add<ReconciliationJobData>('reconciliation-match', {
-      workspaceId,
-      reconciliationId,
-    });
+    await this.queue.add<ReconciliationJobData>(
+      'reconciliation-match',
+      { workspaceId, reconciliationId },
+      buildReconciliationJobOptions({
+        workspaceId,
+        reconciliationId,
+        phase: 'match',
+      }),
+    );
 
     this.logger.log(
       `Enqueued match job for reconciliation ${reconciliationId}`,

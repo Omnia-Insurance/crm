@@ -5,10 +5,11 @@ import { RelationType } from 'src/engine/metadata-modules/field-metadata/interfa
 import { computeMorphOrRelationFieldJoinColumnName } from 'src/engine/metadata-modules/field-metadata/utils/compute-morph-or-relation-field-join-column-name.util';
 import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
 import { findFlatEntityByIdInFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps.util';
+import { findFlatEntityByIdInFlatEntityMapsOrThrow } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps-or-throw.util';
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
 import { isFlatFieldMetadataOfType } from 'src/engine/metadata-modules/flat-field-metadata/utils/is-flat-field-metadata-of-type.util';
-import { resolveRelationFromFlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/utils/resolve-relation-from-flat-field-metadata.util';
-import { getFlatFieldsFromFlatObjectMetadata } from 'src/engine/api/graphql/workspace-schema-builder/utils/get-flat-fields-for-flat-object-metadata.util';
+import { isMorphOrRelationFlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/utils/is-morph-or-relation-flat-field-metadata.util';
+import { getFlatFieldsFromFlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/utils/get-flat-fields-for-flat-object-metadata.util';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 import { buildObjectIdByNameMaps } from 'src/engine/metadata-modules/flat-object-metadata/utils/build-object-id-by-name-maps.util';
 
@@ -74,55 +75,52 @@ export const findRelationPathsToPerson = ({
           continue;
         }
 
-        const relation = resolveRelationFromFlatFieldMetadata({
-          sourceFlatFieldMetadata: field,
-          flatFieldMetadataMaps,
-          flatObjectMetadataMaps,
-        });
+        const targetFlatFieldMetadata =
+          findFlatEntityByIdInFlatEntityMapsOrThrow({
+            flatEntityId: field.relationTargetFieldMetadataId,
+            flatEntityMaps: flatFieldMetadataMaps,
+          });
 
-        if (!isDefined(relation)) {
+        if (!isMorphOrRelationFlatFieldMetadata(targetFlatFieldMetadata)) {
           continue;
         }
 
-        const joinColumnOwner =
-          relation.type === RelationType.MANY_TO_ONE
-            ? {
-                object: relation.sourceObjectMetadata,
-                field: relation.sourceFieldMetadata,
-              }
-            : {
-                object: relation.targetObjectMetadata,
-                field: relation.targetFieldMetadata,
-              };
+        const targetObjectMetadata = findFlatEntityByIdInFlatEntityMapsOrThrow({
+          flatEntityId: targetFlatFieldMetadata.objectMetadataId,
+          flatEntityMaps: flatObjectMetadataMaps,
+        });
+
+        const isManyToOne =
+          field.settings.relationType === RelationType.MANY_TO_ONE;
 
         const nextPath: RelationPathToPerson = [
           ...path,
           {
-            direction: relation.type,
-            queryObjectNameSingular: joinColumnOwner.object.nameSingular,
+            direction: field.settings.relationType,
+            queryObjectNameSingular: isManyToOne
+              ? sourceObject.nameSingular
+              : targetObjectMetadata.nameSingular,
             joinColumnName: computeMorphOrRelationFieldJoinColumnName({
-              name: joinColumnOwner.field.name,
+              name: isManyToOne ? field.name : targetFlatFieldMetadata.name,
             }),
           },
         ];
 
-        if (
-          relation.targetObjectMetadata.nameSingular ===
-          PERSON_OBJECT_NAME_SINGULAR
-        ) {
+        if (targetObjectMetadata.nameSingular === PERSON_OBJECT_NAME_SINGULAR) {
           pathsToPerson.push(nextPath);
           continue;
         }
 
-        if (isSystemObjectMetadata(relation.targetObjectMetadata)) {
+        if (isSystemObjectMetadata(targetObjectMetadata)) {
           continue;
         }
 
-        const targetObjectId = relation.targetObjectMetadata.id;
-
-        if (!visitedObjectIds.has(targetObjectId)) {
-          objectIdsReachedThisDepth.add(targetObjectId);
-          nextFrontier.push({ objectId: targetObjectId, path: nextPath });
+        if (!visitedObjectIds.has(targetObjectMetadata.id)) {
+          objectIdsReachedThisDepth.add(targetObjectMetadata.id);
+          nextFrontier.push({
+            objectId: targetObjectMetadata.id,
+            path: nextPath,
+          });
         }
       }
     }

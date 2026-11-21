@@ -1,0 +1,69 @@
+import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
+import { getToastOptionsFromError } from '@/error-handler/utils/getToastOptionsFromError';
+import { SettingsOptionCardContentSwitch } from '@/settings/components/SettingsOptions/SettingsOptionCardContentSwitch';
+import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
+
+import { useMutation } from '@apollo/client/react';
+import { useToast } from 'twenty-ui/components/feedback';
+import { IconLifebuoy } from 'twenty-ui/icon';
+import { UpdateWorkspaceDocument } from '~/generated-metadata/graphql';
+import { doNotTranslate } from 'twenty-shared/i18n';
+import { useLingui } from '@lingui/react/macro';
+
+export const TwoFactorAuthenticationSwitch = () => {
+  const { t } = useLingui();
+  const { enqueueToast } = useToast();
+  const [currentWorkspace, setCurrentWorkspace] = useAtomState(
+    currentWorkspaceState,
+  );
+
+  const [updateWorkspace] = useMutation(UpdateWorkspaceDocument);
+
+  const handleChange = async () => {
+    if (!currentWorkspace?.id) {
+      throw new Error(doNotTranslate('User is not logged in'));
+    }
+
+    const newEnforceValue = !currentWorkspace.isTwoFactorAuthenticationEnforced;
+
+    try {
+      setCurrentWorkspace({
+        ...currentWorkspace,
+        isTwoFactorAuthenticationEnforced: newEnforceValue,
+      });
+
+      await updateWorkspace({
+        variables: {
+          input: {
+            isTwoFactorAuthenticationEnforced: newEnforceValue,
+          },
+        },
+      });
+    } catch (err: any) {
+      setCurrentWorkspace({
+        ...currentWorkspace,
+        isTwoFactorAuthenticationEnforced: !newEnforceValue,
+      });
+      enqueueToast(
+        getToastOptionsFromError({
+          error: err,
+          children: err?.message,
+        }),
+      );
+    }
+  };
+
+  return (
+    <>
+      {currentWorkspace && (
+        <SettingsOptionCardContentSwitch
+          Icon={IconLifebuoy}
+          title={t`Two Factor Authentication`}
+          description={t`Enforce two-step verification for every user login.`}
+          checked={currentWorkspace.isTwoFactorAuthenticationEnforced}
+          onChange={handleChange}
+        />
+      )}
+    </>
+  );
+};

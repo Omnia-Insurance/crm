@@ -5,8 +5,10 @@ import { type FieldMultiSelectValue } from '@/object-record/record-field/ui/type
 import { isFieldRelation } from '@/object-record/record-field/ui/types/guards/isFieldRelation';
 import { shouldDisplayFormField } from '@/workflow/workflow-steps/workflow-actions/utils/shouldDisplayFormField';
 import { isDefined } from 'twenty-shared/utils';
-import { useIcons } from 'twenty-ui/icon';
+import { doNotTranslate } from 'twenty-shared/i18n';
+import { useIcons } from 'twenty-ui/icon/provider';
 import { RelationType } from '~/generated-metadata/graphql';
+import { useLingui } from '@lingui/react/macro';
 
 export const WorkflowFieldsMultiSelect = ({
   label,
@@ -27,6 +29,7 @@ export const WorkflowFieldsMultiSelect = ({
   actionType: 'UPDATE_RECORD' | 'UPSERT_RECORD' | 'DATABASE_EVENT';
   hint?: string;
 }) => {
+  const { t } = useLingui();
   const { getIcon } = useIcons();
 
   const inlineFieldMetadataItems = objectMetadataItem?.fields
@@ -61,7 +64,7 @@ export const WorkflowFieldsMultiSelect = ({
 
         if (isIdField && actionType === 'UPSERT_RECORD') {
           return {
-            label: 'ID',
+            label: t`ID`,
             value: field.metadata.fieldName,
             Icon: getIcon('IconId'),
             color: 'gray',
@@ -73,7 +76,7 @@ export const WorkflowFieldsMultiSelect = ({
           field.metadata.relationType === RelationType.MANY_TO_ONE;
 
         const value = isFieldRelationManyToOne
-          ? `${field.metadata.fieldName}Id`
+          ? doNotTranslate(`${field.metadata.fieldName}Id`)
           : field.metadata.fieldName;
 
         return {

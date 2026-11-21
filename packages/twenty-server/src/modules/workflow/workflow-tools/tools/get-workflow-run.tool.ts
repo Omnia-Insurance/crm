@@ -2,17 +2,13 @@ import { isDefined } from 'twenty-shared/utils';
 import { StepStatus } from 'twenty-shared/workflow';
 import { z } from 'zod';
 
-import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
-import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { MAX_INLINE_TOOL_OUTPUT_BYTES } from 'src/engine/core-modules/tool/tools/output-navigation-tool/constants/max-inline-tool-output-bytes.constant';
+import { jsonPreview } from 'src/engine/core-modules/tool/utils/json-preview.util';
 import { type WorkflowRunWorkspaceEntity } from 'src/modules/workflow/common/standard-objects/workflow-run.workspace-entity';
 import {
   type WorkflowToolContext,
   type WorkflowToolDependencies,
 } from 'src/modules/workflow/workflow-tools/types/workflow-tool-dependencies.type';
-
-type GetWorkflowRunToolContext = WorkflowToolContext & {
-  rolePermissionConfig: RolePermissionConfig;
-};
 
 const getWorkflowRunSchema = z.object({
   workflowRunId: z.uuid().describe('The UUID of the workflow run to inspect'),
@@ -25,25 +21,31 @@ const FAILED_STEP_STATUSES: StepStatus[] = [
   StepStatus.FAILED_SAFELY,
 ];
 
+const boundStepOutput = (output: unknown) =>
+  Buffer.byteLength(JSON.stringify(output) ?? '') > MAX_INLINE_TOOL_OUTPUT_BYTES
+    ? { output: jsonPreview(output), isOutputTruncated: true }
+    : { output };
+
 export const createGetWorkflowRunTool = (
-  deps: Pick<WorkflowToolDependencies, 'globalWorkspaceOrmManager'>,
-  context: GetWorkflowRunToolContext,
+  deps: {
+    workspaceOrmManager: Pick<
+      WorkflowToolDependencies['workspaceOrmManager'],
+      'executeInWorkspaceContext' | 'getRepository'
+    >;
+  },
+  context: WorkflowToolContext,
 ) => ({
   name: 'get_workflow_run' as const,
   description:
-    'Get the details of a single workflow run for troubleshooting. Returns the overall status, the run-level error, the status and error of each step, and the execution logs of the steps that failed. Use this to diagnose why a workflow run failed or behaved unexpectedly.',
+    'Get the details of a single workflow run for troubleshooting. Returns the overall status, the run-level error, the status, output (a preview when large) and error of each step, and the execution logs of the steps that failed. Use this to diagnose why a workflow run failed or behaved unexpectedly.',
   inputSchema: getWorkflowRunSchema,
   execute: async (parameters: GetWorkflowRunInput) => {
     try {
-      const authContext = buildSystemAuthContext(context.workspaceId);
-
-      return await deps.globalWorkspaceOrmManager.executeInWorkspaceContext(
+      return await deps.workspaceOrmManager.executeInWorkspaceContext(
         async () => {
           const workflowRunRepository =
-            await deps.globalWorkspaceOrmManager.getRepository<WorkflowRunWorkspaceEntity>(
-              context.workspaceId,
+            deps.workspaceOrmManager.getRepository<WorkflowRunWorkspaceEntity>(
               'workflowRun',
-              context.rolePermissionConfig,
             );
 
           const workflowRun = await workflowRunRepository.findOne({
@@ -67,6 +69,7 @@ export const createGetWorkflowRunTool = (
               name: step.name,
               type: step.type,
               status: stepInfo?.status,
+              ...boundStepOutput(stepInfo?.result),
               error: stepInfo?.error,
             };
           });
@@ -93,14 +96,14 @@ export const createGetWorkflowRunTool = (
               startedAt: workflowRun.startedAt,
               endedAt: workflowRun.endedAt,
               enqueuedAt: workflowRun.enqueuedAt,
-              workflowId: workflowRun.workflowId,
-              workflowVersionId: workflowRun.workflowVersionId,
+              coreWorkflowId: workflowRun.coreWorkflowId,
+              coreWorkflowVersionId: workflowRun.coreWorkflowVersionId,
               steps,
               failedStepLogs,
             },
           };
         },
-        authContext,
+        context.authContext,
       );
     } catch (error) {
       return {

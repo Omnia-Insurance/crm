@@ -1,0 +1,232 @@
+import { Inject, Injectable, Logger } from '@nestjs/common';
+
+import { existsSync, readFileSync } from 'fs';
+import { join } from 'path';
+import { Readable } from 'stream';
+import { type ReadableStream } from 'stream/web';
+
+import { type NextFunction, type Request, type Response } from 'express';
+import { type IframeMediaPermission } from 'twenty-shared/types';
+import { isDefined, normalizeIframeOrigin } from 'twenty-shared/utils';
+
+import { toIframeMediaPermissions } from 'src/engine/core-modules/application/utils/to-iframe-media-permissions.util';
+
+import { ClientConfigService } from 'src/engine/core-modules/client-config/services/client-config.service';
+import { WorkspaceDomainsService } from 'src/engine/core-modules/domain/workspace-domains/services/workspace-domains.service';
+import { DOCUMENT_CONTENT_SECURITY_POLICY_DIRECTIVES } from 'src/engine/core-modules/frontend/constants/document-content-security-policy-directives.constant';
+import { buildIframeMediaPermissionsPolicy } from 'src/engine/core-modules/frontend/utils/build-iframe-media-permissions-policy.util';
+import { fitIframeMediaPermissionsToPolicySizeLimit } from 'src/engine/core-modules/frontend/utils/fit-iframe-media-permissions-to-policy-size-limit.util';
+import { getActiveApplicationIframeMediaPermissions } from 'src/engine/core-modules/frontend/utils/get-active-application-iframe-media-permissions.util';
+import { isFrontendDocumentRequest } from 'src/engine/core-modules/frontend/utils/is-frontend-document-request.util';
+import { renderFrontendHtml } from 'src/engine/core-modules/frontend/utils/render-frontend-html.util';
+import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
+import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { WorkspaceNotFoundDefaultError } from 'src/engine/core-modules/workspace/workspace.exception';
+import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
+import { getRequestBaseUrl } from 'src/utils/get-request-base-url.util';
+import { streamToBuffer } from 'src/utils/stream-to-buffer';
+
+const MAX_FRONTEND_HTML_SIZE_BYTES = 1024 * 1024;
+
+@Injectable()
+export class FrontendService {
+  private readonly logger = new Logger(FrontendService.name);
+  private readonly template: string | undefined;
+  private readonly indexUrl: string | undefined;
+
+  constructor(
+    private readonly clientConfigService: ClientConfigService,
+    private readonly workspaceDomainsService: WorkspaceDomainsService,
+    private readonly workspaceCacheService: WorkspaceCacheService,
+    @Inject('FRONTEND_PATH') readonly frontPath: string,
+    twentyConfigService: TwentyConfigService,
+  ) {
+    this.indexUrl = twentyConfigService.get('FRONTEND_INDEX_URL');
+
+    if (isDefined(this.indexUrl)) {
+      return;
+    }
+
+    const indexPath = join(this.frontPath, 'index.html');
+
+    if (existsSync(indexPath)) {
+      this.template = readFileSync(indexPath, 'utf8');
+
+      this.validateTemplate(this.template);
+    }
+  }
+
+  get isEnabled(): boolean {
+    return isDefined(this.template) || isDefined(this.indexUrl);
+  }
+
+  private validateTemplate(template: string): void {
+    if (!template.includes('</head>')) {
+      throw new Error('Frontend index.html must contain a closing head tag');
+    }
+  }
+
+  private async getTemplate(): Promise<string> {
+    if (!isDefined(this.indexUrl)) {
+      if (!isDefined(this.template)) {
+        throw new Error('Frontend HTML is not configured');
+      }
+
+      return this.template;
+    }
+
+    const response = await fetch(this.indexUrl, {
+      signal: AbortSignal.timeout(5_000),
+      redirect: 'error',
+    });
+
+    if (!response.ok) {
+      await response.body?.cancel();
+      throw new Error(`Unable to fetch frontend HTML: HTTP ${response.status}`);
+    }
+
+    if (!isDefined(response.body)) {
+      throw new Error('Frontend index.html must have a response body');
+    }
+
+    const template = (
+      await streamToBuffer(
+        Readable.fromWeb(response.body as ReadableStream<Uint8Array>),
+        MAX_FRONTEND_HTML_SIZE_BYTES,
+      )
+    ).toString('utf8');
+
+    this.validateTemplate(template);
+
+    return template;
+  }
+
+  private async getDocumentIframeMediaPermissions(
+    workspace: WorkspaceEntity | undefined,
+  ): Promise<IframeMediaPermission[]> {
+    if (!isDefined(workspace)) {
+      return [];
+    }
+
+    const workspaceIframeMediaPermissions =
+      workspace.iframeMediaPermissions ?? [];
+
+    try {
+      const { flatApplicationMaps } =
+        await this.workspaceCacheService.getOrRecompute(workspace.id, [
+          'flatApplicationMaps',
+        ]);
+      const permissions = toIframeMediaPermissions([
+        ...workspaceIframeMediaPermissions,
+        ...getActiveApplicationIframeMediaPermissions(
+          Object.values(flatApplicationMaps.byId),
+        ),
+      ]);
+      const fittingPermissions = fitIframeMediaPermissionsToPolicySizeLimit({
+        permissions,
+        reservedPermissions: workspaceIframeMediaPermissions,
+      });
+      const hasDroppedPermissions =
+        buildIframeMediaPermissionsPolicy(fittingPermissions) !==
+        buildIframeMediaPermissionsPolicy(permissions);
+
+      if (hasDroppedPermissions) {
+        this.logger.warn(
+          `Dropped iframe media permissions over the Permissions-Policy size limit for workspace ${workspace.id}`,
+        );
+      }
+
+      return fittingPermissions;
+    } catch (error) {
+      this.logger.error(
+        `Unable to load application iframe media permissions for workspace ${workspace.id}`,
+        error,
+      );
+
+      return workspaceIframeMediaPermissions;
+    }
+  }
+
+  async serveDocument(
+    request: Request,
+    response: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    if (!this.isEnabled || !isFrontendDocumentRequest(request)) {
+      next();
+
+      return;
+    }
+
+    response.setHeader('Cache-Control', 'no-store');
+    response.setHeader('CDN-Cache-Control', 'no-store');
+    response.setHeader('Cloudflare-CDN-Cache-Control', 'no-store');
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+    response.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    response.setHeader(
+      'Permissions-Policy',
+      buildIframeMediaPermissionsPolicy([]),
+    );
+    response.setHeader(
+      'Content-Security-Policy',
+      `frame-ancestors 'self'; ${DOCUMENT_CONTENT_SECURITY_POLICY_DIRECTIVES}`,
+    );
+
+    try {
+      const { workspace, isPublicDomain } = await this.workspaceDomainsService
+        .resolveWorkspaceAndPublicDomain(getRequestBaseUrl(request))
+        .catch((error: unknown) => {
+          if (error === WorkspaceNotFoundDefaultError) {
+            return { workspace: undefined, isPublicDomain: false };
+          }
+
+          throw error;
+        });
+
+      if (isPublicDomain) {
+        response.status(404).end();
+
+        return;
+      }
+
+      const [template, clientConfig] = await Promise.all([
+        this.getTemplate(),
+        this.clientConfigService.getClientConfig(),
+      ]);
+
+      const allowedOrigins = (workspace?.allowedEmbeddingOrigins ?? [])
+        .map((origin) => normalizeIframeOrigin(origin))
+        .filter(isDefined);
+
+      const iframeMediaPermissions =
+        await this.getDocumentIframeMediaPermissions(workspace);
+
+      response.setHeader(
+        'Permissions-Policy',
+        buildIframeMediaPermissionsPolicy(iframeMediaPermissions),
+      );
+
+      if (allowedOrigins.length > 0) {
+        response.setHeader(
+          'Content-Security-Policy',
+          `frame-ancestors 'self' ${[...new Set(allowedOrigins)].join(' ')}; ${DOCUMENT_CONTENT_SECURITY_POLICY_DIRECTIVES}`,
+        );
+        response.removeHeader('X-Frame-Options');
+      }
+
+      response.type('html').end(
+        renderFrontendHtml({
+          template,
+          clientConfig,
+          iframeMediaPermissions,
+        }),
+      );
+    } catch (error) {
+      this.logger.error('Unable to serve frontend document', error);
+      response
+        .status(503)
+        .type('text')
+        .send('Unable to load Twenty. Please try again.');
+    }
+  }
+}

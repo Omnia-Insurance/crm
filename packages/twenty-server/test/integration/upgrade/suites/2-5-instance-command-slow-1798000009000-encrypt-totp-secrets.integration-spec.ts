@@ -1,3 +1,5 @@
+import { Test } from '@nestjs/testing';
+
 import { createCipheriv, createHash, randomBytes, randomUUID } from 'crypto';
 
 import { config } from 'dotenv';
@@ -7,11 +9,11 @@ import { DataSource } from 'typeorm';
 import { buildSecretEncryptionServiceFromEnv } from 'test/integration/upgrade/utils/build-secret-encryption-service.util';
 
 import { JwtTokenTypeEnum } from 'src/engine/core-modules/auth/types/jwt-token-type.enum';
-import { type JwtWrapperService } from 'src/engine/core-modules/jwt/services/jwt-wrapper.service';
+import { JwtWrapperService } from 'src/engine/core-modules/jwt/services/jwt-wrapper.service';
 import { type PlaintextString } from 'src/engine/core-modules/secret-encryption/branded-strings/plaintext-string.type';
 import { SECRET_ENCRYPTION_ENVELOPE_V2_PREFIX } from 'src/engine/core-modules/secret-encryption/constants/secret-encryption.constant';
 import { SecretEncryptionService } from 'src/engine/core-modules/secret-encryption/secret-encryption.service';
-import { SimpleSecretEncryptionUtil } from 'src/engine/core-modules/two-factor-authentication/utils/simple-secret-encryption.util';
+import { SimpleSecretEncryptionUtil } from 'src/database/commands/upgrade-version-command/2-5/utils/simple-secret-encryption.util';
 
 import { EncryptTotpSecretsSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-5/2-5-instance-command-slow-1798000009000-encrypt-totp-secrets';
 
@@ -69,20 +71,13 @@ const restoreCheckConstraint = async (
   );
 };
 
-// Stand-in for the real JwtWrapperService used by SimpleSecretEncryptionUtil.
-// Reproduces JwtWrapperService.generateAppSecret byte-for-byte so the legacy
-// CBC key derivation matches what production rows were sealed with.
-const buildJwtWrapperServiceStub = (appSecret: string): JwtWrapperService => {
-  return {
-    generateAppSecret: (
-      type: JwtTokenTypeEnum,
-      appSecretBody: string,
-    ): string =>
-      createHash('sha256')
-        .update(`${appSecret}${appSecretBody}${type}`)
-        .digest('hex'),
-  } as unknown as JwtWrapperService;
-};
+// Reproduces JwtWrapperService.generateAppSecret byte for byte so legacy CBC keys match production rows.
+const buildJwtWrapperServiceStub = (appSecret: string) => ({
+  generateAppSecret: (type: JwtTokenTypeEnum, appSecretBody: string): string =>
+    createHash('sha256')
+      .update(`${appSecret}${appSecretBody}${type}`)
+      .digest('hex'),
+});
 
 describe('2-5 slow instance command 1798000009000 - EncryptTotpSecretsSlowInstanceCommand (integration)', () => {
   let dataSource: DataSource;
@@ -130,9 +125,18 @@ describe('2-5 slow instance command 1798000009000 - EncryptTotpSecretsSlowInstan
 
     appSecret = process.env.APP_SECRET;
     secretEncryptionService = buildSecretEncryptionServiceFromEnv();
-    simpleSecretEncryptionUtil = new SimpleSecretEncryptionUtil(
-      buildJwtWrapperServiceStub(appSecret),
-    );
+
+    const module = await Test.createTestingModule({
+      providers: [
+        SimpleSecretEncryptionUtil,
+        {
+          provide: JwtWrapperService,
+          useValue: buildJwtWrapperServiceStub(appSecret),
+        },
+      ],
+    }).compile();
+
+    simpleSecretEncryptionUtil = module.get(SimpleSecretEncryptionUtil);
     command = new EncryptTotpSecretsSlowInstanceCommand(
       secretEncryptionService,
       simpleSecretEncryptionUtil,
@@ -198,9 +202,12 @@ describe('2-5 slow instance command 1798000009000 - EncryptTotpSecretsSlowInstan
 
   it('leaves enc:v2 rows untouched and is idempotent across re-runs', async () => {
     const plaintext = 'already-v2-totp-secret';
-    const preexistingV2 = secretEncryptionService.encryptVersioned(plaintext as PlaintextString, {
-      workspaceId,
-    });
+    const preexistingV2 = secretEncryptionService.encryptVersioned(
+      plaintext as PlaintextString,
+      {
+        workspaceId,
+      },
+    );
     const id = await seedRow({ secret: preexistingV2 });
 
     await command.runDataMigration(dataSource);

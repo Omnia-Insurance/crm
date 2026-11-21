@@ -1,6 +1,6 @@
 import { Logger } from '@nestjs/common';
 
-import { type Repository } from 'typeorm';
+import { UpdateResult, type Repository } from 'typeorm';
 import { EntityNotFoundError } from 'typeorm/error/EntityNotFoundError';
 import { type EntityMetadata } from 'typeorm/metadata/EntityMetadata';
 import { isDefined } from 'twenty-shared/utils';
@@ -9,6 +9,11 @@ import { type UpgradeAwareRepositoryState } from 'src/engine/twenty-orm/upgrade-
 import { UpgradeUnavailableEntityWriteException } from 'src/engine/twenty-orm/upgrade-aware/exceptions/upgrade-unavailable-entity-write.exception';
 
 const logger = new Logger('UpgradeAwareRepositoryProxy');
+
+type UpgradeAwareAvailabilityState = Pick<
+  UpgradeAwareRepositoryState,
+  'getHiddenColumnPropertyNames' | 'isEntityAvailable'
+>;
 
 type RepositoryMethodBehavior =
   | {
@@ -109,9 +114,113 @@ const METHODS_THAT_ACCEPT_FIND_OPTIONS = new Set<string>([
   'existsBy',
 ]);
 
+const stripUnavailableSelect = (
+  entityClass: Function,
+  state: UpgradeAwareAvailabilityState,
+  options: unknown,
+): unknown => {
+  if (!isDefined(options) || typeof options !== 'object') {
+    return options;
+  }
+
+  const withSelect = options as { select?: unknown };
+
+  if (!isDefined(withSelect.select)) {
+    return options;
+  }
+
+  const hiddenColumnPropertyNames =
+    state.getHiddenColumnPropertyNames(entityClass);
+
+  if (hiddenColumnPropertyNames.size === 0) {
+    return options;
+  }
+
+  if (Array.isArray(withSelect.select)) {
+    const filtered = withSelect.select.filter(
+      (propertyName) =>
+        typeof propertyName !== 'string' ||
+        !hiddenColumnPropertyNames.has(propertyName),
+    );
+
+    if (filtered.length === withSelect.select.length) {
+      return options;
+    }
+
+    return { ...withSelect, select: filtered };
+  }
+
+  if (typeof withSelect.select === 'object') {
+    const filtered = Object.fromEntries(
+      Object.entries(withSelect.select).filter(
+        ([propertyName]) => !hiddenColumnPropertyNames.has(propertyName),
+      ),
+    );
+
+    if (
+      Object.keys(filtered).length === Object.keys(withSelect.select).length
+    ) {
+      return options;
+    }
+
+    return { ...withSelect, select: filtered };
+  }
+
+  return options;
+};
+
+// A skipped update never reaches the driver, so state the no-match counts TypeORM would have filled in
+const buildSkippedUpdateResult = (): UpdateResult => {
+  const updateResult = new UpdateResult();
+
+  updateResult.raw = [];
+  updateResult.affected = 0;
+
+  return updateResult;
+};
+
+const stripUnavailableUpdateValues = (
+  entityClass: Function,
+  state: UpgradeAwareAvailabilityState,
+  values: unknown,
+): unknown => {
+  if (
+    !isDefined(values) ||
+    typeof values !== 'object' ||
+    Array.isArray(values)
+  ) {
+    return values;
+  }
+
+  const hiddenColumnPropertyNames =
+    state.getHiddenColumnPropertyNames(entityClass);
+
+  if (hiddenColumnPropertyNames.size === 0) {
+    return values;
+  }
+
+  const entries = Object.entries(values as Record<string, unknown>);
+  const keptEntries = entries.filter(
+    ([propertyName]) => !hiddenColumnPropertyNames.has(propertyName),
+  );
+
+  if (keptEntries.length === entries.length) {
+    return values;
+  }
+
+  logger.log(
+    `[upgrade-proxy] strip update values on ${entityClass.name}: ${entries
+      .filter(([propertyName]) => hiddenColumnPropertyNames.has(propertyName))
+      .map(([propertyName]) => propertyName)
+      .join(',')}`,
+  );
+
+  return Object.fromEntries(keptEntries);
+};
+
 const stripUnavailableRelations = (
   metadata: EntityMetadata,
-  state: UpgradeAwareRepositoryState,
+  state: UpgradeAwareAvailabilityState,
   options: unknown,
 ): unknown => {
   if (!isDefined(options) || typeof options !== 'object') {
@@ -155,7 +264,7 @@ const stripUnavailableRelations = (
 
 const isRelationAvailable = (
   metadata: EntityMetadata,
-  state: UpgradeAwareRepositoryState,
+  state: UpgradeAwareAvailabilityState,
   relationPropertyName: string,
 ): boolean => {
   const relation = metadata.relations.find(
@@ -196,7 +305,7 @@ export const wrapRepositoryWithUpgradeAwareProxy = <Entity extends object>({
 }: {
   repository: Repository<Entity>;
   entityClass: Function;
-  state: UpgradeAwareRepositoryState;
+  state: UpgradeAwareAvailabilityState;
 }): Repository<Entity> =>
   new Proxy(repository, {
     get(target, prop, receiver) {
@@ -238,7 +347,7 @@ const handleRepositoryMethodCall = <Entity extends object>({
   target: Repository<Entity>;
   methodName: string;
   entityClass: Function;
-  state: UpgradeAwareRepositoryState;
+  state: UpgradeAwareAvailabilityState;
   behavior: RepositoryMethodBehavior;
   args: unknown[];
 }): unknown => {
@@ -259,17 +368,54 @@ const handleRepositoryMethodCall = <Entity extends object>({
     return behavior.produceEmpty(entityClass);
   }
 
+  if (methodName === 'update' && args.length > 1) {
+    const updateValues = stripUnavailableUpdateValues(
+      entityClass,
+      state,
+      args[1],
+    );
+
+    // TypeORM rejects an empty value set, so report the no-op instead
+    if (
+      updateValues !== args[1] &&
+      Object.keys(updateValues as Record<string, unknown>).length === 0
+    ) {
+      return Promise.resolve(buildSkippedUpdateResult());
+    }
+
+    return callRepositoryMethod({
+      target,
+      methodName,
+      args: [args[0], updateValues, ...args.slice(2)],
+    });
+  }
+
   const rewrittenArgs =
     METHODS_THAT_ACCEPT_FIND_OPTIONS.has(methodName) && args.length > 0
       ? [
-          stripUnavailableRelations(target.metadata, state, args[0]),
+          stripUnavailableSelect(
+            entityClass,
+            state,
+            stripUnavailableRelations(target.metadata, state, args[0]),
+          ),
           ...args.slice(1),
         ]
       : args;
 
-  return (
+  return callRepositoryMethod({ target, methodName, args: rewrittenArgs });
+};
+
+const callRepositoryMethod = <Entity extends object>({
+  target,
+  methodName,
+  args,
+}: {
+  target: Repository<Entity>;
+  methodName: string;
+  args: unknown[];
+}): unknown =>
+  (
     target[methodName as keyof Repository<Entity>] as unknown as (
       ...callArgs: unknown[]
     ) => unknown
-  ).apply(target, rewrittenArgs);
-};
+  ).apply(target, args);

@@ -11,6 +11,7 @@ export const transformEmailsValue = (
   }
 
   let additionalEmails: string | null = value?.additionalEmails;
+  // OMNIA-CUSTOM: trim pasted/imported emails so lookups and dedup match
   const primaryEmail = isNonEmptyString(value?.primaryEmail)
     ? value.primaryEmail.trim().toLowerCase()
     : null;
@@ -23,6 +24,7 @@ export const transformEmailsValue = (
           : additionalEmails
       ) as string[];
 
+      // OMNIA-CUSTOM: same trim for additional emails
       additionalEmails = isNonEmptyArray(emailArray)
         ? JSON.stringify(emailArray.map((email) => email.trim().toLowerCase()))
         : null;

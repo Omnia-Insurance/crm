@@ -23,6 +23,7 @@ export const LinksFieldDisplay = () => {
     }
   };
 
+  // OMNIA-CUSTOM: call recordings set displayAs to 'audio' to play inline
   const displayAs = fieldDefinition.metadata.settings?.displayAs;
 
   return (

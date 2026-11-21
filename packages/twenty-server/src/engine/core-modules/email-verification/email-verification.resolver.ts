@@ -12,8 +12,10 @@ import { ResolverValidationPipe } from 'src/engine/core-modules/graphql/pipes/re
 import { I18nContext } from 'src/engine/core-modules/i18n/types/i18n-context.type';
 import { NoPermissionGuard } from 'src/engine/guards/no-permission.guard';
 import { PublicEndpointGuard } from 'src/engine/guards/public-endpoint.guard';
+import { AllowSuspendedWorkspace } from 'src/engine/decorators/auth/allow-suspended-workspace.decorator';
 
 @MetadataResolver()
+@AllowSuspendedWorkspace()
 @UsePipes(ResolverValidationPipe)
 @UseFilters(
   EmailVerificationExceptionFilter,
@@ -39,10 +41,12 @@ export class EmailVerificationResolver {
         origin,
       );
 
-    return await this.emailVerificationService.resendEmailVerificationToken(
-      resendEmailVerificationTokenInput.email,
+    return await this.emailVerificationService.resendEmailVerificationToken({
+      email: resendEmailVerificationTokenInput.email,
       workspace,
-      context.req.locale,
-    );
+      locale: context.req.locale,
+      affiliatePartnerName:
+        resendEmailVerificationTokenInput.affiliatePartnerName,
+    });
   }
 }

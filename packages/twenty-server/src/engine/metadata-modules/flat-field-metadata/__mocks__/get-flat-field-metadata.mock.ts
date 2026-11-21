@@ -17,6 +17,7 @@ export const getFlatFieldMetadataMock = <T extends FieldMetadataType>(
 
   return {
     calendarViewIds: [],
+    calendarEndViewIds: [],
     viewFilterIds: [],
     kanbanAggregateOperationViewIds: [],
     viewFieldIds: [],
@@ -25,6 +26,7 @@ export const getFlatFieldMetadataMock = <T extends FieldMetadataType>(
     mainGroupByFieldMetadataViewIds: [],
     updatedAt: createdAt,
     defaultValue: null,
+    disabledFieldPermissionActions: null,
     options: null,
     morphId: null,
     settings: null,
@@ -37,11 +39,14 @@ export const getFlatFieldMetadataMock = <T extends FieldMetadataType>(
     label: 'flat field metadata label',
     isNullable: true,
     isUnique: false,
+    isSearchable: false,
+    isAuditLogged: true,
+    // OMNIA-CUSTOM: soft required rule (contract C5)
     requiredCondition: null,
     isUIEditable: true,
     isLabelSyncedWithName: false,
     isSystem: false,
-    standardOverrides: null,
+    overrides: null,
     workspaceId: faker.string.uuid(),
     applicationId: faker.string.uuid(),
     relationTargetFieldMetadataId: null,
@@ -55,11 +60,20 @@ export const getFlatFieldMetadataMock = <T extends FieldMetadataType>(
     fieldPermissionUniversalIdentifiers: [],
     kanbanAggregateOperationViewUniversalIdentifiers: [],
     calendarViewUniversalIdentifiers: [],
+    calendarEndViewUniversalIdentifiers: [],
     mainGroupByFieldMetadataViewUniversalIdentifiers: [],
     viewSortIds: [],
     viewSortUniversalIdentifiers: [],
     searchFieldMetadataIds: [],
     searchFieldMetadataUniversalIdentifiers: [],
+    fieldMetadataOptionIds: [],
+    rowLevelPermissionPredicateIds: [],
+    relationRowLevelPermissionPredicateIds: [],
+    workspaceMemberRowLevelPermissionPredicateIds: [],
+    fieldMetadataOptionUniversalIdentifiers: [],
+    rowLevelPermissionPredicateUniversalIdentifiers: [],
+    relationRowLevelPermissionPredicateUniversalIdentifiers: [],
+    workspaceMemberRowLevelPermissionPredicateUniversalIdentifiers: [],
     universalSettings: null,
     ...overrides,
   };
@@ -69,7 +83,7 @@ export const getStandardFlatFieldMetadataMock = (
   overrides: Omit<FlatFieldMetadataOverrides, 'isCustom' | 'isSystem'>,
 ) => {
   return getFlatFieldMetadataMock({
-    standardOverrides: {},
+    overrides: {},
     isSystem: true,
     ...overrides,
   });

@@ -6,12 +6,10 @@ import { updateLogicFunctionSource } from 'test/integration/metadata/suites/logi
 import { LogicFunctionExecutionStatus } from 'src/engine/metadata-modules/logic-function/dtos/logic-function-execution-result.dto';
 import { LogicFunctionExecutionMode } from 'src/engine/metadata-modules/logic-function/logic-function.entity';
 
-// Default template function code that matches the expected behavior
 const DEFAULT_TEMPLATE_FUNCTION_CODE = `export const main = async (params: { a: string; b: number }): Promise<object> => {
   return { message: \`Toto: \${params.a} and \${params.b}\` };
 };`;
 
-// Test function using external packages from default layer (lodash.groupby)
 const EXTERNAL_PACKAGES_FUNCTION_CODE = `import groupBy from 'lodash.groupby';
 
 export const main = async (params: { items: Array<{ category: string; name: string }> }): Promise<object> => {
@@ -22,7 +20,6 @@ export const main = async (params: { items: Array<{ category: string; name: stri
   };
 };`;
 
-// Test function that throws an error
 const ERROR_FUNCTION_CODE = `export const main = async (params: { shouldFail: boolean }): Promise<object> => {
   if (params.shouldFail) {
     throw new Error('Intentional test error');
@@ -30,11 +27,37 @@ const ERROR_FUNCTION_CODE = `export const main = async (params: { shouldFail: bo
   return { success: true };
 };`;
 
+const RUNTIME_FUNCTION_CODE = `import { execSync } from 'node:child_process';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+const attempt = (operation: () => unknown): string => {
+  try {
+    operation();
+
+    return 'allowed';
+  } catch (error) {
+    return error instanceof Error && 'code' in error
+      ? String(error.code)
+      : 'failed';
+  }
+};
+
+export const main = async (): Promise<object> => ({
+  hasServerVariables: 'PG_DATABASE_URL' in process.env,
+  hasApplicationId: 'APPLICATION_ID' in process.env,
+  writeTemporaryFile: attempt(() =>
+    writeFileSync(join(tmpdir(), 'file.txt'), 'content'),
+  ),
+  readServerFile: attempt(() => readFileSync('/etc/hosts')),
+  spawnProcess: attempt(() => execSync('true')),
+});`;
+
 describe('Logic Function Execution', () => {
   const createdFunctionIds: string[] = [];
 
   afterAll(async () => {
-    // Clean up all created functions
     for (const functionId of createdFunctionIds) {
       try {
         await deleteLogicFunction({
@@ -48,7 +71,6 @@ describe('Logic Function Execution', () => {
   });
 
   it('should execute the default logic function template', async () => {
-    // Create the function with default template code
     const { data: createData } = await createOneLogicFunction({
       input: {
         name: 'Test Default Function',
@@ -97,7 +119,6 @@ describe('Logic Function Execution', () => {
   });
 
   it('should execute a function with external packages (lodash.groupby)', async () => {
-    // Create the function with the external packages code
     const { data: createData } = await createOneLogicFunction({
       input: {
         name: 'External Packages Test',
@@ -120,7 +141,6 @@ describe('Logic Function Execution', () => {
       expectToFail: false,
     });
 
-    // Execute the function with items to group
     const { data: executeData } = await executeLogicFunction({
       input: {
         id: functionId,
@@ -143,25 +163,56 @@ describe('Logic Function Execution', () => {
 
     expect(result?.status).toBe(LogicFunctionExecutionStatus.SUCCESS);
 
-    const data = result?.data as unknown as {
-      grouped: Record<string, Array<{ category: string; name: string }>>;
-      categories: string[];
-    };
-
-    expect(data?.grouped).toMatchObject({
-      fruit: [
-        { category: 'fruit', name: 'apple' },
-        { category: 'fruit', name: 'banana' },
-      ],
-      vegetable: [{ category: 'vegetable', name: 'carrot' }],
+    expect(result?.data).toMatchObject({
+      grouped: {
+        fruit: [
+          { category: 'fruit', name: 'apple' },
+          { category: 'fruit', name: 'banana' },
+        ],
+        vegetable: [{ category: 'vegetable', name: 'carrot' }],
+      },
+      categories: expect.arrayContaining(['fruit', 'vegetable']),
     });
-    expect(data?.categories).toEqual(
-      expect.arrayContaining(['fruit', 'vegetable']),
-    );
+  });
+
+  it('should run with the function variables and its own temporary directory', async () => {
+    const { data: createData } = await createOneLogicFunction({
+      input: {
+        name: 'Runtime Test Function',
+        source: {
+          sourceHandlerCode: RUNTIME_FUNCTION_CODE,
+          handlerName: 'main',
+        },
+      },
+      expectToFail: false,
+    });
+
+    const functionId = createData?.createOneLogicFunction?.id;
+
+    expect(functionId).toBeDefined();
+    createdFunctionIds.push(functionId);
+
+    const { data: executeData } = await executeLogicFunction({
+      input: { id: functionId, payload: {} },
+      expectToFail: false,
+    });
+
+    const result = executeData?.executeOneLogicFunction;
+
+    if (result?.status !== LogicFunctionExecutionStatus.SUCCESS) {
+      throw new Error(JSON.stringify(result?.error, null, 2));
+    }
+
+    expect(result?.data).toEqual({
+      hasServerVariables: false,
+      hasApplicationId: true,
+      writeTemporaryFile: 'allowed',
+      readServerFile: 'ERR_ACCESS_DENIED',
+      spawnProcess: 'ERR_ACCESS_DENIED',
+    });
   });
 
   it('should create logic function without source', async () => {
-    // Create the function with default template code
     const { data: createData } = await createOneLogicFunction({
       input: {
         name: 'Test Default Function',
@@ -197,7 +248,6 @@ describe('Logic Function Execution', () => {
   });
 
   it('should create logic function with source', async () => {
-    // Create the function with default template code
     const { data: createData } = await createOneLogicFunction({
       input: {
         name: 'Test Default Function',
@@ -237,7 +287,6 @@ describe('Logic Function Execution', () => {
   });
 
   it('should handle errors thrown by logic functions', async () => {
-    // Create the function with error-throwing code
     const { data: createData } = await createOneLogicFunction({
       input: {
         name: 'Error Test Function',
@@ -260,7 +309,6 @@ describe('Logic Function Execution', () => {
       expectToFail: false,
     });
 
-    // Execute with shouldFail = false (should succeed)
     const { data: successData } = await executeLogicFunction({
       input: {
         id: functionId,
@@ -276,7 +324,6 @@ describe('Logic Function Execution', () => {
       success: true,
     });
 
-    // Execute with shouldFail = true (should return error status)
     const { data: errorData } = await executeLogicFunction({
       input: {
         id: functionId,
@@ -289,10 +336,9 @@ describe('Logic Function Execution', () => {
 
     expect(errorResult?.status).toBe(LogicFunctionExecutionStatus.ERROR);
     expect(errorResult?.error).toMatchObject({
-      errorType: 'UnhandledError',
+      errorType: 'Error',
       errorMessage: expect.stringContaining('Intentional test error'),
     });
     expect(errorResult?.data).toBeNull();
   });
-
 });

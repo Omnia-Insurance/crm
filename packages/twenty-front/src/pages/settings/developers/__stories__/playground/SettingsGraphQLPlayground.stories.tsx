@@ -1,13 +1,12 @@
-import { playgroundApiKeyState } from '@/settings/playground/states/playgroundApiKeyState';
+import { getMockedDateWithOffset } from '~/testing/utils/getMockedDateWithOffset';
+import { playgroundApiKeyState } from '@/settings/developers/states/playgroundApiKeyState';
 import { jotaiStore } from '@/ui/utilities/state/jotai/jotaiStore';
 import { type Meta, type StoryObj } from '@storybook/react-vite';
 import { action } from 'storybook/actions';
-import {
-  ComponentDecorator,
-  ComponentWithRouterDecorator,
-} from 'twenty-ui/testing';
+import { ComponentDecorator } from 'twenty-ui/testing';
 import { SettingsGraphQLPlayground } from '~/pages/settings/developers/playground/SettingsGraphQLPlayground';
 import { graphqlMocks } from '~/testing/graphqlMocks';
+import { ComponentWithRouterDecorator } from '~/testing/decorators/ComponentWithRouterDecorator';
 
 const meta: Meta<typeof SettingsGraphQLPlayground> = {
   title: 'Pages/Settings/Playground/GraphQLPlayground',
@@ -22,7 +21,7 @@ const meta: Meta<typeof SettingsGraphQLPlayground> = {
     (Story) => {
       jotaiStore.set(playgroundApiKeyState.atom, {
         token: 'test-api-key',
-        expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        expiresAt: getMockedDateWithOffset({ hours: 1 }),
       });
       return <Story />;
     },

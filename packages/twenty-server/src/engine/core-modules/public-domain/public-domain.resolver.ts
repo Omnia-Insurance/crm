@@ -7,6 +7,7 @@ import { PermissionFlagType } from 'twenty-shared/constants';
 import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
 import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
+import { ApplicationExceptionFilter } from 'src/engine/core-modules/application/application-exception-filter';
 import { DomainValidRecords } from 'src/engine/core-modules/dns-manager/dtos/domain-valid-records';
 import { DnsManagerService } from 'src/engine/core-modules/dns-manager/services/dns-manager.service';
 import { PreventNestToAutoLogGraphqlErrorsFilter } from 'src/engine/core-modules/graphql/filters/prevent-nest-to-auto-log-graphql-errors.filter';
@@ -22,18 +23,49 @@ import {
 } from 'src/engine/core-modules/public-domain/public-domain.exception';
 import { PublicDomainService } from 'src/engine/core-modules/public-domain/public-domain.service';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { ApplicationTargetArgs } from 'src/engine/decorators/auth/application-target-args.decorator';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
-import { SettingsPermissionGuard } from 'src/engine/guards/settings-permission.guard';
-import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
+import { AuthGraphqlApiExceptionFilter } from 'src/engine/core-modules/auth/filters/auth-graphql-api-exception.filter';
+import { ApplicationTargetGuard } from 'src/engine/guards/application-target.guard';
+import { AccessPolicyGuard } from 'src/engine/guards/access-policy.guard';
+import { type AccessPolicy } from 'src/engine/guards/types/access-policy.type';
 
-@UseGuards(
-  WorkspaceAuthGuard,
-  SettingsPermissionGuard(PermissionFlagType.WORKSPACE_MEMBERS),
-)
+const PUBLIC_DOMAIN_ACCESS_POLICY: AccessPolicy = {
+  authPrincipals: {
+    userSession: {
+      standard: true,
+      impersonated: true,
+      playground: true,
+      workspaceAgnostic: false,
+    },
+    apiKey: true,
+    oauthClient: true,
+    application: true,
+  },
+  requiredPermissionFlags: [PermissionFlagType.WORKSPACE_MEMBERS],
+};
+
+const PUBLIC_DOMAIN_WRITE_ACCESS_POLICY: AccessPolicy = {
+  authPrincipals: {
+    userSession: {
+      standard: true,
+      impersonated: true,
+      playground: true,
+      workspaceAgnostic: false,
+    },
+    apiKey: true,
+    oauthClient: true,
+    application: false,
+  },
+  requiredPermissionFlags: [PermissionFlagType.WORKSPACE_MEMBERS],
+};
+
 @UsePipes(ResolverValidationPipe)
 @UseFilters(
   PublicDomainExceptionFilter,
+  ApplicationExceptionFilter,
   PreventNestToAutoLogGraphqlErrorsFilter,
+  AuthGraphqlApiExceptionFilter,
 )
 @MetadataResolver()
 export class PublicDomainResolver {
@@ -45,6 +77,7 @@ export class PublicDomainResolver {
   ) {}
 
   @Query(() => [PublicDomainDTO])
+  @UseGuards(AccessPolicyGuard(PUBLIC_DOMAIN_ACCESS_POLICY))
   async findManyPublicDomains(
     @AuthWorkspace() currentWorkspace: WorkspaceEntity,
   ): Promise<PublicDomainDTO[]> {
@@ -52,8 +85,17 @@ export class PublicDomainResolver {
   }
 
   @Mutation(() => PublicDomainDTO)
+  @UseGuards(
+    AccessPolicyGuard(PUBLIC_DOMAIN_WRITE_ACCESS_POLICY),
+    ApplicationTargetGuard,
+  )
   async createPublicDomain(
-    @Args() { domain, applicationId }: CreatePublicDomainInput,
+    @ApplicationTargetArgs<CreatePublicDomainInput>({
+      kind: 'applicationId',
+      idKey: 'applicationId',
+      requireApplicationRegistrationOwnership: false,
+    })
+    { domain, applicationId }: CreatePublicDomainInput,
     @AuthWorkspace() currentWorkspace: WorkspaceEntity,
   ): Promise<PublicDomainDTO> {
     return this.publicDomainService.createPublicDomain({
@@ -64,6 +106,7 @@ export class PublicDomainResolver {
   }
 
   @Mutation(() => Boolean)
+  @UseGuards(AccessPolicyGuard(PUBLIC_DOMAIN_WRITE_ACCESS_POLICY))
   async deletePublicDomain(
     @Args() { domain }: PublicDomainInput,
     @AuthWorkspace() currentWorkspace: WorkspaceEntity,
@@ -77,6 +120,7 @@ export class PublicDomainResolver {
   }
 
   @Mutation(() => DomainValidRecords, { nullable: true })
+  @UseGuards(AccessPolicyGuard(PUBLIC_DOMAIN_ACCESS_POLICY))
   async checkPublicDomainValidRecords(
     @Args() { domain }: PublicDomainInput,
     @AuthWorkspace() workspace: WorkspaceEntity,

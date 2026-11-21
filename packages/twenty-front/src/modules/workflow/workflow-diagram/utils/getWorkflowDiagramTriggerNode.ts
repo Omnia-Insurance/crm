@@ -1,10 +1,13 @@
+import { AUTOMATICALLY_LAID_OUT_NODE_PLACEHOLDER_POSITION } from '@/workflow/workflow-diagram/constants/AutomaticallyLaidOutNodePlaceholderPosition';
 import { type WorkflowTrigger } from '@/workflow/types/Workflow';
+import { getWorkflowStepDisplayName } from '@/workflow/utils/getWorkflowStepDisplayName';
 import { splitWorkflowTriggerEventName } from '@/workflow/utils/splitWorkflowTriggerEventName';
 import { type WorkflowDiagramStepNodeData } from '@/workflow/workflow-diagram/types/WorkflowDiagram';
 import { DATABASE_TRIGGER_TYPES } from '@/workflow/workflow-trigger/constants/DatabaseTriggerTypes';
 import { getTriggerIcon } from '@/workflow/workflow-trigger/utils/getTriggerIcon';
 import { type Node } from '@xyflow/react';
 import { assertUnreachable, isDefined } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
 import { TRIGGER_STEP_ID } from 'twenty-shared/workflow';
 
 export const getWorkflowDiagramTriggerNode = ({
@@ -17,19 +20,19 @@ export const getWorkflowDiagramTriggerNode = ({
 
   switch (trigger.type) {
     case 'MANUAL': {
-      triggerDefaultLabel = 'Manual trigger';
+      triggerDefaultLabel = doNotTranslate('Manual trigger');
       triggerIcon = getTriggerIcon(trigger);
 
       break;
     }
     case 'CRON': {
-      triggerDefaultLabel = 'On a schedule';
+      triggerDefaultLabel = doNotTranslate('On a schedule');
       triggerIcon = getTriggerIcon(trigger);
 
       break;
     }
     case 'WEBHOOK': {
-      triggerDefaultLabel = 'Webhook';
+      triggerDefaultLabel = doNotTranslate('Webhook');
       triggerIcon = getTriggerIcon(trigger);
 
       break;
@@ -60,19 +63,16 @@ export const getWorkflowDiagramTriggerNode = ({
     data: {
       nodeType: 'trigger',
       triggerType: trigger.type,
-      name: isDefined(trigger.name) ? trigger.name : triggerDefaultLabel,
+      name: getWorkflowStepDisplayName({
+        name: isDefined(trigger.name) ? trigger.name : triggerDefaultLabel,
+        type: trigger.type,
+      }),
       icon: triggerIcon,
       stepId: 'trigger',
       hasNextStepIds:
         isDefined(trigger.nextStepIds) && trigger.nextStepIds.length > 0,
-      position: trigger.position ?? {
-        x: 0,
-        y: 0,
-      },
     } satisfies WorkflowDiagramStepNodeData,
-    position: trigger.position ?? {
-      x: 0,
-      y: 0,
-    },
+    position:
+      trigger.position ?? AUTOMATICALLY_LAID_OUT_NODE_PLACEHOLDER_POSITION,
   };
 };

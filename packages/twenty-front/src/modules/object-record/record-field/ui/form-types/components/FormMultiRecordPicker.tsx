@@ -1,5 +1,4 @@
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
-import { FormFieldInputContainer } from '@/object-record/record-field/ui/form-types/components/FormFieldInputContainer';
 import { FormFieldInputInnerContainer } from '@/object-record/record-field/ui/form-types/components/FormFieldInputInnerContainer';
 import { FormFieldInputRowContainer } from '@/object-record/record-field/ui/form-types/components/FormFieldInputRowContainer';
 import { FormMultiRecordFieldChips } from '@/object-record/record-field/ui/form-types/components/FormMultiRecordFieldChips';
@@ -8,27 +7,29 @@ import {
   type RecordId,
   type Variable,
 } from '@/object-record/record-field/ui/form-types/types/RecordPickerValue';
-import { type VariablePickerComponent } from '@/object-record/record-field/ui/form-types/types/VariablePickerComponent';
+import { type VariablePickerComponent } from '@/ui/input/types/VariablePickerComponent';
 import {
   type FormMultiRecordPickerDraftValue,
   getFormMultiRecordPickerDraftValue,
 } from '@/object-record/record-field/ui/form-types/utils/getFormMultiRecordPickerDraftValue';
 import { MultipleRecordPicker } from '@/object-record/record-picker/multiple-record-picker/components/MultipleRecordPicker';
 import { type RecordPickerPickableMorphItem } from '@/object-record/record-picker/types/RecordPickerPickableMorphItem';
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
-import { InputLabel } from '@/ui/input/components/InputLabel';
-import { Dropdown } from '@/ui/layout/dropdown/components/Dropdown';
+import { FormFieldInputContainer } from '@/ui/input/components/FormFieldInputContainer';
+import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
+import { DropdownRoot } from '@/ui/layout/dropdown/components/DropdownRoot';
 import { GenericDropdownContentWidth } from '@/ui/layout/dropdown/constants/GenericDropdownContentWidth';
-import { useCloseDropdown } from '@/ui/layout/dropdown/hooks/useCloseDropdown';
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
-import { useContext, useId, useState } from 'react';
 import { isNonEmptyArray } from '@sniptt/guards';
+import { useId, useState } from 'react';
 import { QUERY_MAX_RECORDS } from 'twenty-shared/constants';
 import { isDefined, isValidUuid } from 'twenty-shared/utils';
-import { mapArrayToObject } from '~/utils/array/mapArrayToObject';
+import { useToast } from 'twenty-ui/components/feedback';
+import { Dropdown } from 'twenty-ui/components/navigation';
 import { IconChevronDown } from 'twenty-ui/icon';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { Field } from 'twenty-ui/primitives/input';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
+import { mapArrayToObject } from '~/utils/array/mapArrayToObject';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledFormSelectContainerWrapper = styled.div<{ readonly?: boolean }>`
   cursor: ${({ readonly }) => (readonly ? 'default' : 'pointer')};
@@ -54,7 +55,7 @@ const StyledVariablePickerContainer = styled.div`
   flex-shrink: 0;
 `;
 
-export type FormMultiRecordPickerProps = {
+type FormMultiRecordPickerProps = {
   label?: string;
   defaultValue?: Array<RecordId | Variable> | Variable | string | null;
   onChange: (value: Array<RecordId | Variable> | Variable) => void;
@@ -73,7 +74,8 @@ export const FormMultiRecordPicker = ({
   testId,
   VariablePicker,
 }: FormMultiRecordPickerProps) => {
-  const { theme } = useContext(ThemeContext);
+  const { t } = useLingui();
+  const theme = useTheme();
 
   const [draftValue, setDraftValue] = useState<FormMultiRecordPickerDraftValue>(
     getFormMultiRecordPickerDraftValue(defaultValue),
@@ -83,8 +85,7 @@ export const FormMultiRecordPicker = ({
   const dropdownId = `form-multi-record-picker-${componentId}`;
   const variablesDropdownId = `form-multi-record-picker-${componentId}-variables`;
 
-  const { closeDropdown } = useCloseDropdown();
-  const { enqueueWarningSnackBar } = useSnackBar();
+  const { enqueueToast } = useToast();
   const { openFormMultiRecordPicker } = useOpenFormMultiRecordPicker({
     objectNameSingular,
   });
@@ -138,8 +139,9 @@ export const FormMultiRecordPicker = ({
       ).length;
 
       if (selectedRecordCount >= QUERY_MAX_RECORDS) {
-        enqueueWarningSnackBar({
-          message: t`You can select at most ${QUERY_MAX_RECORDS} records.`,
+        enqueueToast({
+          status: 'warning',
+          children: t`You can select at most ${QUERY_MAX_RECORDS} records.`,
         });
 
         return;
@@ -188,7 +190,7 @@ export const FormMultiRecordPicker = ({
 
   return (
     <FormFieldInputContainer data-testid={testId}>
-      {label ? <InputLabel>{label}</InputLabel> : null}
+      {label ? <Field.Label>{label}</Field.Label> : null}
       <FormFieldInputRowContainer>
         {readonly || draftValue.type === 'variable' ? (
           <StyledFormSelectContainerWrapper readonly={readonly}>
@@ -201,43 +203,52 @@ export const FormMultiRecordPicker = ({
           </StyledFormSelectContainerWrapper>
         ) : (
           <StyledDropdownContainer>
-            <Dropdown
+            <DropdownRoot
               dropdownId={dropdownId}
-              dropdownPlacement="bottom-start"
-              clickableComponentWidth="100%"
-              onOpen={handleOpenDropdown}
-              dropdownOffset={{
-                y: parseInt(theme.spacing[1], 10),
+              type="picker"
+              multiple
+              onOpenChange={(open) => {
+                if (open) {
+                  handleOpenDropdown();
+                }
               }}
-              clickableComponent={
-                <StyledFormSelectContainerWrapper>
-                  <FormFieldInputInnerContainer
-                    formFieldInputInstanceId={componentId}
-                    hasRightElement={isDefined(VariablePicker) && !readonly}
-                    hoverable
-                    preventFocusStackUpdate={true}
-                  >
-                    {chips}
-                    <StyledIconButton>
-                      <IconChevronDown
-                        size={theme.icon.size.md}
-                        color={theme.font.color.light}
-                      />
-                    </StyledIconButton>
-                  </FormFieldInputInnerContainer>
-                </StyledFormSelectContainerWrapper>
-              }
-              dropdownComponents={
+            >
+              <Dropdown.Trigger
+                nativeButton={false}
+                aria-label={label ?? t`Select records`}
+                render={
+                  <StyledFormSelectContainerWrapper>
+                    <FormFieldInputInnerContainer
+                      formFieldInputInstanceId={componentId}
+                      hasRightElement={isDefined(VariablePicker) && !readonly}
+                      hoverable
+                      preventFocusStackUpdate={true}
+                    >
+                      {chips}
+                      <StyledIconButton>
+                        <IconChevronDown
+                          size={theme.icon.size.md}
+                          color={theme.font.color.light}
+                        />
+                      </StyledIconButton>
+                    </FormFieldInputInnerContainer>
+                  </StyledFormSelectContainerWrapper>
+                }
+              />
+              <DropdownContent
+                side="bottom"
+                align="start"
+                sideOffset={parseInt(theme.spacing[1], 10)}
+                width={GenericDropdownContentWidth.ExtraLarge}
+                aria-label={label ?? t`Select records`}
+              >
                 <MultipleRecordPicker
                   componentInstanceId={dropdownId}
-                  focusId={dropdownId}
                   onChange={handleMorphItemChange}
-                  onSubmit={() => closeDropdown(dropdownId)}
-                  onClickOutside={() => closeDropdown(dropdownId)}
-                  dropdownWidth={GenericDropdownContentWidth.ExtraLarge}
+                  layoutDirection="search-bar-on-bottom"
                 />
-              }
-            />
+              </DropdownContent>
+            </DropdownRoot>
           </StyledDropdownContainer>
         )}
         {isDefined(VariablePicker) && !readonly && (

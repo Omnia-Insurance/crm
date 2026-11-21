@@ -1,0 +1,274 @@
+{
+  "tabs": {
+    "gettingStarted": {
+      "label": "البدء",
+      "groups": {
+        "welcome": {
+          "label": "البدء"
+        },
+        "coreConcepts": {
+          "label": "المفاهيم الأساسية"
+        }
+      }
+    },
+    "userGuide": {
+      "label": "دليل المستخدم",
+      "groups": {
+        "userGuideOverview": {
+          "label": "دليل المستخدم"
+        },
+        "dataModel": {
+          "label": "نموذج البيانات",
+          "groups": {
+            "dataModelReference": {
+              "label": "مرجع"
+            },
+            "dataModelHowTos": {
+              "label": "الإرشادات"
+            }
+          }
+        },
+        "dataMigration": {
+          "label": "ترحيل البيانات",
+          "groups": {
+            "dataMigrationReference": {
+              "label": "مرجع"
+            },
+            "dataMigrationHowTos": {
+              "label": "الإرشادات"
+            }
+          }
+        },
+        "calendarEmails": {
+          "label": "التقويم والبريد الإلكتروني",
+          "groups": {
+            "calendarEmailsReference": {
+              "label": "مرجع"
+            },
+            "calendarEmailsHowTos": {
+              "label": "الإرشادات"
+            }
+          }
+        },
+        "emailCampaigns": {
+          "label": "حملات البريد الإلكتروني",
+          "groups": {
+            "emailCampaignsHowTos": {
+              "label": "الإرشادات"
+            }
+          }
+        },
+        "workflows": {
+          "label": "سير العمل",
+          "groups": {
+            "workflowsReference": {
+              "label": "مرجع"
+            },
+            "workflowsHowTos": {
+              "label": "الإرشادات",
+              "groups": {
+                "crmAutomations": {
+                  "label": "أتمتة إدارة علاقات العملاء"
+                },
+                "connectToOtherTools": {
+                  "label": "الاتصال بأدوات أخرى"
+                },
+                "advancedConfigurations": {
+                  "label": "التكوينات المتقدمة"
+                },
+                "needMoreHelp": {
+                  "label": "المزيد من المساعدة"
+                }
+              }
+            }
+          }
+        },
+        "ai": {
+          "label": "الذكاء الاصطناعي",
+          "groups": {
+            "aiReference": {
+              "label": "مرجع"
+            },
+            "aiHowTos": {
+              "label": "الإرشادات"
+            }
+          }
+        },
+        "layout": {
+          "label": "التخطيط",
+          "groups": {
+            "layoutReference": {
+              "label": "مرجع",
+              "groups": {
+                "layoutViews": {
+                  "label": "العروض"
+                }
+              }
+            },
+            "layoutHowTos": {
+              "label": "الإرشادات"
+            }
+          }
+        },
+        "dashboards": {
+          "label": "لوحات القيادة",
+          "groups": {
+            "dashboardsReference": {
+              "label": "مرجع"
+            },
+            "dashboardsHowTos": {
+              "label": "الإرشادات"
+            }
+          }
+        },
+        "permissionsAccess": {
+          "label": "الصلاحيات والوصول",
+          "groups": {
+            "permissionsAccessReference": {
+              "label": "مرجع"
+            },
+            "permissionsAccessHowTos": {
+              "label": "الإرشادات"
+            }
+          }
+        },
+        "billing": {
+          "label": "الفوترة",
+          "groups": {
+            "billingReference": {
+              "label": "مرجع"
+            },
+            "billingHowTos": {
+              "label": "الإرشادات"
+            }
+          }
+        },
+        "settings": {
+          "label": "الإعدادات",
+          "groups": {
+            "settingsReference": {
+              "label": "مرجع"
+            },
+            "settingsHowTos": {
+              "label": "الإرشادات"
+            }
+          }
+        },
+        "legal": {
+          "label": "قانوني",
+          "groups": {
+            "legalHowTos": {
+              "label": "الإرشادات"
+            }
+          }
+        }
+      }
+    },
+    "developers": {
+      "label": "المطورون",
+      "groups": {
+        "developersOverview": {
+          "label": "المطورون"
+        },
+        "apps": {
+          "label": "التطبيقات",
+          "groups": {
+            "appsGettingStarted": {
+              "label": "البدء"
+            },
+            "appsTutorial": {
+              "label": "البرنامج التعليمي"
+            },
+            "appsConfig": {
+              "label": "التهيئة"
+            },
+            "appsData": {
+              "label": "بيانات"
+            },
+            "appsLogic": {
+              "label": "المنطق"
+            },
+            "appsLayout": {
+              "label": "التخطيط"
+            },
+            "appsOperations": {
+              "label": "العمليات"
+            }
+          }
+        },
+        "api": {
+          "label": "واجهة برمجة التطبيقات"
+        },
+        "selfHost": {
+          "label": "الاستضافة الذاتية"
+        },
+        "contribute": {
+          "label": "المساهمة"
+        },
+        "uiLibrary": {
+          "label": "مكتبة واجهة المستخدم",
+          "groups": {
+            "uiGuides": {
+              "label": "أدلة"
+            },
+            "uiPrimitives": {
+              "label": "العناصر الأولية",
+              "groups": {
+                "uiAccessibility": {
+                  "label": "إمكانية الوصول"
+                },
+                "uiDataDisplay": {
+                  "label": "عرض البيانات"
+                },
+                "uiFeedback": {
+                  "label": "التغذية الراجعة"
+                },
+                "uiForms": {
+                  "label": "النماذج"
+                },
+                "uiLayout": {
+                  "label": "التخطيط"
+                },
+                "uiNavigation": {
+                  "label": "التنقل"
+                },
+                "uiSurfaces": {
+                  "label": "الأسطح"
+                },
+                "uiTypography": {
+                  "label": "الطباعة"
+                }
+              }
+            },
+            "uiComponents": {
+              "label": "مكونات",
+              "groups": {
+                "uiComponentsDataDisplay": {
+                  "label": "عرض البيانات"
+                },
+                "uiComponentsFeedback": {
+                  "label": "التغذية الراجعة"
+                },
+                "uiComponentsInput": {
+                  "label": "إدخال"
+                },
+                "uiComponentsLayout": {
+                  "label": "التخطيط"
+                },
+                "uiComponentsNavigation": {
+                  "label": "التنقل"
+                },
+                "uiComponentsSettings": {
+                  "label": "الإعدادات"
+                },
+                "uiComponentsCodeEditor": {
+                  "label": "محرر الشفرات"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

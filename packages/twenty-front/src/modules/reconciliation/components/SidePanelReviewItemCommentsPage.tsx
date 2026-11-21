@@ -1,40 +1,56 @@
+import { styled } from '@linaria/react';
+import { type MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { useLingui } from '@lingui/react/macro';
+import { isNonEmptyString } from '@sniptt/guards';
+import {
+  type RecordGqlFields,
+  StandardObjectNameSingular,
+} from 'twenty-shared/types';
+import { isDefined } from 'twenty-shared/utils';
+import { useToast } from 'twenty-ui/components/feedback';
+import { IconPlus } from 'twenty-ui/icon';
+import { Button } from 'twenty-ui/primitives/input';
+import { themeCssVariables } from 'twenty-ui/theme';
+
 import { type Task } from '@/activities/types/Task';
-import { getFirstNonEmptyLineOfRichText } from '@/blocknote-editor/utils/getFirstNonEmptyLineOfRichText';
-import { parseInitialBlocknote } from '@/blocknote-editor/utils/parseInitialBlocknote';
-import { useLazyFindOneRecord } from '@/object-record/hooks/useLazyFindOneRecord';
-import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
-import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
+import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
+import { StandardObjectNamePlural } from '@/object-metadata/types/StandardObjectNamePlural';
 import { ObjectFilterDropdownComponentInstanceContext } from '@/object-record/object-filter-dropdown/states/contexts/ObjectFilterDropdownComponentInstanceContext';
+import { useFindOneRecordQuery } from '@/object-record/hooks/useFindOneRecordQuery';
+import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
+import { getRichTextFieldTextLines } from '@/object-record/record-field/ui/utils/getRichTextFieldTextLines';
 import { ReviewItemCommentsFilterProviders } from '@/reconciliation/components/ReviewItemCommentsFilterProviders';
 import { useFilteredTasksForReviewItem } from '@/reconciliation/hooks/useFilteredTasksForReviewItem';
 import { useOpenCreateAuditTaskDraft } from '@/reconciliation/hooks/useOpenCreateAuditTaskDraft';
 import { reviewItemCommentsSidePanelState } from '@/reconciliation/states/reviewItemCommentsSidePanelState';
 import { useOpenRecordInSidePanel } from '@/side-panel/hooks/useOpenRecordInSidePanel';
+import { SidePanelFooter } from '@/ui/layout/side-panel/components/SidePanelFooter';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { ViewBarDetails } from '@/views/components/ViewBarDetails';
 import { ViewBarFilterDropdown } from '@/views/components/ViewBarFilterDropdown';
-import { ViewBarFilterDropdownIds } from '@/views/constants/ViewBarFilterDropdownIds';
-import { styled } from '@linaria/react';
-import { CoreObjectNameSingular } from 'twenty-shared/types';
-import { IconPlus } from 'twenty-ui/icon';
-import { Button } from 'twenty-ui/input';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { getViewBarFilterDropdownId } from '@/views/utils/getViewBarFilterDropdownId';
 import { beautifyPastDateRelativeToNow } from '~/utils/date-utils';
 
 const REVIEW_ITEM_COMMENTS_VIEW_BAR_ID = 'review-item-comments-side-panel';
-const REVIEW_ITEM_COMMENTS_FILTER_DROPDOWN_ID =
-  'review-item-comments-filter-dropdown';
 
-const STATUS_DOT_COLOR: Record<NonNullable<Task['status']>, string> = {
+const REVIEW_ITEM_DECISION_RECORD_GQL_FIELDS: RecordGqlFields = {
+  id: true,
+  decision: true,
+};
+
+type TaskStatus = NonNullable<Task['status']>;
+
+const TASK_STATUS_DOT_COLORS: Record<TaskStatus, string> = {
   TODO: themeCssVariables.color.blue,
   IN_PROGRESS: themeCssVariables.color.orange,
   DONE: themeCssVariables.color.green,
 };
 
-const STATUS_LABEL: Record<NonNullable<Task['status']>, string> = {
-  TODO: 'To do',
-  IN_PROGRESS: 'In progress',
-  DONE: 'Done',
+const TASK_STATUS_LABELS: Record<TaskStatus, MessageDescriptor> = {
+  TODO: msg`To do`,
+  IN_PROGRESS: msg`In progress`,
+  DONE: msg`Done`,
 };
 
 const StyledContainer = styled.div`
@@ -125,13 +141,13 @@ const StyledCardMeta = styled.div`
   margin-top: ${themeCssVariables.spacing[1]};
 `;
 
-const StyledStatusBadge = styled.span<{ status: NonNullable<Task['status']> }>`
+const StyledStatusBadge = styled.span<{ status: TaskStatus }>`
   align-items: center;
   display: inline-flex;
   gap: ${themeCssVariables.spacing[1]};
 
   &::before {
-    background: ${({ status }) => STATUS_DOT_COLOR[status]};
+    background: ${({ status }) => TASK_STATUS_DOT_COLORS[status]};
     border-radius: 50%;
     content: '';
     display: inline-block;
@@ -144,29 +160,23 @@ const StyledMetaSpacer = styled.span`
   flex: 1;
 `;
 
-const StyledFooter = styled.div`
-  align-items: center;
-  border-top: 1px solid ${themeCssVariables.border.color.light};
-  display: flex;
-  flex-shrink: 0;
-  justify-content: flex-end;
-  padding: ${themeCssVariables.spacing[2]} ${themeCssVariables.spacing[3]};
-`;
-
-const getCommentExcerpt = (task: Task): string => {
-  const blocks = task.bodyV2?.blocknote
-    ? (parseInitialBlocknote(task.bodyV2.blocknote) ?? null)
-    : null;
-  return getFirstNonEmptyLineOfRichText(blocks);
-};
-
 const getAuthorLabel = (task: Task): string => {
-  const first = task.assignee?.name?.firstName?.trim() ?? '';
-  const last = task.assignee?.name?.lastName?.trim() ?? '';
-  return [first, last].filter(Boolean).join(' ');
+  const firstName = task.assignee?.name?.firstName?.trim() ?? '';
+  const lastName = task.assignee?.name?.lastName?.trim() ?? '';
+
+  return [firstName, lastName].filter(Boolean).join(' ');
 };
 
-const PageContent = ({ reviewItemId }: { reviewItemId: string }) => {
+type SidePanelReviewItemCommentsPageContentProps = {
+  reviewItemId: string;
+};
+
+const SidePanelReviewItemCommentsPageContent = ({
+  reviewItemId,
+}: SidePanelReviewItemCommentsPageContentProps) => {
+  const { t } = useLingui();
+  const { enqueueToast } = useToast();
+
   const { tasks, hasActiveFilters } = useFilteredTasksForReviewItem({
     reviewItemId,
     viewBarId: REVIEW_ITEM_COMMENTS_VIEW_BAR_ID,
@@ -174,100 +184,104 @@ const PageContent = ({ reviewItemId }: { reviewItemId: string }) => {
 
   const { openRecordInSidePanel } = useOpenRecordInSidePanel();
   const { updateOneRecord } = useUpdateOneRecord();
+  const apolloCoreClient = useApolloCoreClient();
 
-  // The side panel only knows the reviewItem id, so re-read the current
-  // decision (network-only — the cached copy may predate an apply) before
-  // flagging.
-  const { findOneRecord: findOneReviewItem } = useLazyFindOneRecord<
-    ObjectRecord & { decision: string }
-  >({
-    objectNameSingular: 'reviewItem',
-    recordGqlFields: { id: true, decision: true },
-    fetchPolicy: 'network-only',
-  });
+  const { findOneRecordQuery: findOneReviewItemDecisionQuery } =
+    useFindOneRecordQuery({
+      objectNameSingular: 'reviewItem',
+      recordGqlFields: REVIEW_ITEM_DECISION_RECORD_GQL_FIELDS,
+    });
 
   const { openCreateAuditTaskDraft } = useOpenCreateAuditTaskDraft({
-    // Only flag PENDING items: commenting on an APPROVED item must not
-    // clobber the decision, or the applied CRM writes lose batch-undo
-    // eligibility (both client and server undo select decision ===
-    // 'APPROVED') — reconciliation remediation item 2.3.
+    // Only PENDING items are flagged: flagging an APPROVED item would drop its
+    // applied CRM writes from batch undo, which selects decision === 'APPROVED'.
     onTaskCreated: async () => {
-      await findOneReviewItem({
-        objectRecordId: reviewItemId,
-        onCompleted: (reviewItem) => {
-          if (reviewItem.decision !== 'PENDING') {
-            return;
-          }
+      try {
+        // This page only holds the id, and a cached decision may predate an apply.
+        const { data } = await apolloCoreClient.query<{
+          reviewItem?: { decision?: string | null } | null;
+        }>({
+          query: findOneReviewItemDecisionQuery,
+          variables: { objectRecordId: reviewItemId },
+          fetchPolicy: 'network-only',
+        });
 
-          void updateOneRecord({
-            objectNameSingular: 'reviewItem',
-            idToUpdate: reviewItemId,
-            updateOneRecordInput: {
-              decision: 'FLAG_AUDIT',
-              decidedAt: new Date().toISOString(),
-            },
-          });
-        },
-      });
+        if (data?.reviewItem?.decision !== 'PENDING') {
+          return;
+        }
+
+        await updateOneRecord({
+          objectNameSingular: 'reviewItem',
+          idToUpdate: reviewItemId,
+          updateOneRecordInput: {
+            decision: 'FLAG_AUDIT',
+            decidedAt: new Date().toISOString(),
+          },
+        });
+      } catch {
+        enqueueToast({
+          status: 'error',
+          children: t`Failed to flag the review item for audit.`,
+        });
+      }
     },
   });
-
-  const handleAddComment = () => {
-    openCreateAuditTaskDraft({ reviewItemId });
-  };
 
   return (
     <StyledContainer>
       <StyledFilterRow>
         <StyledFilterButtonSlot>
           <ObjectFilterDropdownComponentInstanceContext.Provider
-            value={{ instanceId: ViewBarFilterDropdownIds.MAIN }}
+            value={{
+              instanceId: getViewBarFilterDropdownId(
+                REVIEW_ITEM_COMMENTS_VIEW_BAR_ID,
+              ),
+            }}
           >
-            <ViewBarFilterDropdown
-              dropdownId={REVIEW_ITEM_COMMENTS_FILTER_DROPDOWN_ID}
-            />
+            <ViewBarFilterDropdown />
           </ObjectFilterDropdownComponentInstanceContext.Provider>
         </StyledFilterButtonSlot>
         <StyledChips>
           <ViewBarDetails
             viewBarId={REVIEW_ITEM_COMMENTS_VIEW_BAR_ID}
-            objectNamePlural="tasks"
+            objectNamePlural={StandardObjectNamePlural.Task}
             hasFilterButton
-            addFilterDropdownId={REVIEW_ITEM_COMMENTS_FILTER_DROPDOWN_ID}
           />
         </StyledChips>
       </StyledFilterRow>
-
       <StyledList>
         {tasks.length === 0 ? (
           <StyledEmpty>
             {hasActiveFilters
-              ? 'No comments match the current filter.'
-              : 'No comments yet.'}
+              ? t`No comments match the current filter.`
+              : t`No comments yet.`}
           </StyledEmpty>
         ) : (
           tasks.map((task) => {
-            const excerpt = getCommentExcerpt(task);
+            const excerpt = getRichTextFieldTextLines(task.bodyV2)[0] ?? '';
             const author = getAuthorLabel(task);
-            const title = task.title?.trim() || excerpt || 'Untitled';
+            const trimmedTitle = task.title?.trim() ?? '';
+
             return (
               <StyledCard
                 key={task.id}
                 onClick={() =>
                   openRecordInSidePanel({
                     recordId: task.id,
-                    objectNameSingular: CoreObjectNameSingular.Task,
+                    objectNameSingular: StandardObjectNameSingular.Task,
                   })
                 }
               >
-                <StyledCardTitle>{title}</StyledCardTitle>
-                {task.title?.trim() && excerpt && (
+                <StyledCardTitle>
+                  {trimmedTitle || excerpt || t`Untitled`}
+                </StyledCardTitle>
+                {trimmedTitle && excerpt && (
                   <StyledCardBody>{excerpt}</StyledCardBody>
                 )}
                 <StyledCardMeta>
-                  {task.status && (
+                  {isDefined(task.status) && (
                     <StyledStatusBadge status={task.status}>
-                      {STATUS_LABEL[task.status]}
+                      {t(TASK_STATUS_LABELS[task.status])}
                     </StyledStatusBadge>
                   )}
                   <StyledMetaSpacer />
@@ -281,16 +295,18 @@ const PageContent = ({ reviewItemId }: { reviewItemId: string }) => {
           })
         )}
       </StyledList>
-      <StyledFooter>
-        <Button
-          title="Add comment"
-          variant="primary"
-          accent="blue"
-          size="small"
-          Icon={IconPlus}
-          onClick={handleAddComment}
-        />
-      </StyledFooter>
+      <SidePanelFooter
+        actions={[
+          <Button
+            key="add-comment"
+            size="sm"
+            variant="solid"
+            color="accent"
+            startIcon={<IconPlus />}
+            onClick={() => openCreateAuditTaskDraft({ reviewItemId })}
+          >{t`Add comment`}</Button>,
+        ]}
+      />
     </StyledContainer>
   );
 };
@@ -298,7 +314,7 @@ const PageContent = ({ reviewItemId }: { reviewItemId: string }) => {
 export const SidePanelReviewItemCommentsPage = () => {
   const { reviewItemId } = useAtomStateValue(reviewItemCommentsSidePanelState);
 
-  if (!reviewItemId) {
+  if (!isNonEmptyString(reviewItemId)) {
     return null;
   }
 
@@ -306,7 +322,7 @@ export const SidePanelReviewItemCommentsPage = () => {
     <ReviewItemCommentsFilterProviders
       viewBarId={REVIEW_ITEM_COMMENTS_VIEW_BAR_ID}
     >
-      <PageContent reviewItemId={reviewItemId} />
+      <SidePanelReviewItemCommentsPageContent reviewItemId={reviewItemId} />
     </ReviewItemCommentsFilterProviders>
   );
 };

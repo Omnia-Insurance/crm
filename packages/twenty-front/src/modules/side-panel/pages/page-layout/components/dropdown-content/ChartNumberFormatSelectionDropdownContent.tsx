@@ -1,41 +1,37 @@
-import { usePageLayoutIdFromContextStore } from '@/side-panel/pages/page-layout/hooks/usePageLayoutIdFromContextStore';
+import { ChartSettingsDropdownSection } from '@/side-panel/pages/page-layout/components/chart-settings/ChartSettingsDropdownSection';
+import { Dropdown } from 'twenty-ui/components/navigation';
+import { CHART_NUMBER_FORMAT_DEFAULT } from '@/page-layout/widgets/graph/constants/ChartNumberFormatDefault';
+import { usePageLayoutSidePanelTarget } from '@/side-panel/pages/page-layout/hooks/usePageLayoutSidePanelTarget';
 import { useUpdateCurrentWidgetConfig } from '@/side-panel/pages/page-layout/hooks/useUpdateCurrentWidgetConfig';
 import { useWidgetInEditMode } from '@/side-panel/pages/page-layout/hooks/useWidgetInEditMode';
 import { getChartNumberFormatLabel } from '@/side-panel/pages/page-layout/utils/getChartNumberFormatLabel';
 import { isWidgetConfigurationOfType } from '@/side-panel/pages/page-layout/utils/isWidgetConfigurationOfType';
-import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
-import { DropdownComponentInstanceContext } from '@/ui/layout/dropdown/contexts/DropdownComponentInstanceContext';
-import { useCloseDropdown } from '@/ui/layout/dropdown/hooks/useCloseDropdown';
-import { SelectableList } from '@/ui/layout/selectable-list/components/SelectableList';
-import { SelectableListItem } from '@/ui/layout/selectable-list/components/SelectableListItem';
-import { selectedItemIdComponentState } from '@/ui/layout/selectable-list/states/selectedItemIdComponentState';
-import { useAvailableComponentInstanceIdOrThrow } from '@/ui/utilities/state/component-state/hooks/useAvailableComponentInstanceIdOrThrow';
-import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
-import { MenuItemSelect } from 'twenty-ui/navigation';
 import { ChartNumberFormat } from '~/generated-metadata/graphql';
+import { doNotTranslate } from 'twenty-shared/i18n';
+import { useLingui } from '@lingui/react/macro';
 
 export const ChartNumberFormatSelectionDropdownContent = () => {
-  const { pageLayoutId } = usePageLayoutIdFromContextStore();
+  const { t } = useLingui();
+  const { pageLayoutId } = usePageLayoutSidePanelTarget();
   const { widgetInEditMode } = useWidgetInEditMode(pageLayoutId);
 
   const configuration = widgetInEditMode?.configuration;
 
-  if (
-    !isWidgetConfigurationOfType(configuration, 'AggregateChartConfiguration')
-  ) {
-    throw new Error('Invalid configuration type');
+  const isChartWithNumberFormat =
+    isWidgetConfigurationOfType(configuration, 'AggregateChartConfiguration') ||
+    isWidgetConfigurationOfType(configuration, 'BarChartConfiguration') ||
+    isWidgetConfigurationOfType(configuration, 'LineChartConfiguration') ||
+    isWidgetConfigurationOfType(configuration, 'PieChartConfiguration');
+
+  if (!isChartWithNumberFormat) {
+    throw new Error(doNotTranslate('Invalid configuration type'));
   }
 
-  const currentNumberFormat = configuration.numberFormat;
-
-  const dropdownId = useAvailableComponentInstanceIdOrThrow(
-    DropdownComponentInstanceContext,
-  );
-
-  const selectedItemId = useAtomComponentStateValue(
-    selectedItemIdComponentState,
-    dropdownId,
-  );
+  const currentNumberFormat =
+    configuration.numberFormat ??
+    (configuration.__typename === 'AggregateChartConfiguration'
+      ? undefined
+      : CHART_NUMBER_FORMAT_DEFAULT);
 
   const numberFormatOptions: ChartNumberFormat[] = [
     ChartNumberFormat.SHORT,
@@ -45,8 +41,6 @@ export const ChartNumberFormatSelectionDropdownContent = () => {
   const { updateCurrentWidgetConfig } =
     useUpdateCurrentWidgetConfig(pageLayoutId);
 
-  const { closeDropdown } = useCloseDropdown();
-
   const handleSelectNumberFormatOption = (
     numberFormatOption: ChartNumberFormat,
   ) => {
@@ -55,35 +49,24 @@ export const ChartNumberFormatSelectionDropdownContent = () => {
         numberFormat: numberFormatOption,
       },
     });
-    closeDropdown();
   };
 
   return (
-    <DropdownMenuItemsContainer>
-      <SelectableList
-        selectableListInstanceId={dropdownId}
-        focusId={dropdownId}
-        selectableItemIdArray={numberFormatOptions}
+    <ChartSettingsDropdownSection>
+      <Dropdown.SelectionGroup
+        aria-label={t`Number format`}
+        value={currentNumberFormat ?? null}
       >
         {numberFormatOptions.map((option) => (
-          <SelectableListItem
+          <Dropdown.OptionItem
             key={option}
-            itemId={option}
-            onEnter={() => {
-              handleSelectNumberFormatOption(option);
-            }}
+            value={option}
+            onSelect={() => handleSelectNumberFormatOption(option)}
           >
-            <MenuItemSelect
-              text={getChartNumberFormatLabel(option)}
-              selected={currentNumberFormat === option}
-              focused={selectedItemId === option}
-              onClick={() => {
-                handleSelectNumberFormatOption(option);
-              }}
-            />
-          </SelectableListItem>
+            {getChartNumberFormatLabel(option)}
+          </Dropdown.OptionItem>
         ))}
-      </SelectableList>
-    </DropdownMenuItemsContainer>
+      </Dropdown.SelectionGroup>
+    </ChartSettingsDropdownSection>
   );
 };

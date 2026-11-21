@@ -2,7 +2,14 @@
 
 exports[`ALL_UNIVERSAL_FLAT_ENTITY_FOREIGN_KEY_AGGREGATOR_PROPERTIES should match snapshot 1`] = `
 {
-  "agent": [],
+  "agent": [
+    "navigationMenuItemUniversalIdentifiers",
+  ],
+  "agentChatChannel": [
+    "channelRoleUniversalIdentifiers",
+    "navigationMenuItemUniversalIdentifiers",
+  ],
+  "agentChatChannelRole": [],
   "applicationVariable": [],
   "commandMenuItem": [],
   "connectionProvider": [],
@@ -13,25 +20,38 @@ exports[`ALL_UNIVERSAL_FLAT_ENTITY_FOREIGN_KEY_AGGREGATOR_PROPERTIES should matc
     "viewFilterUniversalIdentifiers",
     "kanbanAggregateOperationViewUniversalIdentifiers",
     "calendarViewUniversalIdentifiers",
+    "calendarEndViewUniversalIdentifiers",
     "mainGroupByFieldMetadataViewUniversalIdentifiers",
     "searchFieldMetadataUniversalIdentifiers",
+    "fieldMetadataOptionUniversalIdentifiers",
+    "rowLevelPermissionPredicateUniversalIdentifiers",
+    "relationRowLevelPermissionPredicateUniversalIdentifiers",
+    "workspaceMemberRowLevelPermissionPredicateUniversalIdentifiers",
   ],
+  "fieldMetadataOption": [],
   "fieldPermission": [],
   "frontComponent": [],
   "index": [],
   "logicFunction": [],
+  "mcpServer": [],
+  "messagingProvider": [],
   "navigationMenuItem": [],
   "objectMetadata": [
     "fieldUniversalIdentifiers",
     "indexMetadataUniversalIdentifiers",
     "objectPermissionUniversalIdentifiers",
     "fieldPermissionUniversalIdentifiers",
+    "rowLevelPermissionRuleUniversalIdentifiers",
     "viewUniversalIdentifiers",
     "searchFieldMetadataUniversalIdentifiers",
+    "pageLayoutUniversalIdentifiers",
+    "commandMenuItemUniversalIdentifiers",
+    "navigationMenuItemUniversalIdentifiers",
   ],
   "objectPermission": [],
   "pageLayout": [
     "tabUniversalIdentifiers",
+    "navigationMenuItemUniversalIdentifiers",
   ],
   "pageLayoutTab": [
     "widgetUniversalIdentifiers",
@@ -40,6 +60,7 @@ exports[`ALL_UNIVERSAL_FLAT_ENTITY_FOREIGN_KEY_AGGREGATOR_PROPERTIES should matc
   "permissionFlag": [
     "rolePermissionFlagUniversalIdentifiers",
   ],
+  "relatedRecordPath": [],
   "role": [
     "roleTargetUniversalIdentifiers",
     "objectPermissionUniversalIdentifiers",
@@ -47,6 +68,8 @@ exports[`ALL_UNIVERSAL_FLAT_ENTITY_FOREIGN_KEY_AGGREGATOR_PROPERTIES should matc
     "fieldPermissionUniversalIdentifiers",
     "rowLevelPermissionPredicateUniversalIdentifiers",
     "rowLevelPermissionPredicateGroupUniversalIdentifiers",
+    "rowLevelPermissionRuleUniversalIdentifiers",
+    "agentChatChannelRoleUniversalIdentifiers",
   ],
   "rolePermissionFlag": [],
   "roleTarget": [],
@@ -55,8 +78,12 @@ exports[`ALL_UNIVERSAL_FLAT_ENTITY_FOREIGN_KEY_AGGREGATOR_PROPERTIES should matc
     "childRowLevelPermissionPredicateGroupUniversalIdentifiers",
     "rowLevelPermissionPredicateUniversalIdentifiers",
   ],
+  "rowLevelPermissionRule": [],
   "searchFieldMetadata": [],
+  "settingsMenuItem": [],
   "skill": [],
+  "timelineActivityType": [],
+  "validationRule": [],
   "view": [
     "viewFieldUniversalIdentifiers",
     "viewFilterUniversalIdentifiers",
@@ -64,6 +91,7 @@ exports[`ALL_UNIVERSAL_FLAT_ENTITY_FOREIGN_KEY_AGGREGATOR_PROPERTIES should matc
     "viewGroupUniversalIdentifiers",
     "viewFieldGroupUniversalIdentifiers",
     "viewSortUniversalIdentifiers",
+    "navigationMenuItemUniversalIdentifiers",
   ],
   "viewField": [],
   "viewFieldGroup": [
@@ -77,5 +105,9 @@ exports[`ALL_UNIVERSAL_FLAT_ENTITY_FOREIGN_KEY_AGGREGATOR_PROPERTIES should matc
   "viewGroup": [],
   "viewSort": [],
   "webhook": [],
+  "workflow": [
+    "navigationMenuItemUniversalIdentifiers",
+  ],
+  "workflowVersion": [],
 }
 `;

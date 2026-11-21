@@ -3,6 +3,7 @@ import { useRef } from 'react';
 
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { hasRecordGroupsComponentSelector } from '@/object-record/record-group/states/selectors/hasRecordGroupsComponentSelector';
+import { isRecordGroupTabsDisplayedComponentSelector } from '@/object-record/record-group/states/selectors/isRecordGroupTabsDisplayedComponentSelector';
 import { recordIndexHasRecordsComponentSelector } from '@/object-record/record-index/states/selectors/recordIndexHasRecordsComponentSelector';
 import { RecordTableBodyEffectsWrapper } from '@/object-record/record-table/components/RecordTableBodyEffectsWrapper';
 import { RecordTableContent } from '@/object-record/record-table/components/RecordTableContent';
@@ -11,13 +12,14 @@ import { RecordTableScrollToFocusedCellEffect } from '@/object-record/record-tab
 import { RecordTableScrollToFocusedRowEffect } from '@/object-record/record-table/components/RecordTableScrollToFocusedRowEffect';
 import { RECORD_TABLE_CLICK_OUTSIDE_LISTENER_ID } from '@/object-record/record-table/constants/RecordTableClickOutsideListenerId';
 import { useRecordTableContextOrThrow } from '@/object-record/record-table/contexts/RecordTableContext';
-import { useResetTableRowSelection } from '@/object-record/record-table/hooks/internal/useResetTableRowSelection';
+import { useResetRecordSelection } from '@/object-record/record-selection/hooks/useResetRecordSelection';
 import { isRecordTableEmptyStateHiddenComponentState } from '@/object-record/record-table/states/isRecordTableEmptyStateHiddenComponentState';
 import { isRecordTableInitialLoadingComponentState } from '@/object-record/record-table/states/isRecordTableInitialLoadingComponentState';
 import { useClickOutsideListener } from '@/ui/utilities/pointer-event/hooks/useClickOutsideListener';
 import { useAtomComponentSelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorValue';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import isEmpty from 'lodash.isempty';
+import { canReachSomeRecords } from 'twenty-shared/utils';
 
 export const RecordTable = () => {
   const {
@@ -57,7 +59,13 @@ export const RecordTable = () => {
     recordTableId,
   );
 
-  const { resetTableRowSelection } = useResetTableRowSelection(recordTableId);
+  // The group tabs render inside the table body, so it stays mounted for them
+  const isRecordGroupTabsDisplayed = useAtomComponentSelectorValue(
+    isRecordGroupTabsDisplayedComponentSelector,
+    recordTableId,
+  );
+
+  const { resetRecordSelection } = useResetRecordSelection(recordTableId);
 
   const recordTableIsEmpty =
     !isRecordTableInitialLoading && !recordTableHasRecords;
@@ -67,7 +75,7 @@ export const RecordTable = () => {
   }
 
   const handleDragSelectionStart = () => {
-    resetTableRowSelection();
+    resetRecordSelection();
     toggleClickOutside(false);
   };
 
@@ -77,7 +85,10 @@ export const RecordTable = () => {
 
   return (
     <>
-      {objectPermissions.canReadObjectRecords && (
+      {canReachSomeRecords({
+        objectRecordsPermissions: objectPermissions,
+        operationType: 'read',
+      }) && (
         <>
           <RecordTableBodyEffectsWrapper
             hasRecordGroups={hasRecordGroups}
@@ -90,6 +101,7 @@ export const RecordTable = () => {
       {isRecordTableInitialLoading &&
       isEmpty(visibleRecordFields) ? null : recordTableIsEmpty &&
         !hasRecordGroups &&
+        !isRecordGroupTabsDisplayed &&
         !isRecordTableEmptyStateHidden ? (
         <RecordTableEmpty tableBodyRef={tableBodyRef} />
       ) : (

@@ -17,8 +17,8 @@ import {
   WorkspaceMemberNumberFormatEnum,
   WorkspaceMemberTimeFormatEnum,
 } from '~/generated-metadata/graphql';
-import { DateTimeSettingsCalendarStartDaySelect } from '~/pages/settings/profile/appearance/components/DateTimeSettingsCalendarStartDaySelect';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { DateTimeSettingsCalendarStartDaySelect } from '@/settings/experience/components/DateTimeSettingsCalendarStartDaySelect';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 const StyledContainer = styled.div`
   display: flex;
@@ -30,7 +30,9 @@ export const FormatPreferencesSettings = () => {
   const currentWorkspaceMember = useAtomStateValue(currentWorkspaceMemberState);
   const { formatPreferences, updateFormatPreference } = useFormatPreferences();
 
-  if (!isDefined(currentWorkspaceMember)) return null;
+  if (!isDefined(currentWorkspaceMember)) {
+    return null;
+  }
 
   const handleTimeZoneChange = (value: string) => {
     updateFormatPreference('timeZone', value);

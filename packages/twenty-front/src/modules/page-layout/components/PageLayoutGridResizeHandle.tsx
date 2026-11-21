@@ -1,12 +1,12 @@
 import { styled } from '@linaria/react';
-import { forwardRef, useContext } from 'react';
+import { forwardRef } from 'react';
 import {
   IconRadiusBottomLeft,
   IconRadiusBottomRight,
   IconRadiusTopLeft,
   IconRadiusTopRight,
 } from 'twenty-ui/icon';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
 type WidgetHandleAxis = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
 type WidgetHorizontalHandleAxis = 'n' | 's';
 type WidgetVerticalHandleAxis = 'e' | 'w';
@@ -33,7 +33,6 @@ const StyledCornerIconWrapper = styled.div<{
 
   & > svg {
     color: transparent;
-    flex-shrink: 0;
     pointer-events: none;
     transform: ${({ position }) => {
       if (position === 'se') {
@@ -60,7 +59,8 @@ const StyledCornerIconWrapper = styled.div<{
 `;
 
 const StyledVerticalHandle = styled.div`
-  border-radius: ${themeCssVariables.border.radius.sm};
+  border-radius: ${themeCssVariables.border.radius.pill};
+  corner-shape: round;
   height: ${themeCssVariables.spacing[5]};
   width: calc(${themeCssVariables.icon.stroke.lg} * 1px);
 `;
@@ -82,7 +82,8 @@ const StyledVerticalHandleWrapper = styled.div<{
 `;
 
 const StyledHorizontalHandle = styled.div`
-  border-radius: ${themeCssVariables.border.radius.sm};
+  border-radius: ${themeCssVariables.border.radius.pill};
+  corner-shape: round;
   height: calc(${themeCssVariables.icon.stroke.lg} * 1px);
   width: ${themeCssVariables.spacing[5]};
 `;
@@ -106,30 +107,50 @@ const StyledResizeHandleWrapper = styled.div<{
   widgetHandleAxis?: WidgetHandleAxis;
 }>`
   bottom: ${({ widgetHandleAxis }) => {
-    if (widgetHandleAxis === 's') return themeCssVariables.spacing[1.5];
-    if (widgetHandleAxis === 'se' || widgetHandleAxis === 'sw') return '0';
+    if (widgetHandleAxis === 's') {
+      return themeCssVariables.spacing[1.5];
+    }
+    if (widgetHandleAxis === 'se' || widgetHandleAxis === 'sw') {
+      return '0';
+    }
     return 'auto';
   }};
 
   left: ${({ widgetHandleAxis }) => {
-    if (widgetHandleAxis === 'w') return themeCssVariables.spacing[1.5];
-    if (widgetHandleAxis === 'n' || widgetHandleAxis === 's') return '50%';
-    if (widgetHandleAxis === 'sw' || widgetHandleAxis === 'nw') return '0';
+    if (widgetHandleAxis === 'w') {
+      return themeCssVariables.spacing[1.5];
+    }
+    if (widgetHandleAxis === 'n' || widgetHandleAxis === 's') {
+      return '50%';
+    }
+    if (widgetHandleAxis === 'sw' || widgetHandleAxis === 'nw') {
+      return '0';
+    }
     return 'auto';
   }};
 
   position: absolute;
 
   right: ${({ widgetHandleAxis }) => {
-    if (widgetHandleAxis === 'e') return themeCssVariables.spacing[1.5];
-    if (widgetHandleAxis === 'se' || widgetHandleAxis === 'ne') return '0';
+    if (widgetHandleAxis === 'e') {
+      return themeCssVariables.spacing[1.5];
+    }
+    if (widgetHandleAxis === 'se' || widgetHandleAxis === 'ne') {
+      return '0';
+    }
     return 'auto';
   }};
 
   top: ${({ widgetHandleAxis }) => {
-    if (widgetHandleAxis === 'w' || widgetHandleAxis === 'e') return '50%';
-    if (widgetHandleAxis === 'n') return themeCssVariables.spacing[1.5];
-    if (widgetHandleAxis === 'ne' || widgetHandleAxis === 'nw') return '0';
+    if (widgetHandleAxis === 'w' || widgetHandleAxis === 'e') {
+      return '50%';
+    }
+    if (widgetHandleAxis === 'n') {
+      return themeCssVariables.spacing[1.5];
+    }
+    if (widgetHandleAxis === 'ne' || widgetHandleAxis === 'nw') {
+      return '0';
+    }
     return 'auto';
   }};
 
@@ -180,7 +201,7 @@ export const PageLayoutGridResizeHandle = forwardRef<
     },
     ref,
   ) => {
-    const { theme } = useContext(ThemeContext);
+    const theme = useTheme();
 
     return (
       <StyledResizeHandleWrapper

@@ -1,8 +1,6 @@
 /* @license Enterprise */
 
 import { Field, ObjectType, registerEnumType } from '@nestjs/graphql';
-
-import { IDField } from '@ptc-org/nestjs-query-graphql';
 import graphqlTypeJson from 'graphql-type-json';
 import {
   Column,
@@ -19,14 +17,13 @@ import {
 
 import type Stripe from 'stripe';
 
-// Serialized types for JSONB storage - uses Stripe's enum types but normalizes expandable fields
-// These avoid TypeORM's DeepPartialEntity issues with Stripe's expandable object types (e.g. Stripe.Account)
+// Normalizes Stripe's expandable fields, which break TypeORM's DeepPartialEntity
 export type AutomaticTaxJson = {
   disabled_reason: Stripe.Subscription.AutomaticTax['disabled_reason'];
   enabled: boolean;
   liability: {
     type: Stripe.Subscription.AutomaticTax.Liability.Type;
-    account?: string; // Normalized: always string ID, never expanded Stripe.Account
+    account?: string;
   } | null;
 };
 
@@ -44,19 +41,22 @@ import { BillingSubscriptionItemEntity } from 'src/engine/core-modules/billing/e
 import { BillingSubscriptionCollectionMethod } from 'src/engine/core-modules/billing/enums/billing-subscription-collection-method.enum';
 import { SubscriptionInterval } from 'src/engine/core-modules/billing/enums/billing-subscription-interval.enum';
 import { SubscriptionStatus } from 'src/engine/core-modules/billing/enums/billing-subscription-status.enum';
-import { WorkspaceRelatedEntity } from 'src/engine/workspace-manager/types/workspace-related-entity';
+import { WorkspaceRelatedEntity } from 'src/engine/workspace-manager/types/workspace-related-entity.type';
 
 registerEnumType(SubscriptionStatus, { name: 'SubscriptionStatus' });
 registerEnumType(SubscriptionInterval, { name: 'SubscriptionInterval' });
+registerEnumType(BillingSubscriptionCollectionMethod, {
+  name: 'BillingSubscriptionCollectionMethod',
+});
 
 @Entity({ name: 'billingSubscription', schema: 'core' })
 @Index('IDX_BILLING_SUBSCRIPTION_WORKSPACE_ID_UNIQUE', ['workspaceId'], {
   unique: true,
-  where: `status IN ('trialing', 'active', 'past_due')`,
+  where: `status IN ('trialing', 'active', 'past_due', 'incomplete', 'incomplete_expired', 'unpaid', 'paused')`,
 })
 @ObjectType('BillingSubscription')
 export class BillingSubscriptionEntity extends WorkspaceRelatedEntity {
-  @IDField(() => UUIDScalarType)
+  @Field(() => UUIDScalarType)
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
@@ -134,6 +134,17 @@ export class BillingSubscriptionEntity extends WorkspaceRelatedEntity {
   })
   currentPeriodStart: Date;
 
+  // Stripe only reports the current window, so the previous boundary is unrecoverable once it advances;
+  // written whenever the period moves, and read by the rollover to bound the usage it settles
+  @Column({ nullable: true, type: 'timestamptz' })
+  previousPeriodStart: Date | null;
+
+  @Column({ nullable: true, type: 'integer' })
+  currentPeriodMaxSeats: number | null;
+
+  @Column({ nullable: true, type: 'integer' })
+  previousPeriodMaxSeats: number | null;
+
   @Field(() => graphqlTypeJson)
   @Column({ nullable: false, type: 'jsonb', default: {} })
   metadata: Stripe.Metadata;
@@ -142,6 +153,7 @@ export class BillingSubscriptionEntity extends WorkspaceRelatedEntity {
   @Column({ nullable: false, type: 'jsonb', default: [] })
   phases: Array<BillingSubscriptionSchedulePhaseDTO>;
 
+  @Field(() => Date, { nullable: true })
   @Column({ nullable: true, type: 'timestamptz' })
   cancelAt: Date | null;
 
@@ -157,6 +169,7 @@ export class BillingSubscriptionEntity extends WorkspaceRelatedEntity {
   @Column({ nullable: true, type: 'jsonb' })
   cancellationDetails: CancellationDetailsJson | null;
 
+  @Field(() => BillingSubscriptionCollectionMethod, { nullable: true })
   @Column({
     nullable: false,
     type: 'enum',

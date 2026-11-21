@@ -1,0 +1,423 @@
+import { gql, InMemoryCache } from '@apollo/client';
+import { CombinedGraphQLErrors } from '@apollo/client/errors';
+import fetchMock, { enableFetchMocks } from 'jest-fetch-mock';
+import { DEFAULT_AI_CHAT_ASSISTANT_PROFILE } from 'twenty-shared/ai';
+import { SESSION_COOKIE_OPT_IN_HEADER_NAME } from 'twenty-shared/constants';
+
+import { ApolloFactory, type Options } from '@/apollo/services/ApolloFactory';
+import { clearSessionGeneration } from '@/auth/utils/clearSessionGeneration';
+import { getSessionGeneration } from '@/auth/utils/getSessionGeneration';
+import { rotateSessionGeneration } from '@/auth/utils/rotateSessionGeneration';
+import { CUSTOM_WORKSPACE_APPLICATION_MOCK } from '@/object-metadata/hooks/__tests__/constants/CustomWorkspaceApplicationMock.test.constant';
+import {
+  AiChatAssistantMode,
+  AiModelTier,
+  WorkspaceActivationStatus,
+  WorkspaceDiscoverability,
+} from '~/generated-metadata/graphql';
+
+enableFetchMocks();
+
+jest.mock('~/utils/sleep', () => ({
+  sleep: jest.fn().mockResolvedValue(undefined),
+}));
+
+const UNAUTHENTICATED_RESPONSE = JSON.stringify({
+  data: {},
+  errors: [{ extensions: { code: 'UNAUTHENTICATED' } }],
+});
+
+const SESSION_SUPERSEDED_RESPONSE = JSON.stringify({
+  data: {},
+  errors: [
+    { extensions: { code: 'UNAUTHENTICATED', subCode: 'SESSION_SUPERSEDED' } },
+  ],
+});
+
+const PERMISSION_DENIED_RESPONSE = JSON.stringify({
+  data: { trackAnalytics: null },
+  errors: [
+    {
+      message: 'Entity performing the request does not have permission',
+      extensions: { code: 'FORBIDDEN' },
+    },
+  ],
+});
+
+const mockOnError = jest.fn();
+const mockOnNetworkError = jest.fn();
+const mockOnPayloadTooLarge = jest.fn();
+const mockOnUnauthenticatedError = jest.fn();
+
+const mockWorkspaceMember = {
+  id: 'workspace-member-id',
+  locale: 'en',
+  name: {
+    firstName: 'John',
+    lastName: 'Doe',
+  },
+  colorScheme: 'Light' as const,
+  userEmail: 'userEmail',
+};
+
+const mockWorkspace = {
+  id: 'workspace-id',
+  metadataVersion: 1,
+  allowImpersonation: false,
+  activationStatus: WorkspaceActivationStatus.ACTIVE,
+  billingSubscriptions: [],
+  billingEntitlements: [],
+  currentBillingSubscription: null,
+  workspaceMembersCount: 0,
+  isPublicInviteLinkEnabled: false,
+  isCampaignClickTrackingEnabled: false,
+  isCampaignOpenTrackingEnabled: false,
+  workspaceDiscoverability: WorkspaceDiscoverability.PUBLIC,
+  isGoogleAuthEnabled: false,
+  isMicrosoftAuthEnabled: false,
+  isPasswordAuthEnabled: false,
+  isCustomDomainEnabled: false,
+  isGoogleAuthBypassEnabled: false,
+  isPasswordAuthBypassEnabled: false,
+  isMicrosoftAuthBypassEnabled: false,
+  hasActivatedAndValidEnterpriseKey: false,
+  hasValidSignedEnterpriseKey: false,
+  hasValidEnterpriseValidityToken: false,
+  isTrialAvailable: true,
+  subdomain: 'test',
+  customDomain: 'test.com',
+  workspaceUrls: {
+    subdomainUrl: 'test.com',
+    customUrl: 'test.com',
+  },
+  isTwoFactorAuthenticationEnforced: false,
+  trashRetentionDays: 14,
+  eventLogRetentionDays: 365 * 3,
+  aiChatModelTier: AiModelTier.fast,
+  aiChatAssistantProfile: DEFAULT_AI_CHAT_ASSISTANT_PROFILE,
+  aiChatDirectMessageAssistantMode: AiChatAssistantMode.MENTION_ONLY,
+  aiChatInboxAssistantMode: AiChatAssistantMode.AUTOMATIC,
+  aiAgentModelTier: AiModelTier.fast,
+  isAutoModelSelectionEnabled: true,
+  aiModelIdByTier: {},
+  isInternalMessagesImportEnabled: false,
+  workspaceCustomApplication: CUSTOM_WORKSPACE_APPLICATION_MOCK,
+  workspaceCustomApplicationId: CUSTOM_WORKSPACE_APPLICATION_MOCK.id,
+  installedApplications: [],
+};
+
+const createMockOptions = (): Options => ({
+  uri: 'http://localhost:3000',
+  currentWorkspaceMember: mockWorkspaceMember,
+  currentWorkspace: mockWorkspace,
+  cache: new InMemoryCache(),
+  isDebugMode: true,
+  onError: mockOnError,
+  onNetworkError: mockOnNetworkError,
+  onPayloadTooLarge: mockOnPayloadTooLarge,
+  onUnauthenticatedError: mockOnUnauthenticatedError,
+  appVersion: '1.0.0',
+});
+
+const makeRequestWithContext = async (context?: Record<string, unknown>) => {
+  const options = createMockOptions();
+  const apolloFactory = new ApolloFactory(options);
+
+  const client = apolloFactory.getClient();
+
+  await client.mutate({
+    context,
+    mutation: gql`
+      mutation TrackAnalytics(
+        $type: AnalyticsType!
+        $event: String
+        $name: String
+        $properties: JSON
+      ) {
+        trackAnalytics(
+          type: $type
+          event: $event
+          name: $name
+          properties: $properties
+        ) {
+          success
+        }
+      }
+    `,
+  });
+};
+
+const makeRequest = async () => makeRequestWithContext();
+
+describe('ApolloFactory', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    fetchMock.resetMocks();
+    clearSessionGeneration();
+  });
+
+  it('should create an instance of ApolloFactory', () => {
+    const options = createMockOptions();
+    const apolloFactory = new ApolloFactory(options);
+    expect(apolloFactory).toBeInstanceOf(ApolloFactory);
+  });
+
+  it('should initialize with the correct workspace member', () => {
+    const options = createMockOptions();
+    const apolloFactory = new ApolloFactory(options);
+    expect(apolloFactory['currentWorkspaceMember']).toEqual(
+      mockWorkspaceMember,
+    );
+  });
+
+  it('should call onError when encountering "Unauthorized" error', async () => {
+    const errors = [{ message: 'Unauthorized' }];
+    fetchMock.mockResponse(() =>
+      Promise.resolve({
+        body: JSON.stringify({
+          data: {},
+          errors,
+        }),
+      }),
+    );
+    try {
+      await makeRequest();
+    } catch (error) {
+      expect(error).toBeInstanceOf(CombinedGraphQLErrors);
+      expect((error as CombinedGraphQLErrors).message).toBe('Unauthorized');
+      expect(mockOnError).toHaveBeenCalledWith(errors);
+    }
+  }, 10000);
+
+  it('should call onError when encountering "UNAUTHENTICATED" error', async () => {
+    const errors = [
+      {
+        extensions: {
+          code: 'UNAUTHENTICATED',
+        },
+      },
+    ];
+    fetchMock.mockResponse(() =>
+      Promise.resolve({
+        body: JSON.stringify({
+          data: {},
+          errors,
+        }),
+      }),
+    );
+
+    try {
+      await makeRequest();
+    } catch (error) {
+      expect(error).toBeInstanceOf(CombinedGraphQLErrors);
+      expect((error as CombinedGraphQLErrors).message).toBe(
+        'Error message not found.',
+      );
+      expect(mockOnError).toHaveBeenCalledWith(errors);
+    }
+  }, 10000);
+
+  it('should call onNetworkError when encountering a network error', async () => {
+    const errors = [
+      {
+        message: 'Unknown error',
+      },
+    ];
+    fetchMock.mockResponse(() =>
+      Promise.resolve({
+        body: JSON.stringify({
+          data: {},
+          errors,
+        }),
+      }),
+    );
+
+    try {
+      await makeRequest();
+    } catch (error) {
+      expect(error).toBeInstanceOf(CombinedGraphQLErrors);
+      expect((error as CombinedGraphQLErrors).message).toBe('Unknown error');
+      expect(mockOnError).toHaveBeenCalledWith(errors);
+    }
+  }, 10000);
+
+  it('should call onNetworkError when the request itself fails', async () => {
+    fetchMock.mockReject(() => Promise.reject({ message: 'Unknown error' }));
+
+    try {
+      await makeRequest();
+    } catch (error) {
+      expect(error).toBeDefined();
+      expect(mockOnNetworkError).toHaveBeenCalled();
+    }
+  }, 10000);
+
+  it('should update workspace member when calling updateWorkspaceMember', () => {
+    const options = createMockOptions();
+    const apolloFactory = new ApolloFactory(options);
+
+    const newWorkspaceMember = {
+      id: 'new-workspace-member-id',
+      locale: 'fr',
+      name: {
+        firstName: 'John',
+        lastName: 'Doe',
+      },
+      colorScheme: 'Light' as const,
+      userEmail: 'userEmail',
+    };
+
+    apolloFactory.updateWorkspaceMember(newWorkspaceMember);
+    expect(apolloFactory['currentWorkspaceMember']).toEqual(newWorkspaceMember);
+  });
+
+  it('should call onPayloadTooLarge when encountering a 413 error', async () => {
+    fetchMock.mockResponse(() =>
+      Promise.resolve({
+        status: 413,
+        body: 'Payload Too Large',
+      }),
+    );
+
+    try {
+      await makeRequest();
+    } catch {
+      expect(mockOnPayloadTooLarge).toHaveBeenCalledWith(
+        expect.stringContaining('Uploaded content is too large'),
+      );
+    }
+  }, 10000);
+
+  // fetch normalises header names.
+  const readHeader = (
+    headers: Record<string, string>,
+    name: string,
+  ): string | undefined =>
+    Object.entries(headers).find(
+      ([key]) => key.toLowerCase() === name.toLowerCase(),
+    )?.[1];
+
+  it('should opt into the session cookie without an Authorization header', async () => {
+    fetchMock.mockResponse(() =>
+      Promise.resolve({ body: JSON.stringify({ data: {} }) }),
+    );
+
+    await makeRequest();
+
+    const headers = fetchMock.mock.calls[0]?.[1]?.headers as Record<
+      string,
+      string
+    >;
+
+    expect(readHeader(headers, 'authorization')).toBeUndefined();
+    // Version-mismatch detection must keep working without one.
+    expect(readHeader(headers, 'X-App-Version')).toBe('1.0.0');
+    expect(readHeader(headers, SESSION_COOKIE_OPT_IN_HEADER_NAME)).toBe('1');
+  });
+
+  // The session cookie is server-managed, so a rejection ends the session.
+  it('should sign out on an unauthenticated response', async () => {
+    fetchMock.mockResponse(UNAUTHENTICATED_RESPONSE);
+    mockOnUnauthenticatedError.mockImplementation(clearSessionGeneration);
+    rotateSessionGeneration();
+
+    expect(getSessionGeneration()).not.toBeNull();
+
+    await expect(makeRequest()).rejects.toBeInstanceOf(CombinedGraphQLErrors);
+
+    expect(mockOnUnauthenticatedError).toHaveBeenCalledTimes(1);
+    expect(getSessionGeneration()).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  const makeSupersededRequest = ({
+    retriedResponse,
+    context,
+  }: {
+    retriedResponse: string;
+    context?: Record<string, unknown>;
+  }) => {
+    fetchMock.mockResponseOnce(SESSION_SUPERSEDED_RESPONSE);
+    fetchMock.mockResponseOnce(retriedResponse);
+
+    return makeRequestWithContext(context);
+  };
+
+  it('should resend a request rejected because a sign-in superseded its session', async () => {
+    rotateSessionGeneration();
+
+    await makeSupersededRequest({
+      retriedResponse: JSON.stringify({
+        data: { trackAnalytics: { success: true } },
+      }),
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(mockOnUnauthenticatedError).not.toHaveBeenCalled();
+  });
+
+  it('should sign out when the resent request is rejected as unauthenticated', async () => {
+    rotateSessionGeneration();
+
+    await expect(
+      makeSupersededRequest({ retriedResponse: UNAUTHENTICATED_RESPONSE }),
+    ).rejects.toBeInstanceOf(CombinedGraphQLErrors);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(mockOnUnauthenticatedError).toHaveBeenCalledTimes(1);
+  });
+
+  it('should not sign out when the resent request is superseded again', async () => {
+    rotateSessionGeneration();
+
+    await expect(
+      makeSupersededRequest({ retriedResponse: SESSION_SUPERSEDED_RESPONSE }),
+    ).rejects.toBeInstanceOf(CombinedGraphQLErrors);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(mockOnUnauthenticatedError).not.toHaveBeenCalled();
+  });
+
+  it('should neither resend nor sign out on a superseded request that must not be retried', async () => {
+    rotateSessionGeneration();
+
+    await expect(
+      makeSupersededRequest({
+        retriedResponse: UNAUTHENTICATED_RESPONSE,
+        context: { skipRetry: true },
+      }),
+    ).rejects.toBeInstanceOf(CombinedGraphQLErrors);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(mockOnUnauthenticatedError).not.toHaveBeenCalled();
+  });
+
+  it('should not resend a superseded request after sign out', async () => {
+    clearSessionGeneration();
+
+    await expect(
+      makeSupersededRequest({ retriedResponse: UNAUTHENTICATED_RESPONSE }),
+    ).rejects.toBeInstanceOf(CombinedGraphQLErrors);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(mockOnUnauthenticatedError).not.toHaveBeenCalled();
+  });
+
+  it('should not resend a request rejected for another reason', async () => {
+    rotateSessionGeneration();
+    fetchMock.mockResponseOnce(UNAUTHENTICATED_RESPONSE);
+
+    await expect(makeRequest()).rejects.toBeInstanceOf(CombinedGraphQLErrors);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('should leave a permission denial alone', async () => {
+    fetchMock.mockResponse(PERMISSION_DENIED_RESPONSE);
+
+    await expect(makeRequest()).rejects.toBeInstanceOf(CombinedGraphQLErrors);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(mockOnUnauthenticatedError).not.toHaveBeenCalled();
+  });
+});

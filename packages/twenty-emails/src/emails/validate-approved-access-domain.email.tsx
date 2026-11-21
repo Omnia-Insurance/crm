@@ -1,6 +1,6 @@
 import { Trans } from '@lingui/react';
-import { Img } from '@react-email/components';
-import { emailTheme } from 'src/common-style';
+import { Img } from 'react-email';
+import { canvasTheme } from 'src/common-style';
 
 import { BaseEmail } from 'src/components/BaseEmail';
 import { CallToAction } from 'src/components/CallToAction';
@@ -56,7 +56,7 @@ export const SendApprovedAccessDomainValidation = ({
               <Link
                 href={`mailto:${senderEmail}`}
                 value={senderEmail}
-                color={emailTheme.font.colors.blue}
+                color={canvasTheme.font.colors.blue}
               />
             ),
             1: <b />,
@@ -69,7 +69,7 @@ export const SendApprovedAccessDomainValidation = ({
           src={workspaceLogo ?? DEFAULT_WORKSPACE_LOGO}
           width={40}
           height={40}
-          alt={workspace.name ?? 'Workspace logo'}
+          alt={workspace.name ?? i18n._('Workspace logo')}
         />
         {workspace.name ? <HighlightedText value={workspace.name} /> : <></>}
         <CallToAction href={link} value={i18n._('Validate domain')} />

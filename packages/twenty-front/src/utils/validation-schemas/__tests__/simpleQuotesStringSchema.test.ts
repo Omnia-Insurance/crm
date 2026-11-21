@@ -1,31 +1,32 @@
+import { i18n } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { SOURCE_LOCALE } from 'twenty-shared/translations';
 import { type ZodSafeParseError } from 'zod';
 
 import { simpleQuotesStringSchema } from '~/utils/validation-schemas/simpleQuotesStringSchema';
 
 describe('simpleQuotesStringSchema', () => {
+  afterEach(() => {
+    i18n.activate(SOURCE_LOCALE);
+  });
+
   it('validates a string with simple quotes', () => {
-    // Given
     const input = "'with simple quotes'";
 
-    // When
     const result = simpleQuotesStringSchema.parse(input);
 
-    // Then
     expect(result).toBe(input);
   });
 
   it.each([
-    // Given
     ['no simple quotes'],
     ["'only at start"],
     ["only at end'"],
     ["mid'dle"],
     [''],
   ])('fails for strings not wrapped in simple quotes (%s)', (input) => {
-    // When
     const result = simpleQuotesStringSchema.safeParse(input);
 
-    // Then
     expect(result.success).toBe(false);
     expect((result as ZodSafeParseError<string>).error.issues).toEqual([
       {
@@ -34,5 +35,23 @@ describe('simpleQuotesStringSchema', () => {
         path: [],
       },
     ]);
+  });
+
+  it('uses the active locale when parsing an already imported schema', () => {
+    const errorMessage = msg`String should be wrapped in simple quotes`;
+    i18n.load('fr-FR', {
+      [errorMessage.id]: 'Entourez le texte de guillemets simples',
+    });
+
+    i18n.activate(SOURCE_LOCALE);
+    const sourceMessage =
+      simpleQuotesStringSchema.safeParse('unquoted').error?.issues[0].message;
+
+    i18n.activate('fr-FR');
+    const translatedMessage =
+      simpleQuotesStringSchema.safeParse('unquoted').error?.issues[0].message;
+
+    expect(sourceMessage).toBe(errorMessage.message);
+    expect(translatedMessage).toBe('Entourez le texte de guillemets simples');
   });
 });

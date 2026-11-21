@@ -1,4 +1,7 @@
-import { type ObjectPermissionManifest } from 'twenty-shared/application';
+import {
+  getObjectPermissionUniversalIdentifier,
+  type ObjectPermissionManifest,
+} from 'twenty-shared/application';
 import { type UniversalFlatObjectPermission } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/types/universal-flat-object-permission.type';
 
 export const fromObjectPermissionManifestToUniversalFlatObjectPermission = ({
@@ -13,18 +16,31 @@ export const fromObjectPermissionManifestToUniversalFlatObjectPermission = ({
   now: string;
 }): UniversalFlatObjectPermission => {
   return {
-    universalIdentifier: objectPermissionManifest.universalIdentifier,
+    universalIdentifier:
+      objectPermissionManifest.universalIdentifier ??
+      getObjectPermissionUniversalIdentifier({
+        applicationUniversalIdentifier,
+        roleUniversalIdentifier,
+        objectUniversalIdentifier:
+          objectPermissionManifest.objectUniversalIdentifier,
+      }),
     applicationUniversalIdentifier,
     roleUniversalIdentifier,
     objectMetadataUniversalIdentifier:
       objectPermissionManifest.objectUniversalIdentifier,
-    canReadObjectRecords: objectPermissionManifest.canReadObjectRecords,
-    canUpdateObjectRecords: objectPermissionManifest.canUpdateObjectRecords,
+    canReadObjectRecords: objectPermissionManifest.canReadObjectRecords ?? null,
+    canCreateObjectRecords:
+      objectPermissionManifest.canUpdateObjectRecords ?? null,
+    canUpdateObjectRecords:
+      objectPermissionManifest.canUpdateObjectRecords ?? null,
     canSoftDeleteObjectRecords:
-      objectPermissionManifest.canSoftDeleteObjectRecords,
-    canDestroyObjectRecords: objectPermissionManifest.canDestroyObjectRecords,
-    showInSidebar: objectPermissionManifest.showInSidebar,
-    editWindowMinutes: objectPermissionManifest.editWindowMinutes,
+      objectPermissionManifest.canSoftDeleteObjectRecords ?? null,
+    canDestroyObjectRecords:
+      objectPermissionManifest.canDestroyObjectRecords ?? null,
+    // OMNIA-CUSTOM: per-object sidebar visibility and edit window (C3, C4);
+    // the manifest is the source of truth for app-owned roles.
+    showInSidebar: objectPermissionManifest.showInSidebar ?? null,
+    editWindowMinutes: objectPermissionManifest.editWindowMinutes ?? null,
     createdAt: now,
     updatedAt: now,
   };

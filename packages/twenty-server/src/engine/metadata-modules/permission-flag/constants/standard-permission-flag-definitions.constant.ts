@@ -1,10 +1,10 @@
 import {
   PermissionFlagType,
   SystemPermissionFlag,
+  TOOL_PERMISSION_FLAGS,
 } from 'twenty-shared/constants';
 
 import { type PermissionFlagPermissionType } from 'src/engine/metadata-modules/permission-flag/constants/permission-flag-permission-type.constant';
-import { TOOL_PERMISSION_FLAGS } from 'src/engine/metadata-modules/permissions/constants/tool-permission-flags';
 
 export type StandardPermissionFlagDefinition = {
   key: PermissionFlagType;
@@ -25,9 +25,9 @@ const STANDARD_PERMISSION_FLAG_METADATA: Record<
   StandardPermissionFlagMetadata
 > = {
   [PermissionFlagType.API_KEYS_AND_WEBHOOKS]: {
-    label: 'API Keys & Webhooks',
-    description: 'Manage API keys and webhooks',
-    icon: 'IconCode',
+    label: 'MCP & APIs',
+    description: 'Manage MCP, API keys, and webhooks',
+    icon: 'IconPlug',
   },
   [PermissionFlagType.WORKSPACE]: {
     label: 'Workspace',
@@ -42,7 +42,7 @@ const STANDARD_PERMISSION_FLAG_METADATA: Record<
   [PermissionFlagType.ROLES]: {
     label: 'Roles',
     description: 'Define user roles and access levels',
-    icon: 'IconLockOpen',
+    icon: 'IconLock',
   },
   [PermissionFlagType.DATA_MODEL]: {
     label: 'Data Model',
@@ -70,8 +70,8 @@ const STANDARD_PERMISSION_FLAG_METADATA: Record<
     icon: 'IconShield',
   },
   [PermissionFlagType.APPLICATIONS]: {
-    label: 'Applications',
-    description: 'Install and manage applications',
+    label: 'Workspace Apps',
+    description: 'Install and manage workspace apps',
     icon: 'IconApps',
   },
   [PermissionFlagType.MARKETPLACE_APPS]: {
@@ -82,7 +82,7 @@ const STANDARD_PERMISSION_FLAG_METADATA: Record<
   [PermissionFlagType.LAYOUTS]: {
     label: 'Layouts',
     description: 'Customize page layouts and UI structure',
-    icon: 'IconLayoutSidebarRightCollapse',
+    icon: 'IconAppWindow',
   },
   [PermissionFlagType.BILLING]: {
     label: 'Billing',
@@ -151,9 +151,9 @@ const STANDARD_PERMISSION_FLAG_METADATA: Record<
     icon: 'IconFileExport',
   },
   [PermissionFlagType.CONNECTED_ACCOUNTS]: {
-    label: 'Sync Account',
-    description: 'Sync email and calendar accounts',
-    icon: 'IconAt',
+    label: 'User Apps',
+    description: 'Manage own app preferences and accounts',
+    icon: 'IconApps',
   },
   [PermissionFlagType.PROFILE_INFORMATION]: {
     label: 'Edit Profile',

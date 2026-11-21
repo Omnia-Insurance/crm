@@ -1,21 +1,22 @@
+import { ACTOR_SOURCE_FILTER_OPTIONS } from '@/object-record/object-filter-dropdown/constants/ActorSourceFilterOptions';
 import { useApplyObjectFilterDropdownFilterValue } from '@/object-record/object-filter-dropdown/hooks/useApplyObjectFilterDropdownFilterValue';
 import { fieldMetadataItemUsedInDropdownComponentSelector } from '@/object-record/object-filter-dropdown/states/fieldMetadataItemUsedInDropdownComponentSelector';
 import { objectFilterDropdownCurrentRecordFilterComponentState } from '@/object-record/object-filter-dropdown/states/objectFilterDropdownCurrentRecordFilterComponentState';
 import { objectFilterDropdownSearchInputComponentState } from '@/object-record/object-filter-dropdown/states/objectFilterDropdownSearchInputComponentState';
+import { getActorSourceFilterDisplayValue } from '@/object-record/object-filter-dropdown/utils/getActorSourceFilterDisplayValue';
 import { getActorSourceMultiSelectOptions } from '@/object-record/object-filter-dropdown/utils/getActorSourceMultiSelectOptions';
 import { MultipleSelectDropdown } from '@/object-record/select/components/MultipleSelectDropdown';
 import { type SelectableItem } from '@/object-record/select/types/SelectableItem';
-import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
+import { LegacyDropdownContent } from '@/ui/layout/dropdown/components/LegacyDropdownContent';
 import { GenericDropdownContentWidth } from '@/ui/layout/dropdown/constants/GenericDropdownContentWidth';
 import { useAtomComponentSelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorValue';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
-import { t } from '@lingui/core/macro';
 import { isNonEmptyString } from '@sniptt/guards';
 import { isDefined, parseJson } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
 import { z } from 'zod';
 
 export const EMPTY_FILTER_VALUE = '[]';
-export const MAX_ITEMS_TO_DISPLAY = 3;
 
 export const ObjectFilterDropdownSourceSelect = ({
   dropdownId,
@@ -62,19 +63,18 @@ export const ObjectFilterDropdownSourceSelect = ({
 
     if (!isDefined(fieldMetadataItemUsedInFilterDropdown)) {
       throw new Error(
-        'Field metadata item used in filter dropdown should be defined',
+        doNotTranslate(
+          'Field metadata item used in filter dropdown should be defined',
+        ),
       );
     }
 
-    const selectedItemNames = sourceTypes
-      .filter((option) => newSelectedItemIds.includes(option.id))
-      .map((option) => option.name);
+    const selectedItemNames = ACTOR_SOURCE_FILTER_OPTIONS.filter((option) =>
+      newSelectedItemIds.includes(option.id),
+    ).map((option) => option.name);
 
-    const selectedCount = selectedItemNames.length;
     const filterDisplayValue =
-      selectedItemNames.length > MAX_ITEMS_TO_DISPLAY
-        ? t`${selectedCount} source types`
-        : selectedItemNames.join(', ');
+      getActorSourceFilterDisplayValue(selectedItemNames);
 
     const newFilterValue =
       newSelectedItemIds.length > 0
@@ -85,7 +85,9 @@ export const ObjectFilterDropdownSourceSelect = ({
   };
 
   return (
-    <DropdownContent widthInPixels={GenericDropdownContentWidth.ExtraLarge}>
+    <LegacyDropdownContent
+      widthInPixels={GenericDropdownContentWidth.ExtraLarge}
+    >
       <MultipleSelectDropdown
         selectableListId="object-filter-source-select-id"
         focusId={dropdownId}
@@ -99,6 +101,6 @@ export const ObjectFilterDropdownSourceSelect = ({
         searchFilter={objectFilterDropdownSearchInput}
         loadingItems={false}
       />
-    </DropdownContent>
+    </LegacyDropdownContent>
   );
 };

@@ -15,6 +15,7 @@ declare module 'express-serve-static-core' {
     user?: FlatAuthContextUser | null;
     apiKey?: FlatApiKey | null;
     application?: FlatApplication | null;
+    agentId?: string;
     userWorkspace?: FlatUserWorkspace;
     locale: keyof typeof APP_LOCALES;
     workspace?: FlatWorkspace;
@@ -26,5 +27,9 @@ declare module 'express-serve-static-core' {
     authProvider?: AuthProviderEnum | null;
     impersonationContext?: RawAuthContext['impersonationContext'];
     tokenType?: JwtTokenTypeEnum;
+    authenticatedAt?: Date;
+    executedRootResolvers?: string[];
+    mcpMethod?: string;
+    mcpToolName?: string;
   }
 }

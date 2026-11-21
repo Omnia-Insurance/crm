@@ -1,5 +1,5 @@
 import { styled } from '@linaria/react';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 const StyledShimmeringText = styled.div`
   -webkit-background-clip: text;
@@ -16,6 +16,12 @@ const StyledShimmeringText = styled.div`
   background-position: -200% top;
   background-repeat: no-repeat;
   background-size: 200% 100%;
+
+  @media (prefers-reduced-motion: reduce) {
+    -webkit-text-fill-color: currentColor;
+    animation: none;
+    background: none;
+  }
 
   @keyframes shimmer-wave {
     0% {

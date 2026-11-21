@@ -2,14 +2,16 @@ import { objectMetadataItemsSelector } from '@/object-metadata/states/objectMeta
 import { pageLayoutDraftComponentState } from '@/page-layout/states/pageLayoutDraftComponentState';
 import { pageLayoutPersistedComponentState } from '@/page-layout/states/pageLayoutPersistedComponentState';
 import { getWidgetConfigurationViewId } from '@/page-layout/utils/getWidgetConfigurationViewId';
-import { usePerformViewAPIPersist } from '@/views/hooks/internal/usePerformViewAPIPersist';
+import { usePerformViewApiPersist } from '@/views/hooks/internal/usePerformViewApiPersist';
+import { t } from '@lingui/core/macro';
 import { useStore } from 'jotai';
 import { useCallback } from 'react';
 import { isDefined } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
 import { ViewType, WidgetType } from '~/generated-metadata/graphql';
 
 export const useCreatePendingFieldsWidgetViews = () => {
-  const { performViewAPICreate } = usePerformViewAPIPersist();
+  const { performViewApiCreate } = usePerformViewApiPersist();
   const store = useStore();
 
   const createPendingFieldsWidgetViews = useCallback(
@@ -63,15 +65,15 @@ export const useCreatePendingFieldsWidgetViews = () => {
         );
 
         const viewName = isDefined(objectMetadataItem)
-          ? `${objectMetadataItem.labelSingular} Fields`
-          : 'Fields';
+          ? t`${objectMetadataItem.labelSingular} Fields`
+          : t`Fields`;
 
-        const result = await performViewAPICreate(
+        const result = await performViewApiCreate(
           {
             input: {
               id: viewId,
               name: viewName,
-              icon: 'IconList',
+              icon: 'IconListDetails',
               objectMetadataId,
               type: ViewType.FIELDS_WIDGET,
             },
@@ -81,12 +83,14 @@ export const useCreatePendingFieldsWidgetViews = () => {
 
         if (result.status === 'failed') {
           throw new Error(
-            `Failed to create view for FIELDS widget ${widget.id}`,
+            doNotTranslate(
+              `Failed to create view for FIELDS widget ${widget.id}`,
+            ),
           );
         }
       }
     },
-    [performViewAPICreate, store],
+    [performViewApiCreate, store],
   );
 
   return { createPendingFieldsWidgetViews };

@@ -1,8 +1,13 @@
 {
   "name": "twenty-client-sdk",
-  "version": "2.19.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/twentyhq/twenty.git",
+    "directory": "packages/twenty-client-sdk"
+  },
+  "version": "2.58.0",
   "sideEffects": false,
-  "license": "AGPL-3.0",
+  "license": "MIT",
   "scripts": {
     "build": "npx rimraf dist && npx vite build && npx vite build -c vite.metadata.config.ts && tsgo -p tsconfig.lib.json --declaration --emitDeclarationOnly --noEmit false --outDir dist --rootDir src && npx tsc-alias -p tsconfig.lib.json --outDir dist"
   },
@@ -62,10 +67,10 @@
     "typescript": "^5.9.3",
     "vite": "^8.0.0",
     "vite-plugin-dts": "^4.5.4",
-    "vitest": "^4.1.0"
+    "vitest": "^4.1.12"
   },
   "engines": {
-    "node": "^24.5.0",
+    "node": "^24.5.0 || ^26.5.1",
     "yarn": "^4.0.2"
   }
 }

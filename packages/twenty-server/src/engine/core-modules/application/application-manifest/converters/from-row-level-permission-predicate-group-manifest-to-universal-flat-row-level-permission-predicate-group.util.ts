@@ -1,5 +1,4 @@
 import { type RowLevelPermissionPredicateGroupManifest } from 'twenty-shared/application';
-import { RowLevelPermissionPredicateScope } from 'twenty-shared/types';
 
 import { type UniversalFlatRowLevelPermissionPredicateGroup } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/types/universal-flat-row-level-permission-predicate-group.type';
 
@@ -23,12 +22,17 @@ export const fromRowLevelPermissionPredicateGroupManifestToUniversalFlatRowLevel
       objectMetadataUniversalIdentifier:
         rowLevelPermissionPredicateGroupManifest.objectUniversalIdentifier,
       logicalOperator: rowLevelPermissionPredicateGroupManifest.logicalOperator,
-      scope: RowLevelPermissionPredicateScope.ALL,
       parentRowLevelPermissionPredicateGroupUniversalIdentifier:
         rowLevelPermissionPredicateGroupManifest.parentPredicateGroupUniversalIdentifier ??
         null,
+      rowLevelPermissionRuleUniversalIdentifier: null,
       positionInRowLevelPermissionPredicateGroup:
         rowLevelPermissionPredicateGroupManifest.position ?? null,
+      canReadRecords: false,
+      canCreateRecords: false,
+      canUpdateRecords: false,
+      canSoftDeleteRecords: false,
+      canDestroyRecords: false,
       childRowLevelPermissionPredicateGroupUniversalIdentifiers: [],
       rowLevelPermissionPredicateUniversalIdentifiers: [],
       createdAt: now,

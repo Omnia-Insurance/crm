@@ -2,40 +2,38 @@ import { InformationBannerComponentInstanceContext } from '@/information-banner/
 import { informationBannerIsOpenComponentState } from '@/information-banner/states/informationBannerIsOpenComponentState';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
+import { isDefined } from 'twenty-shared/utils';
+import { OverflowingTextWithTooltip } from 'twenty-ui/primitives/typography';
+import { type IconComponent } from 'twenty-ui/icon';
 import {
   Banner,
   type BannerColor,
+  type BannerStatus,
   type BannerVariant,
-} from 'twenty-ui/feedback';
-import { type IconComponent, IconX } from 'twenty-ui/icon';
-import { Button, IconButton } from 'twenty-ui/input';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+} from 'twenty-ui/primitives/feedback';
+import { themeCssVariables } from 'twenty-ui/theme';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledText = styled.div`
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0;
 `;
 
-const StyledInvertedIconButton = styled(IconButton)`
-  color: ${themeCssVariables.font.color.inverted} !important;
-`;
-
-const StyledContent = styled.div<{ hasCloseButton: boolean }>`
+const StyledContent = styled.div`
   align-items: center;
   display: flex;
   flex: 1;
   gap: ${themeCssVariables.spacing[3]};
   justify-content: center;
-  margin-left: ${({ hasCloseButton }) => (hasCloseButton ? '24px' : '0')};
+  min-width: 0;
 `;
 
 export const InformationBanner = ({
   message,
-  color = 'blue',
-  variant = 'primary',
+  color,
+  status = 'info',
+  variant = 'solid',
   buttonTitle,
-  buttonIcon,
+  buttonIcon: ButtonIcon,
   buttonOnClick,
   isButtonDisabled = false,
   onClose,
@@ -43,6 +41,7 @@ export const InformationBanner = ({
 }: {
   message: string;
   color?: BannerColor;
+  status?: BannerStatus;
   variant?: BannerVariant;
   buttonTitle?: string;
   buttonIcon?: IconComponent;
@@ -51,13 +50,11 @@ export const InformationBanner = ({
   onClose?: () => void;
   componentInstanceId: string;
 }) => {
+  const { t } = useLingui();
   const informationBannerIsOpen = useAtomComponentStateValue(
     informationBannerIsOpenComponentState,
     componentInstanceId,
   );
-
-  const isPrimary = variant === 'primary';
-  const buttonAccent = color === 'danger' ? 'danger' : 'blue';
 
   return (
     <InformationBannerComponentInstanceContext.Provider
@@ -66,41 +63,31 @@ export const InformationBanner = ({
       }}
     >
       {informationBannerIsOpen && (
-        <Banner color={color} variant={variant}>
-          <StyledContent hasCloseButton={!!onClose}>
-            <StyledText>{message}</StyledText>
+        <Banner
+          color={color}
+          status={status}
+          variant={variant}
+          onDismiss={onClose}
+          closeLabel={t`Close banner`}
+        >
+          <StyledContent>
+            <StyledText>
+              <OverflowingTextWithTooltip
+                isFocusable
+                text={<>{message}</>}
+                tooltipContent={message}
+              />
+            </StyledText>
             {buttonTitle && buttonOnClick && (
-              <Button
-                variant="secondary"
-                accent={buttonAccent}
-                title={buttonTitle}
-                Icon={buttonIcon}
-                size="small"
-                inverted={isPrimary}
+              <Banner.Action
+                startIcon={isDefined(ButtonIcon) ? <ButtonIcon /> : undefined}
                 onClick={buttonOnClick}
                 disabled={isButtonDisabled}
-              />
+              >
+                {buttonTitle}
+              </Banner.Action>
             )}
           </StyledContent>
-          {onClose &&
-            (isPrimary ? (
-              <StyledInvertedIconButton
-                Icon={IconX}
-                size="small"
-                variant="tertiary"
-                onClick={onClose}
-                ariaLabel={t`Close banner`}
-              />
-            ) : (
-              <IconButton
-                Icon={IconX}
-                size="small"
-                variant="tertiary"
-                accent={buttonAccent}
-                onClick={onClose}
-                ariaLabel={t`Close banner`}
-              />
-            ))}
         </Banner>
       )}
     </InformationBannerComponentInstanceContext.Provider>

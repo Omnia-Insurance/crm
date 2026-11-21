@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
+import { isBefore } from 'date-fns';
 import { ConnectedAccountProvider } from 'twenty-shared/types';
 import { assertUnreachable, isDefined } from 'twenty-shared/utils';
 import { Repository } from 'typeorm';
@@ -14,16 +15,15 @@ import {
   ConnectedAccountRefreshAccessTokenExceptionCode,
 } from 'src/engine/metadata-modules/connected-account/exceptions/connected-account-refresh-tokens.exception';
 import { ConnectedAccountTokenEncryptionService } from 'src/engine/metadata-modules/connected-account/services/connected-account-token-encryption.service';
-import { GoogleAPIRefreshAccessTokenService } from 'src/modules/connected-account/refresh-tokens-manager/drivers/google/services/google-api-refresh-tokens.service';
-import { MicrosoftAPIRefreshAccessTokenService } from 'src/modules/connected-account/refresh-tokens-manager/drivers/microsoft/services/microsoft-api-refresh-tokens.service';
+import { GoogleApiRefreshAccessTokenService } from 'src/modules/connected-account/refresh-tokens-manager/drivers/google/services/google-api-refresh-tokens.service';
+import { MicrosoftApiRefreshAccessTokenService } from 'src/modules/connected-account/refresh-tokens-manager/drivers/microsoft/services/microsoft-api-refresh-tokens.service';
+import { computeAccessTokenRefreshAt } from 'src/modules/connected-account/refresh-tokens-manager/utils/compute-access-token-refresh-at.util';
 
-// Tokens flowing through this service can be in two states depending on
-// where they enter the pipeline. We model both shapes explicitly so the
-// type system can prevent the #20819 class of bug (mixing encrypted and
-// decrypted tokens in the same flow).
+// Encrypted and plaintext shapes are modeled separately so they cannot be mixed (#20819)
 export type ConnectedAccountPlaintextTokens = {
   accessToken: PlaintextString;
   refreshToken: PlaintextString | null;
+  accessTokenExpiresAt?: Date | null;
 };
 
 export type ConnectedAccountEncryptedTokens = {
@@ -31,11 +31,7 @@ export type ConnectedAccountEncryptedTokens = {
   refreshToken: EncryptedString | null;
 };
 
-// Public return type of resolveTokens: always encrypted (either fresh from
-// the database or freshly re-encrypted after a refresh round-trip).
 export type ConnectedAccountTokens = ConnectedAccountEncryptedTokens;
-
-const CONNECTED_ACCOUNT_ACCESS_TOKEN_EXPIRATION = 1000 * 60 * 60;
 
 @Injectable()
 export class ConnectedAccountRefreshTokensService {
@@ -44,8 +40,8 @@ export class ConnectedAccountRefreshTokensService {
   );
 
   constructor(
-    private readonly googleAPIRefreshAccessTokenService: GoogleAPIRefreshAccessTokenService,
-    private readonly microsoftAPIRefreshAccessTokenService: MicrosoftAPIRefreshAccessTokenService,
+    private readonly googleApiRefreshAccessTokenService: GoogleApiRefreshAccessTokenService,
+    private readonly microsoftApiRefreshAccessTokenService: MicrosoftApiRefreshAccessTokenService,
     private readonly appOAuthRefreshAccessTokenService: AppOAuthRefreshAccessTokenService,
     private readonly connectedAccountTokenEncryptionService: ConnectedAccountTokenEncryptionService,
     @InjectRepository(ConnectedAccountEntity)
@@ -56,15 +52,6 @@ export class ConnectedAccountRefreshTokensService {
     connectedAccount: ConnectedAccountEntity,
     workspaceId: string,
   ): Promise<ConnectedAccountTokens> {
-    const encryptedRefreshToken = connectedAccount.refreshToken;
-
-    if (encryptedRefreshToken === 'SERVICE_ACCOUNT') {
-      return {
-        accessToken: '' as EncryptedString,
-        refreshToken: 'SERVICE_ACCOUNT' as EncryptedString,
-      };
-    }
-
     const isAccessTokenValid =
       await this.isAccessTokenStillValid(connectedAccount);
 
@@ -75,6 +62,8 @@ export class ConnectedAccountRefreshTokensService {
 
       return this.getExistingEncryptedTokens(connectedAccount, workspaceId);
     }
+
+    const encryptedRefreshToken = connectedAccount.refreshToken;
 
     if (!isDefined(encryptedRefreshToken)) {
       throw new ConnectedAccountRefreshAccessTokenException(
@@ -143,6 +132,7 @@ export class ConnectedAccountRefreshTokensService {
         accessToken: encryptedAccessToken,
         refreshToken: reEncryptedRefreshToken,
         lastCredentialsRefreshedAt: new Date(),
+        accessTokenExpiresAt: plaintextTokens.accessTokenExpiresAt ?? null,
       },
     );
 
@@ -159,19 +149,25 @@ export class ConnectedAccountRefreshTokensService {
       case ConnectedAccountProvider.GOOGLE:
       case ConnectedAccountProvider.MICROSOFT:
       case ConnectedAccountProvider.APP: {
+        // TODO: drive this from the connection provider definition
+        if (
+          connectedAccount.provider === ConnectedAccountProvider.APP &&
+          !isDefined(connectedAccount.refreshToken)
+        ) {
+          return true;
+        }
+
         if (!connectedAccount.lastCredentialsRefreshedAt) {
           return false;
         }
 
-        const BUFFER_TIME = 5 * 60 * 1000;
+        const now = new Date();
+        const accessTokenRefreshAt = computeAccessTokenRefreshAt({
+          accessTokenIssuedAt: connectedAccount.lastCredentialsRefreshedAt,
+          accessTokenExpiresAt: connectedAccount.accessTokenExpiresAt,
+        });
 
-        const tokenExpirationTime =
-          CONNECTED_ACCOUNT_ACCESS_TOKEN_EXPIRATION - BUFFER_TIME;
-
-        return (
-          connectedAccount.lastCredentialsRefreshedAt >
-          new Date(Date.now() - tokenExpirationTime)
-        );
+        return isBefore(now, accessTokenRefreshAt);
       }
       case ConnectedAccountProvider.IMAP_SMTP_CALDAV:
       case ConnectedAccountProvider.OIDC:
@@ -194,11 +190,11 @@ export class ConnectedAccountRefreshTokensService {
     try {
       switch (connectedAccount.provider) {
         case ConnectedAccountProvider.GOOGLE:
-          return await this.googleAPIRefreshAccessTokenService.refreshTokens(
+          return await this.googleApiRefreshAccessTokenService.refreshTokens(
             refreshToken,
           );
         case ConnectedAccountProvider.MICROSOFT:
-          return await this.microsoftAPIRefreshAccessTokenService.refreshTokens(
+          return await this.microsoftApiRefreshAccessTokenService.refreshTokens(
             refreshToken,
           );
         case ConnectedAccountProvider.APP:

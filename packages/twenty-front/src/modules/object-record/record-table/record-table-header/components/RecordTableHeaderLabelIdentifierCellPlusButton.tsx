@@ -6,10 +6,11 @@ import { canCreateRecordsForObjectMetadataItem } from '@/object-record/utils/can
 import { useAtomComponentSelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorValue';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { styled } from '@linaria/react';
+import { LightIconButton } from 'twenty-ui/components/input';
 import { IconPlus } from 'twenty-ui/icon';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
-import { LightIconButton } from 'twenty-ui/input';
+import { themeCssVariables } from 'twenty-ui/theme';
 import { useIsMobile } from 'twenty-ui/utilities';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledHeaderIcon = styled.div`
   margin: ${themeCssVariables.spacing[1]} ${themeCssVariables.spacing[1]}
@@ -17,6 +18,7 @@ const StyledHeaderIcon = styled.div`
 `;
 
 export const RecordTableHeaderLabelIdentifierCellPlusButton = () => {
+  const { t } = useLingui();
   const { objectMetadataItem, objectPermissions } =
     useRecordTableContextOrThrow();
 
@@ -25,12 +27,12 @@ export const RecordTableHeaderLabelIdentifierCellPlusButton = () => {
     isLayoutCustomizationModeEnabledState,
   );
 
-  const { openDraftInSidePanel } = useCreateNewIndexRecord({
+  const { createNewIndexRecord } = useCreateNewIndexRecord({
     objectMetadataItem,
   });
 
   const handlePlusButtonClick = () => {
-    openDraftInSidePanel({
+    createNewIndexRecord({
       position: 'first',
     });
   };
@@ -49,11 +51,13 @@ export const RecordTableHeaderLabelIdentifierCellPlusButton = () => {
     }) && (
       <StyledHeaderIcon>
         <LightIconButton
-          Icon={IconPlus}
-          size="small"
-          accent="tertiary"
+          size="sm"
+          emphasis="subtle"
           onClick={handlePlusButtonClick}
-        />
+          aria-label={t`Add field`}
+        >
+          <IconPlus />
+        </LightIconButton>
       </StyledHeaderIcon>
     )
   );

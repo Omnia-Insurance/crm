@@ -5,8 +5,8 @@ import { isDefined, isValidLocale, normalizeLocale } from 'twenty-shared/utils';
 import { messages as enMessages } from '~/locales/generated/en';
 import { dynamicActivate } from '~/utils/i18n/dynamicActivate';
 
-// Synchronously activate English so translation functions never throw
-// before the async locale detection completes.
+// OMNIA-CUSTOM: activate English synchronously so module-scope i18n._()
+// never throws before the async locale detection completes
 i18n.load(SOURCE_LOCALE, enMessages);
 i18n.activate(SOURCE_LOCALE);
 

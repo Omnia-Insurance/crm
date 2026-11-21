@@ -22,13 +22,12 @@ import {
   objectRecordChangedValues,
 } from 'src/engine/core-modules/event-emitter/utils/object-record-changed-values';
 import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
-import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
+import { type OrmFlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/orm-flat-field-metadata.type';
 import type { FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 import {
-  TwentyORMException,
-  TwentyORMExceptionCode,
+  TwentyOrmException,
+  TwentyOrmExceptionCode,
 } from 'src/engine/twenty-orm/exceptions/twenty-orm.exception';
-import { type EventOrigin } from 'src/engine/twenty-orm/types/event-emission-policy.type';
 import { type DatabaseBatchEventInput } from 'src/engine/workspace-event-emitter/workspace-event-emitter';
 
 export const formatTwentyOrmEventToDatabaseBatchEvent = <
@@ -41,16 +40,14 @@ export const formatTwentyOrmEventToDatabaseBatchEvent = <
   authContext,
   recordsAfter,
   recordsBefore,
-  origin,
 }: {
   action: DatabaseEventAction;
   objectMetadataItem: FlatObjectMetadata;
-  flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
+  flatFieldMetadataMaps: FlatEntityMaps<OrmFlatFieldMetadata>;
   workspaceId: string;
   authContext?: RawAuthContext;
   recordsAfter?: T[];
   recordsBefore?: T[];
-  origin?: EventOrigin;
 }): DatabaseBatchEventInput<T, DatabaseEventAction> | undefined => {
   const objectMetadataNameSingular = objectMetadataItem.nameSingular;
 
@@ -121,9 +118,9 @@ export const formatTwentyOrmEventToDatabaseBatchEvent = <
           );
 
           if (!isDefined(correspondingRecordBefore)) {
-            throw new TwentyORMException(
+            throw new TwentyOrmException(
               `Record mismatch detected while computing event data for ${action.toUpperCase()} action`,
-              TwentyORMExceptionCode.ORM_EVENT_DATA_CORRUPTED,
+              TwentyOrmExceptionCode.ORM_EVENT_DATA_CORRUPTED,
             );
           }
 
@@ -199,7 +196,9 @@ export const formatTwentyOrmEventToDatabaseBatchEvent = <
         event.userWorkspaceId = authContext?.userWorkspaceId;
         event.workspaceMemberId = authContext?.workspaceMemberId;
         event.recordId = recordBefore.id;
-        event.properties = { before: recordBefore };
+        event.properties = {
+          before: recordBefore,
+        };
 
         return event;
       });
@@ -226,17 +225,14 @@ export const formatTwentyOrmEventToDatabaseBatchEvent = <
           (recordBeforeToFind) => recordBeforeToFind.id === recordAfter.id,
         );
 
-        let updatedFields;
-        let diff;
-
-        diff = objectRecordChangedValues(
+        const diff = objectRecordChangedValues(
           correspondingRecordBefore ?? {},
           recordAfter,
           objectMetadataItem,
           flatFieldMetadataMaps,
         ) as Partial<ObjectRecordDiff<T>>;
 
-        updatedFields = computeUpdatedFieldsFromDiff(
+        const updatedFields = computeUpdatedFieldsFromDiff(
           diff,
           objectMetadataItem,
           flatFieldMetadataMaps,
@@ -270,6 +266,5 @@ export const formatTwentyOrmEventToDatabaseBatchEvent = <
     events,
     objectMetadata: objectMetadataItem,
     workspaceId,
-    ...(origin ? { origin } : {}),
   };
 };
