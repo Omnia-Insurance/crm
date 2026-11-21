@@ -186,7 +186,7 @@ jobs:
             if [ "$READY" != "True" ]; then
               echo "--- $pod (not ready) ---"
               kubectl describe "$pod" -n ${{ env.NAMESPACE }} | tail -25
-              kubectl logs "$pod" -n ${{ env.NAMESPACE }} --tail=30 --all-containers 2>/dev/null || true
+              # OMNIA-CUSTOM: no pod logs here; this output is public and app logs can carry PHI
             fi
           done
           echo "::endgroup::"

@@ -1,6 +1,8 @@
 import { UseFilters, UseGuards, UsePipes } from '@nestjs/common';
 import { Args, Mutation } from '@nestjs/graphql';
 
+import { isDefined } from 'twenty-shared/utils';
+
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
 import { EventLogEmitterExceptionFilter } from 'src/engine/core-modules/event-logs/emit/event-log-emitter-exception.filter';
 import {
@@ -93,6 +95,11 @@ export class EventLogEmitterResolver {
     workspace: WorkspaceEntity | undefined,
     @AuthUser({ allowUndefined: true }) user: UserEntity | undefined,
   ) {
+    // OMNIA-CUSTOM: public mutation; drop anonymous calls so nobody can flood the event-log store
+    if (!isDefined(workspace)) {
+      return { success: false };
+    }
+
     const eventLogContext = this.eventLogEmitterService.createContext({
       workspaceId: workspace?.id,
       userId: user?.id,

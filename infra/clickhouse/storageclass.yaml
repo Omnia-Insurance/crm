@@ -1,0 +1,26 @@
+# Encrypted gp3 class for PHI-bearing volumes; the default gp2 class sets no "encrypted" parameter.
+# No kmsKeyId: volumes use the AWS managed key aws/ebs, whose key policy already lets the EBS CSI
+# controller (node role, AmazonEBSCSIDriverPolicy v15) use it through EC2. A customer managed key
+# would need KMS grants on that role first.
+# Not the default class, and no zone pin: the ClickHouse pod's node affinity picks us-east-1d
+# (WaitForFirstConsumer), so this class stays reusable for future encrypted volumes.
+#   kubectl apply -f storageclass.yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3-encrypted
+  labels:
+    app.kubernetes.io/part-of: twenty
+    app.kubernetes.io/managed-by: kubectl
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+  encrypted: "true"
+  csi.storage.k8s.io/fstype: ext4
+  # Picked up by the twenty-crm-daily AWS Backup plan through a tag-based selection (backup-selection.json).
+  tagSpecification_1: "backup=twenty-crm-daily"
+  tagSpecification_2: "data-classification=phi"
+# Retain: deleting the PVC never deletes PHI-bearing data by accident; delete the EBS volume on purpose.
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true

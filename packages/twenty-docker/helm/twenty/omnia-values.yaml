@@ -99,6 +99,15 @@ server:
     # JavaScript that sign-out never revokes; renewToken would trade it for new sessions for 60 days.
     - name: REFRESH_TOKEN_EXPIRES_IN
       value: "5m"
+    # OMNIA-CUSTOM: event logs in the in-cluster ClickHouse (infra/clickhouse). Optional, so a missing
+    # Secret turns logs off instead of blocking pods. Never set EVENT_SINKS: its console sink prints
+    # full record snapshots (PHI) to stdout.
+    - name: CLICKHOUSE_URL
+      valueFrom:
+        secretKeyRef:
+          name: twenty-clickhouse-credentials
+          key: app-url
+          optional: true
   resources:
     requests:
       cpu: 100m
@@ -178,3 +187,9 @@ redisInternal:
 
 # Only the in-cluster Postgres reads the root key (db.enabled is false in prod).
 tolerations: *productionTolerations
+
+# OMNIA-CUSTOM: the pre-upgrade job applies ClickHouse migrations as twenty_migrator (ALL ON twenty.*).
+clickhouse:
+  migration:
+    secretName: twenty-clickhouse-credentials
+    urlKey: migrator-url

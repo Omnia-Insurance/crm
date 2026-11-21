@@ -1,0 +1,518 @@
+# ClickHouse for Twenty event logs (Settings > Logs, the Logs console). Managed with kubectl,
+# outside the my-twenty Helm release, so CRM deploys never restart it:
+#   kubectl -n twentycrm apply -f clickhouse.yaml
+# Needs StorageClass gp3-encrypted (storageclass.yaml) and Secret twenty-clickhouse-credentials
+# (create-secret.sh). README.md has the order, checks and rollback.
+#
+# Secret placeholder, deliberately commented out: applying placeholders would replace real
+# credentials. create-secret.sh generates this Secret without showing any value.
+#
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: twenty-clickhouse-credentials
+#   namespace: twentycrm
+#   labels:
+#     app.kubernetes.io/name: clickhouse
+#     app.kubernetes.io/part-of: twenty
+# type: Opaque
+# stringData:
+#   app-url: http://twenty_app:<64 hex>@clickhouse.twentycrm.svc.cluster.local:8123/twenty?request_timeout=10000  # server, worker
+#   migrator-url: http://twenty_migrator:<64 hex>@clickhouse.twentycrm.svc.cluster.local:8123/twenty  # migration jobs
+#   app-password-sha256: <sha256 of the app password>                                                # ClickHouse pod
+#   migrator-password-sha256: <sha256 of the migrator password>                                      # ClickHouse pod
+#   ops-password: <64 hex>                                                                            # operators
+#   ops-password-sha256: <sha256 of the ops password>                                                # ClickHouse pod
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: clickhouse
+  namespace: twentycrm
+  labels:
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/instance: twenty-event-logs
+    app.kubernetes.io/component: event-logs
+    app.kubernetes.io/part-of: twenty
+    app.kubernetes.io/managed-by: kubectl
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clickhouse-config
+  namespace: twentycrm
+  labels:
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/instance: twenty-event-logs
+    app.kubernetes.io/component: event-logs
+    app.kubernetes.io/part-of: twenty
+    app.kubernetes.io/managed-by: kubectl
+data:
+  10-omnia-hardening.xml: |
+    <!--
+      ClickHouse 26.8 server overrides for Twenty event logs (PHI). Mounted as the whole
+      /etc/clickhouse-server/config.d directory, which hides the image's docker_related_config.xml.
+    -->
+    <clickhouse>
+        <!-- Twenty writes and parses naive UTC DateTime64 strings. -->
+        <timezone>UTC</timezone>
+
+        <!-- In the pod network namespace this is eth0 (pod IP) plus loopback. IPv4-only cluster. -->
+        <listen_host>0.0.0.0</listen_host>
+
+        <!-- The Service exposes 8123 only; 9000 serves in-pod clickhouse-client and the NetworkPolicy blocks it. -->
+        <http_port>8123</http_port>
+        <tcp_port>9000</tcp_port>
+        <mysql_port remove="remove"/>
+        <postgresql_port remove="remove"/>
+        <interserver_http_port remove="remove"/>
+
+        <!-- Refuse any passwordless or plaintext-password user. -->
+        <allow_plaintext_password>0</allow_plaintext_password>
+        <allow_no_password>0</allow_no_password>
+        <allow_implicit_no_password>0</allow_implicit_no_password>
+
+        <!-- On by default; would post crash context to crash.clickhouse.com. -->
+        <send_crash_reports>
+            <enabled>false</enabled>
+        </send_crash_reports>
+
+        <!-- A core is a memory image (PHI) written outside the encrypted volume. 1, not 0: with a piped
+             core_pattern (systemd-coredump) the kernel ignores 0 and refuses only at 1. -->
+        <core_dump>
+            <size_limit>1</size_limit>
+        </core_dump>
+
+        <!-- Stock is trace level into 10 x 1000M files on the container layer (node root disk). -->
+        <logger>
+            <level>warning</level>
+            <console>1</console>
+            <log remove="remove"/>
+            <errorlog remove="remove"/>
+        </logger>
+
+        <!-- The ratio applies to the cgroup memory limit. Caches are lazily filled; cap them for a 3Gi pod. -->
+        <max_server_memory_usage_to_ram_ratio>0.75</max_server_memory_usage_to_ram_ratio>
+        <mark_cache_size>268435456</mark_cache_size>
+        <uncompressed_cache_size>134217728</uncompressed_cache_size>
+        <index_mark_cache_size>67108864</index_mark_cache_size>
+        <query_condition_cache_size>33554432</query_condition_cache_size>
+        <query_cache>
+            <max_size_in_bytes>67108864</max_size_in_bytes>
+        </query_cache>
+
+        <!-- Stock system logs have no TTL. Keep a database access trail, drop the profiling logs. -->
+        <query_log>
+            <ttl>event_date + INTERVAL 90 DAY DELETE</ttl>
+        </query_log>
+        <session_log>
+            <database>system</database>
+            <table>session_log</table>
+            <partition_by>toYYYYMM(event_date)</partition_by>
+            <ttl>event_date + INTERVAL 90 DAY DELETE</ttl>
+            <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+        </session_log>
+        <part_log>
+            <ttl>event_date + INTERVAL 14 DAY DELETE</ttl>
+        </part_log>
+        <error_log>
+            <ttl>event_date + INTERVAL 30 DAY DELETE</ttl>
+        </error_log>
+        <crash_log>
+            <ttl>event_date + INTERVAL 30 DAY DELETE</ttl>
+        </crash_log>
+        <text_log remove="remove"/>
+        <trace_log remove="remove"/>
+        <query_thread_log remove="remove"/>
+        <query_views_log remove="remove"/>
+        <metric_log remove="remove"/>
+        <asynchronous_metric_log remove="remove"/>
+        <query_metric_log remove="remove"/>
+        <opentelemetry_span_log remove="remove"/>
+        <processors_profile_log remove="remove"/>
+        <background_schedule_pool_log remove="remove"/>
+        <instrumentation_trace_log remove="remove"/>
+
+        <merge_tree>
+            <!-- Refuse inserts once under 15% of the volume is free: a write flood fails inserts instead of filling the disk. -->
+            <min_free_disk_ratio_to_perform_insert>0.15</min_free_disk_ratio_to_perform_insert>
+            <!-- Merge memory grows with input parts times JSON paths (one stream each); record snapshots carry
+                 hundreds of paths. Measured on 26.8: ~1 GiB for an 8-part merge without these caps. -->
+            <merge_max_dynamic_subcolumns_in_wide_part>256</merge_max_dynamic_subcolumns_in_wide_part>
+            <max_parts_to_merge_at_once>5</max_parts_to_merge_at_once>
+        </merge_tree>
+    </clickhouse>
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clickhouse-users
+  namespace: twentycrm
+  labels:
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/instance: twenty-event-logs
+    app.kubernetes.io/component: event-logs
+    app.kubernetes.io/part-of: twenty
+    app.kubernetes.io/managed-by: kubectl
+data:
+  10-omnia-users.xml: |
+    <!--
+      ClickHouse users for Twenty event logs. Mounted as the whole /etc/clickhouse-server/users.d
+      directory. Each CH_*_PASSWORD_SHA256 comes from Secret twenty-clickhouse-credentials.
+      192.168.0.0/16 is the twenty-crm VPC CIDR (vpc-0c44bc57e788cd885); pods take VPC addresses.
+    -->
+    <clickhouse>
+        <users>
+            <!-- Stock default: empty password, ::/0, GRANT ALL, access_management. -->
+            <default remove="remove"/>
+
+            <!-- Server and worker. No DDL, DROP or TRUNCATE. ALTER DELETE only on the tables the hourly
+                 EventLogCleanupCronJob trims to the workspace retention setting. -->
+            <twenty_app>
+                <password_sha256_hex from_env="CH_TWENTY_APP_PASSWORD_SHA256"/>
+                <networks>
+                    <ip>192.168.0.0/16</ip>
+                </networks>
+                <profile>twenty_app</profile>
+                <quota>default</quota>
+                <grants>
+                    <query>GRANT SELECT, INSERT ON twenty.*</query>
+                    <query>GRANT ALTER DELETE ON twenty.objectEvent</query>
+                    <query>GRANT ALTER DELETE ON twenty.workspaceEvent</query>
+                    <query>GRANT ALTER DELETE ON twenty.pageview</query>
+                    <query>GRANT ALTER DELETE ON twenty.applicationLog</query>
+                </grants>
+            </twenty_app>
+
+            <!-- Migration jobs only: CREATE DATABASE/TABLE, ALTER, RENAME, EXCHANGE, DROP on twenty.
+                 No global grants, so no url(), s3(), remote() or file() reads. -->
+            <twenty_migrator>
+                <password_sha256_hex from_env="CH_TWENTY_MIGRATOR_PASSWORD_SHA256"/>
+                <networks>
+                    <ip>192.168.0.0/16</ip>
+                </networks>
+                <profile>twenty_migrator</profile>
+                <quota>default</quota>
+                <grants>
+                    <query>GRANT ALL ON twenty.*</query>
+                </grants>
+            </twenty_migrator>
+
+            <!-- kubectl exec only. System tables and metadata; of the PHI table, only event names and times. -->
+            <ops>
+                <password_sha256_hex from_env="CH_OPS_PASSWORD_SHA256"/>
+                <networks>
+                    <ip>127.0.0.1</ip>
+                </networks>
+                <profile>twenty_app</profile>
+                <quota>default</quota>
+                <grants>
+                    <query>GRANT SELECT ON system.*</query>
+                    <query>GRANT SHOW ON twenty.*</query>
+                    <query>GRANT SHOW ACCESS ON *.*</query>
+                    <query>GRANT SELECT ON twenty._migration</query>
+                    <query>GRANT SELECT(event, timestamp, isCustom) ON twenty.objectEvent</query>
+                    <query>GRANT KILL QUERY ON *.*</query>
+                    <query>GRANT SYSTEM FLUSH LOGS ON *.*</query>
+                </grants>
+            </ops>
+        </users>
+
+        <!-- readonly stays 0: Twenty sets async_insert, wait_for_async_insert, enable_http_compression,
+             use_query_cache and max_execution_time per query; migrations set alter_sync and mutations_sync. -->
+        <profiles>
+            <twenty_app>
+                <max_memory_usage>1073741824</max_memory_usage>
+                <max_bytes_before_external_group_by>536870912</max_bytes_before_external_group_by>
+                <max_bytes_before_external_sort>536870912</max_bytes_before_external_sort>
+                <max_execution_time>60</max_execution_time>
+                <!-- app-url sets request_timeout=10000, so the Node client gives up after 10 s; stop the server-side read too. -->
+                <cancel_http_readonly_queries_on_client_close>1</cancel_http_readonly_queries_on_client_close>
+                <!-- Locked so no user can keep its own queries out of system.query_log. -->
+                <constraints>
+                    <max_memory_usage>
+                        <max>1073741824</max>
+                    </max_memory_usage>
+                    <log_queries><readonly/></log_queries>
+                    <log_queries_min_type><readonly/></log_queries_min_type>
+                    <log_queries_min_query_duration_ms><readonly/></log_queries_min_query_duration_ms>
+                    <log_queries_probability><readonly/></log_queries_probability>
+                </constraints>
+            </twenty_app>
+            <!-- No max_execution_time: migrations 006 and 009 must not be cut off halfway. -->
+            <twenty_migrator>
+                <max_memory_usage>1073741824</max_memory_usage>
+                <max_bytes_before_external_group_by>536870912</max_bytes_before_external_group_by>
+                <max_bytes_before_external_sort>536870912</max_bytes_before_external_sort>
+                <!-- Locked so no user can keep its own queries out of system.query_log. -->
+                <constraints>
+                    <max_memory_usage>
+                        <max>1073741824</max>
+                    </max_memory_usage>
+                    <log_queries><readonly/></log_queries>
+                    <log_queries_min_type><readonly/></log_queries_min_type>
+                    <log_queries_min_query_duration_ms><readonly/></log_queries_min_query_duration_ms>
+                    <log_queries_probability><readonly/></log_queries_probability>
+                </constraints>
+            </twenty_migrator>
+        </profiles>
+    </clickhouse>
+---
+# Applied before the StatefulSet so the pod is covered from its first start.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: clickhouse
+  namespace: twentycrm
+  labels:
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/instance: twenty-event-logs
+    app.kubernetes.io/component: event-logs
+    app.kubernetes.io/part-of: twenty
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: clickhouse
+      app.kubernetes.io/instance: twenty-event-logs
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: twenty
+              app.kubernetes.io/instance: my-twenty
+              app.kubernetes.io/component: server
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: twenty
+              app.kubernetes.io/instance: my-twenty
+              app.kubernetes.io/component: worker
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: twenty
+              app.kubernetes.io/instance: my-twenty
+              app.kubernetes.io/component: migration
+      ports:
+        - protocol: TCP
+          port: 8123
+  # Egress follows deny-instance-metadata (everything but IMDS), like every pod in the namespace. No
+  # ClickHouse user holds a url(), s3(), remote() or file() grant.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clickhouse-headless
+  namespace: twentycrm
+  labels:
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/instance: twenty-event-logs
+    app.kubernetes.io/component: event-logs
+    app.kubernetes.io/part-of: twenty
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/instance: twenty-event-logs
+  ports:
+    - name: http
+      port: 8123
+      targetPort: http
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clickhouse
+  namespace: twentycrm
+  labels:
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/instance: twenty-event-logs
+    app.kubernetes.io/component: event-logs
+    app.kubernetes.io/part-of: twenty
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/instance: twenty-event-logs
+  ports:
+    - name: http
+      port: 8123
+      targetPort: http
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: clickhouse
+  namespace: twentycrm
+  labels:
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/instance: twenty-event-logs
+    app.kubernetes.io/component: event-logs
+    app.kubernetes.io/part-of: twenty
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  replicas: 1
+  serviceName: clickhouse-headless
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: clickhouse
+      app.kubernetes.io/instance: twenty-event-logs
+  updateStrategy:
+    type: RollingUpdate
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: clickhouse
+        app.kubernetes.io/instance: twenty-event-logs
+        app.kubernetes.io/component: event-logs
+        app.kubernetes.io/part-of: twenty
+        app.kubernetes.io/managed-by: kubectl
+      annotations:
+        # The volume is zonal: a scale-down eviction leaves the pod Pending until us-east-1d has room.
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+    spec:
+      serviceAccountName: clickhouse
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 90
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      nodeSelector:
+        environment: production
+      tolerations:
+        - key: environment
+          operator: Equal
+          value: production
+          effect: NoSchedule
+      # Pins the zonal EBS volume (created on first schedule) to us-east-1d, the node without Redis.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: topology.kubernetes.io/zone
+                    operator: In
+                    values:
+                      - us-east-1d
+      containers:
+        - name: clickhouse
+          # 26.8 LTS: every 25.x line, upstream's 25.8.8 included, is out of security support.
+          image: clickhouse/clickhouse-server:26.8.43.13@sha256:1136f5db3a9ecd97debe87260c78bf3be94bc80474ede020d89b0943d08898a8
+          imagePullPolicy: IfNotPresent
+          # Skips /entrypoint.sh, which writes users.d/default-user.xml and copies users.xml into /tmp.
+          command:
+            - /usr/bin/clickhouse-server
+          args:
+            - --config-file=/etc/clickhouse-server/config.xml
+          workingDir: /var/lib/clickhouse
+          env:
+            # A forked watchdog would hide crashes from the kubelet.
+            - name: CLICKHOUSE_WATCHDOG_ENABLE
+              value: "0"
+            - name: TZ
+              value: UTC
+            # The root filesystem is read-only; any temp file lands on the encrypted volume.
+            - name: TMPDIR
+              value: /var/lib/clickhouse/tmp
+            - name: CH_TWENTY_APP_PASSWORD_SHA256
+              valueFrom:
+                secretKeyRef:
+                  name: twenty-clickhouse-credentials
+                  key: app-password-sha256
+            - name: CH_TWENTY_MIGRATOR_PASSWORD_SHA256
+              valueFrom:
+                secretKeyRef:
+                  name: twenty-clickhouse-credentials
+                  key: migrator-password-sha256
+            - name: CH_OPS_PASSWORD_SHA256
+              valueFrom:
+                secretKeyRef:
+                  name: twenty-clickhouse-credentials
+                  key: ops-password-sha256
+          ports:
+            - name: http
+              containerPort: 8123
+              protocol: TCP
+            - name: native
+              containerPort: 9000
+              protocol: TCP
+          # A low memory request makes ClickHouse, not the CRM, the first eviction candidate under node
+          # pressure. The server caps itself at 0.75 of the limit (3 GiB); the CPU limit keeps merges
+          # from starving ingress-nginx on the same node.
+          resources:
+            requests:
+              cpu: 250m
+              memory: 1Gi
+            limits:
+              cpu: 500m
+              memory: 4Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          # Exec probes use loopback inside the pod, so the ingress NetworkPolicy never blocks them.
+          startupProbe:
+            exec:
+              command: ["wget", "-q", "-O", "/dev/null", "-T", "3", "http://127.0.0.1:8123/ping"]
+            periodSeconds: 5
+            timeoutSeconds: 4
+            failureThreshold: 60
+          readinessProbe:
+            exec:
+              command: ["wget", "-q", "-O", "/dev/null", "-T", "3", "http://127.0.0.1:8123/ping"]
+            periodSeconds: 10
+            timeoutSeconds: 4
+            failureThreshold: 3
+          # Restarts a server that stops answering HTTP. Twenty's 10 s request_timeout covers slow queries.
+          livenessProbe:
+            exec:
+              command: ["wget", "-q", "-O", "/dev/null", "-T", "3", "http://127.0.0.1:8123/ping"]
+            periodSeconds: 20
+            timeoutSeconds: 4
+            failureThreshold: 6
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/clickhouse
+            - name: config-d
+              mountPath: /etc/clickhouse-server/config.d
+              readOnly: true
+            - name: users-d
+              mountPath: /etc/clickhouse-server/users.d
+              readOnly: true
+      volumes:
+        - name: config-d
+          configMap:
+            name: clickhouse-config
+        - name: users-d
+          configMap:
+            name: clickhouse-users
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app.kubernetes.io/name: clickhouse
+          app.kubernetes.io/instance: twenty-event-logs
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: gp3-encrypted
+        resources:
+          requests:
+            storage: 30Gi

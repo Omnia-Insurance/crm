@@ -3,6 +3,8 @@ OMNIA-CUSTOM: owns schema upgrades (server pods set DISABLE_DB_MIGRATIONS). Only
 instance-commands runner: it records fast commands per workspace, so upgrade then skips every slow and workspace command.
 Env mirrors deployment-server.yaml, storage env included (upgrade commands use file storage).
 Pre-upgrade only: a first install (new cluster, DR, staging) needs the one-off upgrade pod before helm install.
+With clickhouse.migration.secretName set it then applies ClickHouse (event log) migrations as the migrator user,
+time-boxed and warn-only: event logs are optional, so ClickHouse must never fail or stall a CRM deploy.
 */}}
 {{- if .Values.server.enabled }}
 apiVersion: batch/v1
@@ -67,6 +69,11 @@ spec:
               node dist/command/command.js cache:flush &&
               node dist/command/command.js upgrade &&
               node dist/command/command.js cache:flush
+              {{- if .Values.clickhouse.migration.secretName }} &&
+              { [ -z "${CLICKHOUSE_MIGRATION_URL:-}" ] ||
+              CLICKHOUSE_URL="$CLICKHOUSE_MIGRATION_URL" timeout 900 node dist/database/clickhouse/migrations/run-migrations.js ||
+              echo "WARNING: ClickHouse migrations failed; event logs may drop events until they are re-run"; }
+              {{- end }}
           env:
             - name: SERVER_URL
               value: {{ include "twenty.serverUrl" . | quote }}
@@ -116,6 +123,16 @@ spec:
             {{- end }}
             {{- with .Values.server.extraEnv }}
             {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- with .Values.clickhouse.migration }}
+            {{- if .secretName }}
+            - name: CLICKHOUSE_MIGRATION_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .secretName | quote }}
+                  key: {{ .urlKey | quote }}
+                  optional: true
+            {{- end }}
             {{- end }}
           resources:
             {{- toYaml .Values.server.resources | nindent 12 }}

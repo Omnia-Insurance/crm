@@ -248,3 +248,9 @@ redis:
 # OMNIA-CUSTOM: tolerations for the in-cluster Postgres pod only; every other
 # component reads its own <component>.tolerations.
 tolerations: []
+
+# OMNIA-CUSTOM: ClickHouse (event logs) migrations in the pre-upgrade job; an empty secretName skips them.
+clickhouse:
+  migration:
+    secretName: ""
+    urlKey: migrator-url
