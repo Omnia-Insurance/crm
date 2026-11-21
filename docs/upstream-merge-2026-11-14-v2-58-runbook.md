@@ -91,7 +91,7 @@ Omnia upgrade steps, in the order `upgrade` runs them:
     ```
 11. **Rehearse on a fresh prod snapshot**, after steps 3 to 6, with the server built from `main`. Never rehearse on a dev database with gaps in its upgrade history ([Dev databases](#dev-databases)).
     - Restore with `scripts/replicate-db-to-local.sh --via-k8s --yes 2>&1 | tee rehearsal.log` (env vars in its header). It deletes the prod signing keys and refresh tokens, and runs `cache:flush` and `upgrade` against the copy. The copy holds PHI: keep it on the encrypted laptop and drop it after P2.
-    - The script disconnects the copy from prod services (webhooks, pull pipelines, SMTP, Sentry, telemetry). Before a worker runs on it, also deactivate its Compliance Call Pipeline and delete the local `bull:webhook-queue:*` keys, or it calls Deepgram and replays queued webhooks.
+    - The script disconnects the copy from prod services (webhooks, pull pipelines, mail and calendar sync, SMTP, Sentry, telemetry). Before a worker runs on it, also deactivate its Compliance Call Pipeline and delete the local `bull:webhook-queue:*` keys, or it calls Deepgram and replays queued webhooks.
     - If the script warns that the local encryption key is the prod key, the copy's OAuth tokens and app secrets are live: never run a worker on it.
     - Never let PHI into a model context during the rehearsal. Check UI pages with a script that prints routes, counts and record ids, not with screenshots of record pages.
     - `upgrade` must finish with exit 0. W9 runs after every permission step and fails it on any violation. `upgrade --dry-run` stops at the first instance step, so only a real run proves W1 and W9.

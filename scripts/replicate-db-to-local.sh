@@ -689,9 +689,25 @@ BEGIN
     UPDATE core.webhook SET "deletedAt" = NOW() WHERE "deletedAt" IS NULL;
   END IF;
 
+  IF to_regclass('core."messageChannel"') IS NOT NULL THEN
+    UPDATE core."messageChannel" SET "isSyncEnabled" = FALSE WHERE "isSyncEnabled";
+  END IF;
+
+  IF to_regclass('core."calendarChannel"') IS NOT NULL THEN
+    UPDATE core."calendarChannel" SET "isSyncEnabled" = FALSE WHERE "isSyncEnabled";
+  END IF;
+
   FOR workspace_schema IN SELECT "databaseSchema" FROM core.workspace WHERE "databaseSchema" IS NOT NULL LOOP
     IF to_regclass(format('%I.webhook', workspace_schema)) IS NOT NULL THEN
       EXECUTE format('UPDATE %I.webhook SET "deletedAt" = NOW() WHERE "deletedAt" IS NULL', workspace_schema);
+    END IF;
+
+    IF to_regclass(format('%I."messageChannel"', workspace_schema)) IS NOT NULL THEN
+      EXECUTE format('UPDATE %I."messageChannel" SET "isSyncEnabled" = FALSE WHERE "isSyncEnabled"', workspace_schema);
+    END IF;
+
+    IF to_regclass(format('%I."calendarChannel"', workspace_schema)) IS NOT NULL THEN
+      EXECUTE format('UPDATE %I."calendarChannel" SET "isSyncEnabled" = FALSE WHERE "isSyncEnabled"', workspace_schema);
     END IF;
   END LOOP;
 

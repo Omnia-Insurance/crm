@@ -1210,6 +1210,10 @@ check_file_contains \
   "Prod-to-local restore must soft-delete the copy's webhooks (they post to omniaagent.com)"
 check_file_contains \
   "scripts/replicate-db-to-local.sh" \
+  'UPDATE core."messageChannel" SET "isSyncEnabled" = FALSE WHERE "isSyncEnabled";' \
+  "Prod-to-local restore must stop mail and calendar sync (a local key equal to prod's decrypts the copy's OAuth tokens)"
+check_file_contains \
+  "scripts/replicate-db-to-local.sh" \
   "AND key IN ('EMAIL_SMTP_PASSWORD', 'SENTRY_DSN', 'SENTRY_FRONT_DSN');" \
   "Prod-to-local restore must drop the copy's SMTP password and Sentry DSNs"
 check_file_contains \
