@@ -1202,6 +1202,18 @@ check_file_contains \
   "Prod-to-local restore must flush cached Workspace rows and config after rewrites"
 check_file_contains \
   "scripts/replicate-db-to-local.sh" \
+  'UPDATE core."ingestionPipeline" SET "isEnabled" = FALSE WHERE "isEnabled";' \
+  "Prod-to-local restore must disable the copy's pull pipelines (they call Convoso with prod credentials)"
+check_file_contains \
+  "scripts/replicate-db-to-local.sh" \
+  'UPDATE core.webhook SET "deletedAt" = NOW() WHERE "deletedAt" IS NULL;' \
+  "Prod-to-local restore must soft-delete the copy's webhooks (they post to omniaagent.com)"
+check_file_contains \
+  "scripts/replicate-db-to-local.sh" \
+  "AND key IN ('EMAIL_SMTP_PASSWORD', 'SENTRY_DSN', 'SENTRY_FRONT_DSN');" \
+  "Prod-to-local restore must drop the copy's SMTP password and Sentry DSNs"
+check_file_contains \
+  "scripts/replicate-db-to-local.sh" \
   'export PG_DATABASE_URL="$LOCAL_DATABASE_URL"' \
   "Local server commands must target the restored database"
 check_file_contains \
@@ -1981,6 +1993,38 @@ check_file_contains \
   "Policy Agent ownership RLS must resolve through Agent Profile"
 
 echo ""
+echo "--- Omnia upgrade command W8b: standard objects keep upstream's record-action lockdown ---"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/upgrade-version-command/omnia/2-58-workspace-command-1794500008000-omnia-restore-standard-object-permission-lockdown.command.ts" \
+  "@RegisteredWorkspaceCommand('2.58.0', 1794500008000)" \
+  "W8b must restore the standard lockdown (recordShare and five others) before W9 verifies it"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/upgrade-version-command/omnia/omnia-upgrade-version-command.module.ts" \
+  "OmniaRestoreStandardObjectPermissionLockdownCommand," \
+  "W8b must be provided by OmniaUpgradeVersionCommandModule"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/upgrade-version-command/omnia/utils/get-standard-object-disabled-permission-actions-by-universal-identifier.util.ts" \
+  "buildStandardFlatObjectMetadataMaps" \
+  "W8b and W9 must read the expected lockdown from upstream's standard object builders, not a hand-kept list"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/upgrade-version-command/omnia/verify-permissions/services/omnia-permissions-verification.service.ts" \
+  "findStandardObjectPermissionLockdownViolations" \
+  "W9 must fail on any standard object missing its record-action lockdown"
+
+echo "--- Omnia upgrade command W10: users keep landing on all records ---"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/upgrade-version-command/omnia/2-58-workspace-command-1795231988000-omnia-prioritize-initial-object-views.command.ts" \
+  "@RegisteredWorkspaceCommand('2.58.0', 1795231988000)" \
+  "W10 must move each seeded All <records> view ahead of custom views (v2.58 opens the first non-INDEX view)"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/upgrade-version-command/omnia/omnia-upgrade-version-command.module.ts" \
+  "OmniaPrioritizeInitialObjectViewsCommand," \
+  "W10 must be provided by OmniaUpgradeVersionCommandModule"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/upgrade-version-command/omnia/utils/compute-omnia-initial-object-view-position-updates.util.ts" \
+  "view.id.localeCompare(otherView.id) < 0" \
+  "W10 must break position ties by id, like the front's computeObjectViewTargetIds"
+
 echo "--- Omnia upgrade command W9: verify permissions, fails the upgrade (contracts C1/C2, som U17, fcmd U11/U12) ---"
 check_file_exists \
   "packages/twenty-server/src/database/commands/upgrade-version-command/omnia/2-58-workspace-command-1794500009000-omnia-verify-permissions.command.ts" \
@@ -1988,7 +2032,7 @@ check_file_exists \
 check_file_contains \
   "packages/twenty-server/src/database/commands/upgrade-version-command/omnia/2-58-workspace-command-1794500009000-omnia-verify-permissions.command.ts" \
   "@RegisteredWorkspaceCommand('2.58.0', 1794500009000)" \
-  "W9 must stay the last 2.58 workspace step, after W1, upstream backfill 1794337540466 and W6/W7"
+  "W9 must run after every permission-affecting 2.58 step: W1, upstream backfill 1794337540466 and W6/W7"
 check_file_contains \
   "packages/twenty-server/src/database/commands/upgrade-version-command/omnia/2-58-workspace-command-1794500009000-omnia-verify-permissions.command.ts" \
   "reportOmniaPermissionsViolationsOrThrow" \

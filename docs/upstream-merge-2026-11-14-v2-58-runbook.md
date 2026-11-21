@@ -38,7 +38,9 @@ Omnia upgrade steps, in the order `upgrade` runs them:
 | W2–W4 | `…-backfill-custom-object-search-fields`, `…-set-recording-field-display-as-audio`, `…-consolidate-standard-delete-command-menu-items` | Search fields, call recording display, unified delete commands |
 | W5 | `upgrade:2-58:omnia-migrate-one-to-many-view-filters` | Migrates one-to-many view filters; logs the rest as `fix them by hand` |
 | W6–W8 | `…-sync-dashboard-audience`, `…-reconciliation-object-lockdown`, `…-purge-legacy-export-files` | Dashboard audience rules, reconciliation lockdown, deletes `export/exports/` files |
-| W9 | `upgrade:2-58:omnia-verify-permissions` (`1794500009000`, last) | Fails the upgrade on any RLS or PHI-gate violation. Also `workspace:omnia-verify-permissions`. |
+| W8b | `upgrade:2-58:omnia-restore-standard-object-permission-lockdown` (`1794500008000`) | Gives the six standard objects synced after 2.53 (`recordShare`, `shortLink`, `agentMessageReaction`, `campaignDelivery`, `messageSuppression`, `agentChatThreadParticipant`) the record-action lockdown a fresh v2.58 workspace has. Without it every role can write record shares, including on other users' private AI threads. Adds actions only. |
+| W9 | `upgrade:2-58:omnia-verify-permissions` (`1794500009000`) | Fails the upgrade on any RLS or PHI-gate violation. Also `workspace:omnia-verify-permissions`. |
+| W10 | `upgrade:2-58:omnia-prioritize-initial-object-views` (`1795231988000`) | Moves each object's "All <records>" view (seeded by upstream 2.41) ahead of its other views. v2.58 opens the first non-INDEX view, so without it users land on views such as DNT or Today. |
 
 ## Before P0: the branch
 
@@ -50,15 +52,17 @@ Omnia upgrade steps, in the order `upgrade` runs them:
 
 1. **Deploy pipeline.** Fix GitHub Actions (no run since 2026-10-08). Find which image prod runs and how #112 reached it: `kubectl -n twentycrm get deploy my-twenty-twenty-server -o jsonpath='{..image}'`. CI has never built a v2.58 image, and its front build needs an 8 GB heap that may run out on `ubuntu-latest`, so step 10 builds the image by hand.
 2. **Pre-flight SQL** ([below](#pre-flight-sql)). Resolve every finding before the window, and record the decisions on the cutover's Linear issue.
+   - **Workflow runs** (pre-flight 24). v2.58's stale-run cron re-queues every run left ENQUEUED and resumes every RUNNING one. On the snapshot that replays 6,252 runs from March to May (Lead Contacted would move about 2,200 leads from Assigned back to Contacted) and resumes 409 runs of the deactivated "Post Policy Sale SMS Campaigns". P1 step 4 stops them. Decide with Matthew whether the 409 SMS runs may continue (recommended: no). Stopping them is safe before the window too, away from 00:00 UTC when delayed steps resume.
 3. **Retired apps.**
    - call-recording (`4daa5147-…`): if it is installed, export its data, then uninstall it under Settings > Applications. Otherwise the 2-10 upgrade renames its `callRecording` object to `callRecordingOld`.
    - payment-reconciliation v1 (`d11726da-…`): if it is installed, export its `payRecon*` data and run `scripts/drop-payrecon-v1-app.sh <workspaceId>` on a local copy. Then, with Matthew and after a manual RDS snapshot, run it on prod, followed by `yarn command:prod cache:flush` in a server pod.
+   - Its orphaned registration (`core."applicationRegistration"` `d48027d2-2348-4937-a4ce-3db7535677af`, no installs) must go too. Its `TWENTY_API_KEY` variable predates the `enc:v2` format, and the 2.5 backfill that converts such values sorts before prod's cursor, so the 2.31 CHECK fails the upgrade on it (rehearsal, 2026-11-20). With Matthew, once pre-flight 23 shows no `core.application` row uses it, delete its `core."applicationRegistrationVariable"` rows, then the registration. The API key it held (`apps`, 2026-03-17) is already revoked.
    - self-hosting, twenty-for-twenty and twenty-partners (deleted upstream) must not be installed. Uninstall any that is.
 4. **Compliance-qa** (`packages/twenty-apps/internal/compliance-qa/README.md` (a), (b), (f)):
    - The `DEEPGRAM_API_KEY` registration server variable exists and holds the BAA-covered Deepgram key. Set it under Settings > Applications on v2.6 (on v2.58: Settings > Developers > Apps > Compliance > Config). If it cannot be set in time, deactivate the "Compliance Call Pipeline" for the window and catch up later with `backfill-compliance-qa`.
    - Put compliance-qa's `core.application."applicationRegistrationId"` in `LOGIC_FUNCTION_AWS_CONTAINER_CREDENTIALS_APP_REGISTRATION_IDS` in `omnia-values.yaml`. It ships empty, so compliance-qa's S3, Bedrock and Translate calls fail until it is set. If the registration has no owner workspace, claim ownership first.
    - Never reinstall or re-sync compliance-qa 1.1.x on v2.58.
-5. **Webhook rate limit.** Measure the peak webhook calls per minute to omniaagent.com over 30 days, including a bulk-import day, from the receiver's access logs. Set `WEBHOOK_CALL_RATE_LIMITING_LIMIT` in `omnia-values.yaml` to peak × 2, or 600 if unmeasured. Calls above the limit are dropped and recorded as failed webhook responses, not queued.
+5. **Webhook rate limit.** Measure the peak webhook calls per minute to omniaagent.com over 30 days, including a bulk-import day, from the receiver's access logs. Set `WEBHOOK_CALL_RATE_LIMITING_LIMIT` in `omnia-values.yaml` to peak × 2, or 600 if unmeasured. Calls above the limit are dropped and recorded as failed webhook responses, not queued. A dropped person event is lost to Nia's consent mirror (`doNotText`, `doNotCall`) for good, because nothing re-syncs it: size the limit so no bulk operation reaches it, and run Nia's `scripts/twenty-native-parity.ts` after any bulk operation.
 6. **Push senders.** After the cutover, the ingestion push endpoint reads the secret only from the `x-webhook-secret` header, and a pipeline without a secret accepts no push. Move each push sender (pre-flight 18) from `?secret=` to the header now: v2.6 accepts both.
 7. **Pod IMDS block** (required before go-live). On every node group launch template, set `HttpTokens: required` and `HttpPutResponseHopLimit: 1`, then roll the node group. The hop limit alone does not stop IMDSv1. The alternative is a NetworkPolicy that denies `169.254.169.254` and keeps the Pod Identity agent (`169.254.170.23`) reachable. First check that no non-hostNetwork add-on relies on the node role. Then verify from a pod that has curl:
    ```bash
@@ -66,7 +70,7 @@ Omnia upgrade steps, in the order `upgrade` runs them:
    curl -s -m 3 -X PUT -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' -o /dev/null -w '%{http_code}\n' \
      http://169.254.169.254/latest/api/token                                                # 000 (timeout)
    ```
-8. **Signing-key decision** (Matthew). v2.6 access tokens are stateless bearer tokens valid for up to 7 days (the chart's `ACCESS_TOKEN_EXPIRES_IN`; `omnia-values.yaml` now sets 30m). They sit in the legacy JS `tokenPair` cookie or in `sessionStorage` (`impersonation_original_session`), and revoking refresh tokens does not end them. Revoking the signing keys ends them at the cutover. It also invalidates every API key, because v2.6 signs API keys with the same key (pre-flight 20 and 21), so every consumer then needs a new key. Choose one: revoke in P1 step 6 and reissue the listed keys, or accept the tail of up to 7 days.
+8. **Signing-key decision** (Matthew). v2.6 access tokens are stateless bearer tokens valid for up to 7 days (the chart's `ACCESS_TOKEN_EXPIRES_IN`; `omnia-values.yaml` now sets 30m). They sit in the legacy JS `tokenPair` cookie or in `sessionStorage` (`impersonation_original_session`), and revoking refresh tokens does not end them. Revoking the signing keys ends them at the cutover. It does not end legacy HS256 API keys (pre-flight 20): v2.58 still verifies those from `APP_SECRET`, and regenerating a key leaves the old token valid too. Retire a key only with `revokeApiKey` plus a new key, then update and restart its consumer. Choose one: revoke in P1 step 6 and retire the listed keys, or accept the tail of up to 7 days.
 9. **Dashboard (`~/command`) change**, ready to ship in P1 step 8 (it deploys on push to master):
    - Read the session server-side from the httpOnly `tokenPair` cookie on `.omniaagent.com`. Its JSON is `{"accessOrWorkspaceAgnosticToken":{"token","expiresAt"}}`: an access token only, no `refreshToken`, valid for at most 30 minutes (a copy taken before a sign-out stays valid until then). On a missing or expired token, send the browser to `${CRM_FRONTEND_URL}/welcome?postSignInRedirect=<dashboard url>`.
    - Sign out: after `$signOut()`, `SignOutDialog` sends the top-level window to `${CRM_FRONTEND_URL}/welcome?omniaSignOut=1&postSignInRedirect=<dashboard url>` instead of `/sign-in`. Only the CRM can end its host-only `__Host-twenty-session`. Without this change, dashboard Sign out signs the user straight back in, a HIPAA access-control regression on shared call-centre workstations.
@@ -87,13 +91,16 @@ Omnia upgrade steps, in the order `upgrade` runs them:
     ```
 11. **Rehearse on a fresh prod snapshot**, after steps 3 to 6, with the server built from `main`. Never rehearse on a dev database with gaps in its upgrade history ([Dev databases](#dev-databases)).
     - Restore with `scripts/replicate-db-to-local.sh --via-k8s --yes 2>&1 | tee rehearsal.log` (env vars in its header). It deletes the prod signing keys and refresh tokens, and runs `cache:flush` and `upgrade` against the copy. The copy holds PHI: keep it on the encrypted laptop and drop it after P2.
-    - Before any worker runs on the copy, cut it off from prod systems: soft-delete its webhooks (`UPDATE core.webhook SET "deletedAt" = now();`), disable its pull pipelines (`UPDATE core."ingestionPipeline" SET "isEnabled" = false;`), deactivate its Compliance Call Pipeline, delete the local `bull:webhook-queue:*` keys and run `cache:flush`. Otherwise it calls omniaagent.com, Convoso and Deepgram.
-    - `upgrade` must finish with exit 0. W9 runs last and fails it on any violation. `upgrade --dry-run` stops at the first instance step, so only a real run proves W1 and W9.
-    - Read the upgrade time from the log timestamps, and size the window and the cutover job's `activeDeadlineSeconds` from it (search vectors are recomputed for about 258k calls and 63k persons).
+    - The script disconnects the copy from prod services (webhooks, pull pipelines, SMTP, Sentry, telemetry). Before a worker runs on it, also deactivate its Compliance Call Pipeline and delete the local `bull:webhook-queue:*` keys, or it calls Deepgram and replays queued webhooks.
+    - If the script warns that the local encryption key is the prod key, the copy's OAuth tokens and app secrets are live: never run a worker on it.
+    - Never let PHI into a model context during the rehearsal. Check UI pages with a script that prints routes, counts and record ids, not with screenshots of record pages.
+    - `upgrade` must finish with exit 0. W9 runs after every permission step and fails it on any violation. `upgrade --dry-run` stops at the first instance step, so only a real run proves W1 and W9.
+    - Read the upgrade time from the log timestamps, and size the window and the cutover job's `activeDeadlineSeconds` from it. Rehearsal 2026-11-20 on a laptop (238k persons, 421k calls, 1.7M timeline activities): about 3 minutes of runtime over 626 steps. The longest single step was the 2.35 `timelineActivity` search-vector column, at 27 s.
     - Run the [post-upgrade checks](#post-upgrade-checks).
     - W5 manual-fix list: `grep 'fix them by hand' rehearsal.log`. `yarn command:prod upgrade:2-58:omnia-migrate-one-to-many-view-filters --dry-run` lists them again, because W5 leaves those rows unchanged. The snapshot's ids match prod. Before P1, repair or delete those view filters on prod, review the chart-widget and workflow filters it reports, and record the ids on a Linear issue. In v2.58 such a row compiles to no filter (the view silently drops a condition), or throws for a UUID-valued unsupported operand.
     - W8 keeps the export file rows whose storage object is missing. That is expected on a local copy without S3 files.
-    - Rehearse P1 step 6, including the signing-key revoke if step 8 chose it: afterwards sign-in works and an old API key gets 401.
+    - Rehearse P1 step 6, including the signing-key revoke if step 8 chose it: afterwards sign-in works, and a legacy API key still works until it is revoked (step 8).
+    - Before any worker runs on the copy, run P1 step 4's workflow-run statements in their post-upgrade form (expect 6,252, 19 and 409 rows on the November snapshot), or it replays them against the copy.
     - Run the [smoke checks](#smoke-checks) as an agent and as an admin. Time the Policies index and kanban as an agent (the hop renders as SQL `EXISTS`); if they are slow, capture the query with a local `log_min_duration_statement` and `EXPLAIN ANALYZE` it.
     - Smoke-test the pushed image itself on the copy: run `$REPO:$TAG` as the server and as the worker (`yarn worker:prod`) with the local env, `DISABLE_DB_MIGRATIONS=true` and `host.docker.internal` for Postgres and Redis. Sign in (bcrypt), run an XLSX import (worker), and check `yarn command:prod upgrade:status`.
     - Run `cron:register:all` on the copy and record `ZCARD bull:cron-queue:repeat` as the P2 baseline.
@@ -105,8 +112,7 @@ Omnia upgrade steps, in the order `upgrade` runs them:
 13. **Rotate the ui.sh MCP token.**
 14. **Announce** the window and the user-visible changes:
     - Everyone signs in again once, because old sessions are revoked. Dashboard Sign out now also signs out of the CRM.
-    - Agents' search finds only their own leads, and no longer matches the middle of words (digit fragments such as phone endings still match).
-    - A CSV re-import or merge that touches an agent's own older policies hits the edit-window error.
+    - Search no longer matches the middle of words (digit fragments such as phone endings still match). Agents still see every lead, as today.
     - One running export per workspace. It is cancelled when the tab closes, and there is no export from a record page. Imports run with the importer's permissions.
     - Roles with a dashboard audience see and edit only the dashboards tagged for them.
     - Create opens the new record. The 10,000-record cap on bulk delete is gone.
@@ -154,7 +160,21 @@ Omnia upgrade steps, in the order `upgrade` runs them:
    ```sql
    UPDATE core."exportJob" SET status = 'cancelled' WHERE status IN ('pending', 'processing');
    UPDATE core."importJob" SET status = 'failed' WHERE status IN ('uploading', 'pending', 'processing');
+
+   -- Old workflow runs (P0 step 2). STOPPED, not FAILED: users can retry FAILED runs. Run c only if P0 decided it.
+   BEGIN;
+   UPDATE "<databaseSchema>"."workflowRun" SET status = 'STOPPED', "endedAt" = now(), "updatedAt" = now()
+   WHERE "deletedAt" IS NULL AND status IN ('ENQUEUED', 'NOT_STARTED') AND "createdAt" < now() - interval '1 day'
+     AND "workflowId" IN ('a63eb315-0393-421f-9434-7372b9583c88', '8c9711ba-8a61-406e-8ff3-f16a5a55f2a9', '3ca3e3fc-f360-413c-86ee-8ac83c1a6937', '32ef78c2-f7f2-4e07-96b0-8b35e57b2d13', '96307355-057d-44c3-9018-8ce82202e840');  -- a: queued runs
+   UPDATE "<databaseSchema>"."workflowRun" SET status = 'STOPPED', "endedAt" = now(), "updatedAt" = now()
+   WHERE "deletedAt" IS NULL AND status = 'RUNNING' AND "updatedAt" < now() - interval '1 day'
+     AND "workflowId" IN ('a63eb315-0393-421f-9434-7372b9583c88', '8c9711ba-8a61-406e-8ff3-f16a5a55f2a9', '3ca3e3fc-f360-413c-86ee-8ac83c1a6937', '32ef78c2-f7f2-4e07-96b0-8b35e57b2d13');  -- b: stuck runs
+   UPDATE "<databaseSchema>"."workflowRun" SET status = 'STOPPED', "endedAt" = now(), "updatedAt" = now()
+   WHERE "deletedAt" IS NULL AND status = 'RUNNING' AND "workflowId" = '96307355-057d-44c3-9018-8ce82202e840';  -- c: SMS campaign
+   COMMIT;  -- only if the counts match pre-flight 24
    ```
+   - On the upgraded copy the column is `"coreWorkflowId"`: use `"coreWorkflowId" IN (SELECT id FROM core.workflow WHERE "workspaceWorkflowId" IN (...))`.
+   - Leave the `workflow-queue` and `delayed-jobs-queue` keys alone: each job re-reads its run and does nothing unless it is RUNNING. Never `FLUSHALL`.
    ```bash
    kubectl -n twentycrm exec deploy/my-twenty-twenty-redis -- sh -c \
      'for q in export-queue import-queue; do redis-cli --scan --pattern "bull:$q:*" | xargs -r redis-cli DEL; done'
@@ -163,11 +183,13 @@ Omnia upgrade steps, in the order `upgrade` runs them:
    ```sh
    yarn command:prod omnia:run-legacy-typeorm-migrations   # expect "No pending legacy migrations"
    yarn command:prod cache:flush
-   yarn command:prod:background upgrade                    # detached; Ctrl+C only stops the stream
+   PG_DATABASE_PRIMARY_TIMEOUT_MS=3600000 yarn command:prod:background upgrade   # detached; Ctrl+C only stops the stream
    yarn command:prod:background:logs                       # until EXIT=0
    yarn command:prod upgrade:status                        # clean
    grep 'fix them by hand' /tmp/twenty-command.log        # W5 ids not handled in P0
    ```
+   - The timeout override covers the table rewrites. In the rehearsal, the 2.35 `timelineActivity` search vector outlasted a 10 s timeout, and prod's 120 s is not a safe margin on Aurora.
+   - If a step still fails with `Query read timeout`, run `upgrade` again: it resumes at the failed step.
    - Any W5 id that P0 did not handle goes on the same Linear issue and is fixed the same day.
    - Copy the log out before the pod goes: `kubectl -n twentycrm cp <pod>:/tmp/twenty-command.log upgrade-v258.log`, with `<pod>` from `kubectl -n twentycrm get pod -l job-name=my-twenty-twenty-cutover -o name`.
    - If I1, W1 or W9 stops the run, see [Contingencies](#contingencies). If W9 fails, stop: pods stay at 0 and RLS stays fail-closed.
@@ -186,7 +208,8 @@ Omnia upgrade steps, in the order `upgrade` runs them:
    WHERE type = 'CONFIG_VARIABLE' AND (key = 'AI_MODEL_PREFERENCES' OR key LIKE 'AI\_MODELS\_DEFAULT\_%');
 
    -- c. Rows that pre-flight 14 found shadowing omnia-values.yaml pins (TELEMETRY_ENABLED, *_RATE_LIMITING_*,
-   --    ACCESS_TOKEN_EXPIRES_IN) and any non-Bedrock provider key, as P0 decided.
+   --    ACCESS_TOKEN_EXPIRES_IN), any non-Bedrock provider key, and SENTRY_DSN, SENTRY_FRONT_DSN and
+   --    SENTRY_ENVIRONMENT unless their project is confirmed deleted, as P0 decided.
    DELETE FROM core."keyValuePair"
    WHERE type = 'CONFIG_VARIABLE' AND "workspaceId" IS NULL AND "userId" IS NULL AND key IN ('<key from P0>');
 
@@ -195,7 +218,7 @@ Omnia upgrade steps, in the order `upgrade` runs them:
    UPDATE core."signingKey" SET "revokedAt" = now(), "isCurrent" = false, "privateKey" = NULL WHERE "revokedAt" IS NULL;
    ```
    - The revoke reason in (a) is required: a revoke without one stays renewable through the public `renewToken` bridge for `REFRESH_TOKEN_REUSE_GRACE_PERIOD`.
-   - After (d), regenerate each API key from pre-flight 20 and update its consumer.
+   - (d) does not end legacy API keys. To retire one from pre-flight 20, run `revokeApiKey`, create a new key, then update and restart its consumer.
    - Then run `yarn command:prod cache:flush` in the cutover pod and `kubectl -n twentycrm delete job my-twenty-twenty-cutover`.
 7. **Deploy.** From `main` at `$TAG`:
    ```bash
@@ -221,7 +244,8 @@ Omnia upgrade steps, in the order `upgrade` runs them:
 - **AI.** The model list shows Bedrock models only, and an AI chat answers. Turn on the data policy flag (`yarn command:prod feature-flag:update -f IS_AI_DATA_POLICY_ENABLED --value true -w <workspaceId>`). Then set AI data processing: product-improvement sharing off, zero data retention not required, no residency region.
 - **Webhooks.** Every webhook has a role ([post-upgrade checks](#post-upgrade-checks)), and deliveries reach omniaagent.com. During the first bulk operation, watch the failed webhook responses for rate-limit drops.
 - **Compliance-qa** end to end (README (c)). The legacy pipeline is the core workflow whose `workspaceWorkflowId` is `32ef78c2-f7f2-4e07-96b0-8b35e57b2d13`; find it by that id, never by name. An eligible Call update starts a run, the scorecard reaches a final status, and the run shows no Deepgram, S3 or Bedrock credential errors.
-- **Exports** as an admin and as an agent; the agent's export is RLS-filtered.
+- **Exports** as an admin and as the Investor; agents have no export flag, as on v2.6.
+- **Workflow runs.** About 2 hours after pods are up: no ENQUEUED or NOT_STARTED run is older than a day, and no run created before the window started or resumed after it (except the SMS runs if P0 kept them). An eligible call insert now also starts a compliance run; after a day no call has two live scorecards: `SELECT count(*) FROM (SELECT "callId" FROM "<databaseSchema>"."_qaScorecard" WHERE "deletedAt" IS NULL AND "callId" IS NOT NULL GROUP BY 1 HAVING count(*) > 1) d;` returns 0.
 - **Dashboard** SSO round trip and Sign out ([smoke checks](#smoke-checks) 11 and 12).
 - **Internal apps.** Nothing to re-sync now: payment-reconciliation is gone, and Brokerage is not installed and stays deploy-gated. Before any app's first v2.58 sync:
   - rebuild it with the v2.58 `twenty` CLI and SDK (a v2.19-SDK manifest fails with `NON_UPDATABLE_PROPERTY_DIVERGENCE`)
@@ -436,6 +460,22 @@ SELECT id, "isCurrent", "revokedAt" IS NOT NULL AS revoked, "createdAt" FROM cor
 -- 22. Feature flags that are on. W9 fails the upgrade if IS_ACCESS_GROUPS_ENABLED, IS_RECORD_LEVEL_SHARING_ENABLED,
 --     IS_PRIVATE_RECORDS_ENABLED or IS_RELATED_RECORD_PATHS_ENABLED is on.
 SELECT "workspaceId", key FROM core."featureFlag" WHERE value ORDER BY key;
+
+-- 23. Registration variables the 2.31 CHECK rejects. Expect none once the orphaned
+--     payment-reconciliation v1 registration is gone (P0 step 3).
+SELECT v.id, r.name, v.key, (SELECT count(*) FROM core.application a WHERE a."applicationRegistrationId" = r.id) AS installs
+FROM core."applicationRegistrationVariable" v JOIN core."applicationRegistration" r ON r.id = v."applicationRegistrationId"
+WHERE v."encryptedValue" <> '' AND v."encryptedValue" NOT LIKE 'enc:v2:%';
+
+-- 24. Unfinished workflow runs, for P0 step 2 and P1 step 4. Snapshot 2026-11-20: Lead Contacted ENQUEUED 6068 and
+--     RUNNING 8, Lead Sold ENQUEUED 183 and RUNNING 6, Policy Deleted ENQUEUED 1, Compliance Call Pipeline RUNNING 5,
+--     Post Policy Sale SMS Campaigns (deactivated) RUNNING 409.
+SELECT w.id, w.name, v.status AS version_status, r.status, count(*), min(r."createdAt"), max(r."updatedAt")
+FROM "<databaseSchema>"."workflowRun" r
+JOIN "<databaseSchema>".workflow w ON w.id = r."workflowId"
+LEFT JOIN "<databaseSchema>"."workflowVersion" v ON v.id = r."workflowVersionId"
+WHERE r."deletedAt" IS NULL AND r.status NOT IN ('COMPLETED', 'FAILED', 'STOPPED')
+GROUP BY 1, 2, 3, 4 ORDER BY 2, 4;
 ```
 
 **Check 2.** Every one of the 206 legacy TypeORM migrations in the repo must be applied on prod (`omnia:run-legacy-typeorm-migrations` in P1 is then a no-op). The last command must print nothing:
@@ -493,17 +533,17 @@ ORDER BY 1;
 
 As an agent (Member, no LAYOUTS):
 
-1. Sees every policy and edits their own. Editing another agent's policy is denied with the RLS message, and an old policy of their own gives the edit-window message.
+1. Sees every policy and edits their own. Editing another agent's policy is denied with the RLS message. No edit window is configured, so an old policy of their own still saves.
 2. A new policy gets the Agent filled in, the name "Carrier - Product", and LTV and submittedDate stamped. Reassigning the agent is denied.
-3. Sees their own leads only. Search shows no other agent's leads or dashboards, and a pasted policy number or the last 7 digits of a phone finds the record.
+3. Sees every lead, as on v2.6, but only their own calls. Search shows no other agent's calls and no out-of-audience dashboards, and a pasted policy number or the last 7 digits of a phone finds the record.
 4. The sidebar lists exactly the role's objects, the landing page is Leads, and Opened repeats no listed object.
 5. Dashboards are limited to the audience, and a new dashboard is tagged with the role.
 6. The Policy page and the timeline hide restricted fields. The reconciliation objects and their attachments are out of reach.
-7. Export is RLS-filtered and includes the relation sub-field columns. An import applies RLS.
+7. Export and import are hidden (no EXPORT_CSV or IMPORT_CSV flag, as on v2.6). As the Investor, export is RLS-filtered and includes the relation sub-field columns.
 
 As an admin:
 
-8. Sees everything. Saving the Member role keeps Policy read-all, and the edit-window and Show-in-Sidebar rows save. A role created in Settings stays locked out of the reconciliation objects. A reconciliation runs end to end.
+8. Sees everything. Do not save a role on prod to test it: opening the Policy or Dashboard object page marks the role dirty, and Save rewrites its grants and rules (the rehearsal covers role saves). A role created in Settings stays locked out of the reconciliation objects.
 9. The Create button is visible, also in the side-panel index, and Delete is pinned. Cmd+K hides Import, Export and AI from roles without those flags. The timeline shows struck-through before values. Enterprise-gated settings (role RLS rules, Security) open without an Enterprise lock.
 
 Auth:

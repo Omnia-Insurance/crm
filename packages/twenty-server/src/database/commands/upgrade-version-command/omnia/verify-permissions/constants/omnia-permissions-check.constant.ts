@@ -11,4 +11,5 @@ export const OMNIA_PERMISSIONS_CHECK = {
   recordAccessFeatureFlags: 'record-access-feature-flags',
   navigationCommandActivation: 'navigation-command-activation',
   readRestrictedSearchableField: 'read-restricted-searchable-field',
+  standardObjectLockdown: 'standard-object-lockdown',
 } as const;

@@ -677,6 +677,58 @@ DELETE FROM core."publicDomain";
 SQL
 fi
 
+# The copy keeps prod's webhooks, pull pipelines, SMTP account and Sentry DSNs, so
+# a local server or worker would reach them; v2.6 schemas keep webhooks per workspace.
+echo "==> Disconnecting the copy from production services..."
+psql "$LOCAL_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+DO $$
+DECLARE
+  workspace_schema text;
+BEGIN
+  IF to_regclass('core.webhook') IS NOT NULL THEN
+    UPDATE core.webhook SET "deletedAt" = NOW() WHERE "deletedAt" IS NULL;
+  END IF;
+
+  FOR workspace_schema IN SELECT "databaseSchema" FROM core.workspace WHERE "databaseSchema" IS NOT NULL LOOP
+    IF to_regclass(format('%I.webhook', workspace_schema)) IS NOT NULL THEN
+      EXECUTE format('UPDATE %I.webhook SET "deletedAt" = NOW() WHERE "deletedAt" IS NULL', workspace_schema);
+    END IF;
+  END LOOP;
+
+  IF to_regclass('core."ingestionPipeline"') IS NOT NULL THEN
+    UPDATE core."ingestionPipeline" SET "isEnabled" = FALSE WHERE "isEnabled";
+  END IF;
+END $$;
+
+UPDATE core."keyValuePair"
+SET value = to_jsonb('LOGGER'::text),
+    "updatedAt" = NOW()
+WHERE type = 'CONFIG_VARIABLE'
+  AND "workspaceId" IS NULL
+  AND "userId" IS NULL
+  AND key = 'EMAIL_DRIVER';
+
+DELETE FROM core."keyValuePair"
+WHERE type = 'CONFIG_VARIABLE'
+  AND "workspaceId" IS NULL
+  AND "userId" IS NULL
+  AND key IN ('EMAIL_SMTP_PASSWORD', 'SENTRY_DSN', 'SENTRY_FRONT_DSN');
+
+WITH updated AS (
+  UPDATE core."keyValuePair"
+  SET value = 'false'::jsonb,
+      "updatedAt" = NOW()
+  WHERE type = 'CONFIG_VARIABLE'
+    AND "workspaceId" IS NULL
+    AND "userId" IS NULL
+    AND key = 'TELEMETRY_ENABLED'
+  RETURNING key
+)
+INSERT INTO core."keyValuePair" ("key", "value", "type", "userId", "workspaceId", "createdAt", "updatedAt")
+SELECT 'TELEMETRY_ENABLED', 'false'::jsonb, 'CONFIG_VARIABLE', NULL, NULL, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM updated);
+SQL
+
 if [[ "$PURGE_LOCAL_REDIS_WORKSPACE_CACHE" == "true" ]]; then
   # The URL and domain rewrites above change cached config and Workspace rows.
   echo "==> Flushing local Redis cache..."

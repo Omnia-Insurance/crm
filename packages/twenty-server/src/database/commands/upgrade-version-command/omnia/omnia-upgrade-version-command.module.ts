@@ -10,7 +10,9 @@ import { OmniaMigrateOneToManyViewFiltersCommand } from 'src/database/commands/u
 import { OmniaSyncDashboardAudienceCommand } from 'src/database/commands/upgrade-version-command/omnia/2-58-workspace-command-1794500005000-omnia-sync-dashboard-audience.command';
 import { OmniaReconciliationObjectLockdownCommand } from 'src/database/commands/upgrade-version-command/omnia/2-58-workspace-command-1794500006000-omnia-reconciliation-object-lockdown.command';
 import { OmniaPurgeLegacyExportFilesCommand } from 'src/database/commands/upgrade-version-command/omnia/2-58-workspace-command-1794500007000-omnia-purge-legacy-export-files.command';
+import { OmniaRestoreStandardObjectPermissionLockdownCommand } from 'src/database/commands/upgrade-version-command/omnia/2-58-workspace-command-1794500008000-omnia-restore-standard-object-permission-lockdown.command';
 import { OmniaVerifyPermissionsUpgradeCommand } from 'src/database/commands/upgrade-version-command/omnia/2-58-workspace-command-1794500009000-omnia-verify-permissions.command';
+import { OmniaPrioritizeInitialObjectViewsCommand } from 'src/database/commands/upgrade-version-command/omnia/2-58-workspace-command-1795231988000-omnia-prioritize-initial-object-views.command';
 import { OmniaFinalizeRolePermissionFlagCutoverCatchUpFastInstanceCommand } from 'src/database/commands/upgrade-version-command/omnia/2-8-instance-command-fast-1798100000000-omnia-finalize-role-permission-flag-cutover-catch-up';
 import { OmniaPermissionsVerificationService } from 'src/database/commands/upgrade-version-command/omnia/verify-permissions/services/omnia-permissions-verification.service';
 import { ApplicationModule } from 'src/engine/core-modules/application/application.module';
@@ -39,7 +41,9 @@ import { ReconciliationObjectLockdownModule } from 'src/modules/reconciliation/r
     OmniaSyncDashboardAudienceCommand,
     OmniaReconciliationObjectLockdownCommand,
     OmniaPurgeLegacyExportFilesCommand,
+    OmniaRestoreStandardObjectPermissionLockdownCommand,
     OmniaVerifyPermissionsUpgradeCommand,
+    OmniaPrioritizeInitialObjectViewsCommand,
     OmniaPermissionsVerificationService,
   ],
 })
